@@ -4,10 +4,11 @@
   <arg name="odomTopic" default="/gmapping/odometry" />
 	<arg name="cmdTopic" default="/mpc_vel" />
   <arg name="mpc_type" value="double_integrator_mpcc" />
+  <arg name="task_id" value="" />
   <arg name="use_rl" default="false" />
   <arg name="db_filename" default="$(env HOME)/dbs/rl_learning.db" />
 
-  <rosparam file="$(find mpcc)/params/$(arg mpc_type).yaml" command="load" ns="mpcc/" />
+  <rosparam file="$(find mpcc)/params/$(arg mpc_type)$(arg task_id).yaml" command="load" ns="mpcc/" />
   <rosparam file="$(find mpcc)/params/robo_params.yaml" command="load" ns="mpcc/" />
 
   <!-- For logging data when learning CBF adaptation -->
@@ -19,11 +20,6 @@
 	</group>
 
 	<node name="mpcc" pkg="mpcc" type="mpcc_ros" output="screen">
-	<!-- <node name="jackal_mpc_track" pkg="cbf_tracking" type="jackal_mpc_tracking" 
-		launch-prefix="lldb" output="screen"> -->
-	<!-- <node name="jackal_mpc_track" pkg="cbf_tracking" type="jackal_mpc_tracking" 
-		launch-prefix="valgrind -s" output="screen"> -->
-		
 		<!--<param name="mpc_type" value="$(arg mpc_type)" />-->
 
 		<remap from="/odometry/filtered" to="$(arg odomTopic)" />

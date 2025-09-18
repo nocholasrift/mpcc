@@ -137,10 +137,25 @@ class TrainManager:
             sys.exit(-1)
 
     def deserialize_state(self, serialized_str, msg_type):
-        raw = bytearray(serialized_str.encode("latin-1"))
-        msg = msg_type()
-        msg.deserialize(raw)
-        return msg
+        try:
+            serialized_bytes = bytes.fromhex(serialized_str)
+        except ValueError as e:
+            print("Error deserializing state: ", str(e))
+            print("serialized_str: ", serialized_str)
+            return None
+
+        new_msg = msg_type()
+        new_msg.deserialize(serialized_bytes)
+
+        ret = []
+        for elem in new_msg.state:
+            ret.append(elem)
+
+        ret.append(1 if new_msg.solver_status else 0)
+
+        ret = np.array(ret, dtype=np.float64)
+
+        return ret
 
     def load_from_db(self):
 
@@ -181,12 +196,18 @@ class TrainManager:
         dones = []
 
         for row in rows:
-            prev_state = deserialize_state(row[label_to_index["prev_state"]], RLState)
-            next_state = deserialize_state(row[label_to_index["next_state"]], RLState)
-            action = row[label_to_index["action"]].split(",")
-            action = [float(a) for a in action]
-            reward = float(row[label_to_index["reward"]])
-            done = bool(row[label_to_index["done"]])
+            prev_state = self.deserialize_state(
+                row[label_to_index["prev_state"]], RLState
+            )
+            next_state = self.deserialize_state(
+                row[label_to_index["next_state"]], RLState
+            )
+            action = np.array(
+                row[label_to_index["action"]].split(","), dtype=np.float64
+            )
+            action = np.array([float(a) for a in action], dtype=np.float64)
+            reward = np.array(float(row[label_to_index["reward"]]), dtype=np.float64)
+            done = np.array(bool(row[label_to_index["is_done"]]), dtype=np.float64)
 
             states.append(prev_state)
             actions.append(action)

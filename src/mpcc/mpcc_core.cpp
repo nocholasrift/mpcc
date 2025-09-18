@@ -42,15 +42,24 @@ MPCCore::MPCCore(const std::string& mpc_input_type) {
 MPCCore::~MPCCore() {}
 
 void MPCCore::load_params(const std::map<std::string, double>& params) {
-  _dt         = params.at("DT");
-  _max_anga   = params.at("MAX_ANGA");
-  _max_linacc = params.at("MAX_LINACC");
+  _dt         = params.find("DT") != params.end() ? params.at("DT") : _dt;
+  _max_anga   = params.find("MAX_ANGA") != params.end() ? params.at("MAX_ANGA")
+                                                        : _max_anga;
+  _max_linacc = params.find("MAX_LINACC") != params.end()
+                    ? params.at("MAX_LINACC")
+                    : _max_linacc;
 
-  _max_vel    = params.at("LINVEL");
-  _max_angvel = params.at("ANGVEL");
+  _max_vel =
+      params.find("LINVEL") != params.end() ? params.at("LINVEL") : _max_vel;
+  _max_angvel =
+      params.find("ANGVEL") != params.end() ? params.at("ANGVEL") : _max_angvel;
 
-  _prop_gain         = params.at("ANGLE_GAIN");
-  _prop_angle_thresh = params.at("ANGLE_THRESH");
+  _prop_gain         = params.find("ANGLE_GAIN") != params.end()
+                           ? params.at("ANGLE_GAIN")
+                           : _prop_gain;
+  _prop_angle_thresh = params.find("ANGLE_THRESH") != params.end()
+                           ? params.at("ANGLE_THRESH")
+                           : _prop_angle_thresh;
 
   _params = params;
 
@@ -75,6 +84,17 @@ void MPCCore::set_trajectory(const std::array<Spline1D, 2>& ref,
   _mpc->set_reference(ref, ref_len);
 }
 
+void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
+                             const Eigen::VectorXd& y_pts, int degree,
+                             const Eigen::VectorXd& knot_parameters) {
+  Spline1D splineX(utils::Interp(x_pts, degree, knot_parameters));
+  Spline1D splineY(utils::Interp(y_pts, degree, knot_parameters));
+  _ref[0] = splineX;
+  _ref[1] = splineY;
+  _is_set = true;
+  _mpc->set_reference(_ref, _params["REF_LENGTH"]);
+}
+
 // void MPCCore::set_tubes(const std::vector<Spline1D>& tubes)
 void MPCCore::set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {
   _mpc->set_tubes(tubes);
@@ -84,7 +104,7 @@ bool MPCCore::orient_robot() {
   // calculate heading error between robot and trajectory start
   // use 1st point as most times first point has 0 velocity
 
-  double start = get_s_from_odom();
+  double start = get_s_from_pose(_odom);
   double eps_s = .05;
 
   /*std::cout << "start is " << start + eps_s << std::endl;*/
@@ -126,11 +146,11 @@ bool MPCCore::orient_robot() {
   return false;
 }
 
-double MPCCore::get_s_from_odom() const {
+double MPCCore::get_s_from_pose(const Eigen::VectorXd& pose) const {
   // find the s which minimizes dist to robot
   double s            = 0;
   double min_dist     = 1e6;
-  Eigen::Vector2d pos = _odom.head(2);
+  Eigen::Vector2d pos = pose.head(2);
   for (double i = 0.0; i < _ref_length; i += .01) {
     Eigen::Vector2d p =
         Eigen::Vector2d(_ref[0](i).coeff(0), _ref[1](i).coeff(0));

@@ -113,8 +113,11 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _nh.param("ref_length_size", _mpc_ref_len_sz, 4.);
   _nh.param("mpc_ref_samples", _mpc_ref_samples, 10);
 
-  _nh.param("/train/logging", _is_logging, false);
+  _nh.param("/train/task_id", _task_id, -1);
   _nh.param("/train/is_eval", _is_eval, false);
+  _nh.param("/train/logging", _is_logging, false);
+  _nh.param("/train/num_samples", _num_samples, static_cast<int>(1e6));
+  _nh.param("/train/max_path_length", _max_path_length, static_cast<int>(1e6));
 
   _dt = 1.0 / freq;
 
@@ -201,13 +204,16 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
 
   if (_use_cbf && (_is_logging || _is_eval)) {
     std::unordered_map<std::string_view, double> logger_params;
-    logger_params["MIN_ALPHA"]     = _min_alpha;
-    logger_params["MAX_ALPHA"]     = _max_alpha;
-    logger_params["MIN_ALPHA_DOT"] = _min_alpha_dot;
-    logger_params["MAX_ALPHA_DOT"] = _max_alpha_dot;
-    logger_params["MIN_H_VAL"]     = _min_h_val;
-    logger_params["MAX_H_VAL"]     = _max_h_val;
-    logger_params["MAX_OBS_DIST"]  = _max_tube_width;
+    logger_params["MIN_ALPHA"]       = _min_alpha;
+    logger_params["MAX_ALPHA"]       = _max_alpha;
+    logger_params["MIN_ALPHA_DOT"]   = _min_alpha_dot;
+    logger_params["MAX_ALPHA_DOT"]   = _max_alpha_dot;
+    logger_params["MIN_H_VAL"]       = _min_h_val;
+    logger_params["MAX_H_VAL"]       = _max_h_val;
+    logger_params["MAX_OBS_DIST"]    = _max_tube_width;
+    logger_params["TASK_ID"]         = _task_id;
+    logger_params["NUM_SAMPLES"]     = _num_samples;
+    logger_params["MAX_PATH_LENGTH"] = _max_path_length;
 
     _logger = std::make_unique<logger::RLLogger>(nh, logger_params, _is_logging,
                                                  _mpc_input_type);

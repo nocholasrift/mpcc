@@ -63,13 +63,18 @@ class MPCCore {
   void set_state(const Eigen::Vector3d& state);
   void set_odom(const Eigen::Vector3d& odom);
   void set_goal(const Eigen::Vector2d& goal);
+#ifdef FOUND_PYBIND11
+  void set_trajectory(const Eigen::VectorXd& x_pts,
+                      const Eigen::VectorXd& y_pts, int degree,
+                      const Eigen::VectorXd& knot_parameters);
+#endif
   void set_trajectory(const std::array<Spline1D, 2>& ref, double arclen);
   void set_tubes(const std::array<Eigen::VectorXd, 2>& tubes);
   void set_dyna_obs(const Eigen::MatrixXd& dyna_obs);
 
-  double get_s_from_odom() const;
   const bool get_solver_status() const;
   const Eigen::VectorXd& get_state() const;
+  double get_s_from_pose(const Eigen::VectorXd& pose) const;
   const std::array<Eigen::VectorXd, 2> get_state_limits() const;
   const std::array<Eigen::VectorXd, 2> get_input_limits() const;
   std::vector<Eigen::VectorXd> get_horizon() const;

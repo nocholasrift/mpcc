@@ -51,7 +51,7 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
   const std::vector<std::string> string_types = {"prev_state", "action",
                                                  "next_state", "is_done"};
 
-  std::vector<std::string> float_types = {"id", "reward"};
+  std::vector<std::string> float_types = {"global_id", "task_id", "reward"};
 
   if (_is_logging && !amrl::logging_setup(_nh, _table_name, _topic_name,
                                           string_types, {}, float_types)) {
@@ -89,6 +89,16 @@ void RLLogger::load_params(
   _max_obs_dist = params.find("MAX_OBS_DIST") != params.end()
                       ? params.at("MAX_OBS_DIST")
                       : _max_obs_dist;
+
+  _task_id = params.find("TASK_ID") != params.end() ? params.at("TASK_ID") : -1;
+
+  _num_samples = params.find("NUM_SAMPLES") != params.end()
+                     ? params.at("NUM_SAMPLES")
+                     : 1e6;
+
+  _max_path_length = params.find("MAX_PATH_LENGTH") != params.end()
+                         ? params.at("MAX_PATH_LENGTH")
+                         : 1e6;
 
   _params = params;
 }
@@ -170,6 +180,15 @@ bool RLLogger::request_alpha(MPCCore& mpc_core, double ref_len) {
 void RLLogger::log_transition(const MPCCore& mpc_core, double len_start,
                               double ref_len) {
 
+  if (_count >= _num_samples || _count >= _max_path_length) {
+    _is_done = true;
+    std_msgs::Bool done_msg;
+    done_msg.data = _is_done;
+    _done_pub.publish(done_msg);
+
+    return;
+  }
+
   fill_state(mpc_core, _curr_rl_state);
 
   if (_is_first_iter) {
@@ -193,7 +212,7 @@ void RLLogger::log_transition(const MPCCore& mpc_core, double len_start,
             std::to_string(_alpha_dot_blw),             // action
         serialize_state(_curr_rl_state), is_done_str};  // next_state, is_done
 
-    std::vector<double> numeric_data = {_count, reward};
+    std::vector<double> numeric_data = {_count, _task_id, reward};
 
     row.header.seq += _count++;
     row.header.stamp = ros::Time::now();
@@ -298,13 +317,32 @@ void RLLogger::fill_state(const MPCCore& mpc_core, mpcc::RLState& state) {
   /*}*/
 }
 
+/*std::string RLLogger::serialize_state(const mpcc::RLState& state) {*/
+/*  std::stringstream ss;*/
+/**/
+/*  for (size_t i = 0; i < msg.state.size(); ++i) {*/
+/*    ss << state.state[i];*/
+/*    if (i != state.state.size() - 1)*/
+/*      ss << ",";*/
+/*  }*/
+/**/
+/*  ss << (msg.solver_status ? 'true' : 'false');*/
+/*  return ss.str();*/
+/*}*/
+
 std::string RLLogger::serialize_state(const mpcc::RLState& state) {
   uint32_t serial_size = ros::serialization::serializationLength(state);
   std::vector<uint8_t> buffer(serial_size);
   ros::serialization::OStream stream(buffer.data(), serial_size);
   ros::serialization::serialize(stream, state);
 
-  return std::string(buffer.begin(), buffer.end());
+  std::stringstream ss;
+  ss << std::hex << std::uppercase << std::setfill('0');  // set formatting
+  for (size_t i = 0; i < buffer.size(); ++i) {
+    ss << std::setw(2) << static_cast<int>(buffer[i]);
+  }
+
+  return ss.str();
 }
 
 double normalize(double val, double min, double max) {

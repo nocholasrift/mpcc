@@ -22,6 +22,8 @@ find_package(catkin REQUIRED COMPONENTS
   amrl_logging
 )
 
+find_package(pybind11 QUIET)
+
 set(CVXPYGEN_OUTPUT ${CMAKE_SOURCE_DIR}/scripts/tube_gen/LP_codegen/c)
 add_subdirectory(${CVXPYGEN_OUTPUT})
 
@@ -83,6 +85,14 @@ set(ACADOS_MODELS
   double_integrator_mpcc
 )
 
+set(MPCC_SRCS
+  src/mpcc/logger.cpp
+  src/mpcc/mpcc_ros.cpp
+  src/mpcc/mpcc_core.cpp
+  src/mpcc/mpcc_acados.cpp
+  src/mpcc/mpcc_di_acados.cpp
+)
+
 set(ACADOS_OUTPUT_DIRS "")
 set(ACADOS_OUTPUT_SRC "")
 set(ACADOS_OUTPUT_HEADERS "")
@@ -111,9 +121,6 @@ foreach(model ${ACADOS_MODELS})
     VERBATIM
   )
 
-  message("scripts: ${${model}_SCRIPTS}")
-  message("outfiles: ${${model}_LIBS}")
-
   add_custom_target(
     GenerateAcadosCode_${model}
     DEPENDS ${${model}_OUTPUT_FILES} ${${model}_SCRIPTS} ${CMAKE_SOURCE_DIR}/params/${model}.yaml
@@ -125,19 +132,46 @@ add_library(cvxpy_lib STATIC ${cpg_src})
 target_compile_options(cvxpy_lib PRIVATE -O3 -w)
 target_include_directories(cvxpy_lib PRIVATE ${cpg_include})
 
+if (pybind11_FOUND)
+  message(STATUS "Pybind11 found, building mpcc python bindings")
+  add_definitions(-DFOUND_PYBIND11)
+
+  find_package(PythonLibs REQUIRED)
+  include_directories(${PYTHON_INCLUDE_DIRS})
+
+  pybind11_add_module(py_mpcc
+    src/mpcc/mpcc_core.cpp
+    src/mpcc/mpcc_acados.cpp
+    src/mpcc/mpcc_di_acados.cpp
+    src/mpcc/py_mpcc.cpp
+  )
+  add_dependencies(py_mpcc ${ACADOS_TARGETS})
+
+  target_include_directories(py_mpcc PRIVATE 
+    ${ACADOS_OUTPUT_DIRS} 
+    ${cpg_include}
+  )
+
+  target_link_libraries(py_mpcc
+    PRIVATE
+    ${HPIPM_LIBRARIES}
+    ${ACADOS_LIBRARIES}
+    ${EIGEN3_LIBRARIES}
+    ${ACADOS_OUTPUT_LIBS}
+    ${BLASFEO_LIBRARIES}
+  )
+else()
+  message(STATUS "Pybind11 not found, mpcc python bindings will not be built")
+endif()
+
 add_executable(mpcc_ros 
-  src/mpcc/logger.cpp
+  ${MPCC_SRCS}
   src/mpcc/mpcc_node.cpp
-  src/mpcc/mpcc_ros.cpp
-  src/mpcc/mpcc_core.cpp
-  src/mpcc/mpcc_acados.cpp
-  src/mpcc/mpcc_di_acados.cpp
 )
 target_link_libraries(mpcc_ros
   ${HPIPM_LIBRARIES}
   ${catkin_LIBRARIES}
   ${ACADOS_LIBRARIES}
-  ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
   ${ACADOS_OUTPUT_LIBS}
   ${BLASFEO_LIBRARIES}

@@ -64,6 +64,10 @@ class RLLogger {
   std::string _topic_name;
   std::string _mpc_type;
 
+  int _task_id;
+  int _num_samples;
+  int _max_path_length;
+
   double _min_alpha;
   double _max_alpha;
   double _min_alpha_dot;

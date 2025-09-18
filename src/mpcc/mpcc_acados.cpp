@@ -7,10 +7,20 @@
 #include <mpcc/termcolor.hpp>
 #include <stdexcept>
 
+#ifdef FOUND_PYBIND11
+// the declarations in the header cannot be referenced by pybind...
+// need to define them
+const uint16_t MPCC::kNX;
+const uint16_t MPCC::kNS;
+const uint16_t MPCC::kNP;
+const uint16_t MPCC::kNU;
+const uint16_t MPCC::kNBX0;
+#endif
+
 MPCC::MPCC() {
   // Set default value
-  _dt          = .05;
-  _mpc_steps   = 20;
+  _dt          = .1;
+  _mpc_steps   = 10;
   _max_angvel  = 3.0;  // Maximal angvel radian (~30 deg)
   _max_linvel  = 2.0;  // Maximal linvel accel
   _max_linacc  = 4.0;  // Maximal linacc accel
@@ -663,9 +673,6 @@ Eigen::VectorXd MPCC::get_cbf_data(const Eigen::VectorXd& state,
   double obs_dirx = -yr_dot / den;
   double obs_diry = xr_dot / den;
 
-  /*std::cout << "[MPCC] obs_dir: " << obs_dirx << ", " << obs_diry << std::endl;*/
-  /*std::cout << "[MPCC] robot pos: " << _odom.head(2).transpose() << std::endl;*/
-  /*std::cout << "[MPCC] xr yr: " << xr << " " << yr << std::endl;*/
   double signed_d = (_odom(0) - xr) * obs_dirx + (_odom(1) - yr) * obs_diry;
   double p =
       obs_dirx * cos(_odom(2)) + obs_diry * sin(_odom(2)) + state(3) * .05;

@@ -218,8 +218,11 @@ class MPCCROS {
   bool _is_logging;
   bool _is_eval;
 
+  int _task_id;
+  int _num_samples;
   int _tube_degree;
   int _tube_samples;
+  int _max_path_length;
   int _mpc_ref_samples;
 
   grid_map::GridMap _grid_map;

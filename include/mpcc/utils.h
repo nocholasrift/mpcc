@@ -1,9 +1,9 @@
 #pragma once
 #include <mpcc/types.h>
-#include <tf/tf.h>
 
 #include <Eigen/Core>
-#include <grid_map_ros/grid_map_ros.hpp>
+#include <grid_map_core/grid_map_core.hpp>
+#include <grid_map_cv/grid_map_cv.hpp>
 #include <iostream>
 
 extern "C" {
