@@ -5,9 +5,7 @@ import os
 
 def soft_update_from_to(source, target, tau):
     for target_param, param in zip(target.parameters(), source.parameters()):
-        target_param.data.copy_(
-            target_param.data * (1.0 - tau) + param.data * tau
-        )
+        target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
 
 def copy_model_params_from_to(source, target):
@@ -23,7 +21,7 @@ def fanin_init(tensor):
         fan_in = np.prod(size[1:])
     else:
         raise Exception("Shape must be have dimension at least 2.")
-    bound = 1. / np.sqrt(fan_in)
+    bound = 1.0 / np.sqrt(fan_in)
     return tensor.data.uniform_(-bound, bound)
 
 
@@ -35,7 +33,7 @@ def fanin_init_weights_like(tensor):
         fan_in = np.prod(size[1:])
     else:
         raise Exception("Shape must be have dimension at least 2.")
-    bound = 1. / np.sqrt(fan_in)
+    bound = 1.0 / np.sqrt(fan_in)
     new_tensor = FloatTensor(tensor.size())
     new_tensor.uniform_(-bound, bound)
     return new_tensor
@@ -43,15 +41,13 @@ def fanin_init_weights_like(tensor):
 
 def elem_or_tuple_to_variable(elem_or_tuple):
     if isinstance(elem_or_tuple, tuple):
-        return tuple(
-            elem_or_tuple_to_variable(e) for e in elem_or_tuple
-        )
+        return tuple(elem_or_tuple_to_variable(e) for e in elem_or_tuple)
     return from_numpy(elem_or_tuple).float()
 
 
 def filter_batch(np_batch):
     for k, v in np_batch.items():
-        if v.dtype == np.bool:
+        if v.dtype == np.bool_:
             yield k, v.astype(int)
         else:
             yield k, v
@@ -61,8 +57,9 @@ def np_to_pytorch_batch(np_batch):
     return {
         k: elem_or_tuple_to_variable(x)
         for k, x in filter_batch(np_batch)
-        if x.dtype != np.dtype('O')  # ignore object (e.g. dictionaries)
+        if x.dtype != np.dtype("O")  # ignore object (e.g. dictionaries)
     }
+
 
 """
 GPU wrappers
@@ -80,7 +77,7 @@ def set_gpu_mode(mode, gpu_id=0):
     _use_gpu = mode
     device = torch.device("cuda:0" if _use_gpu else "cpu")
     if _use_gpu:
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(_gpu_id)
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(_gpu_id)
 
 
 def gpu_enabled():
@@ -98,7 +95,7 @@ def from_numpy(*args, **kwargs):
 
 def get_numpy(tensor):
     # not sure if I should do detach or not here
-    return tensor.to('cpu').detach().numpy()
+    return tensor.to("cpu").detach().numpy()
 
 
 def zeros(*sizes, **kwargs):

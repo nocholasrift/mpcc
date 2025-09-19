@@ -89,10 +89,57 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
                              const Eigen::VectorXd& knot_parameters) {
   Spline1D splineX(utils::Interp(x_pts, degree, knot_parameters));
   Spline1D splineY(utils::Interp(y_pts, degree, knot_parameters));
-  _ref[0] = splineX;
-  _ref[1] = splineY;
-  _is_set = true;
-  _mpc->set_reference(_ref, _params["REF_LENGTH"]);
+
+  int N               = knot_parameters.size();
+  double true_ref_len = knot_parameters.tail(1)[0];
+  double ref_len      = _params["REF_LENGTH"];
+
+  if (true_ref_len < ref_len) {
+    double end = true_ref_len - 1e-1;
+    double px  = splineX(end).coeff(0);
+    double py  = splineY(end).coeff(0);
+    double dx  = splineX.derivatives(end, 1).coeff(1);
+    double dy  = splineY.derivatives(end, 1).coeff(1);
+
+    /*ROS_WARN("(%.2f, %.2f)\t(%.2f, %.2f)", px, py, dx, dy);*/
+
+    double ds = ref_len / (N - 1);
+
+    Eigen::RowVectorXd ss, xs, ys;
+    ss.resize(N);
+    xs.resize(N);
+    ys.resize(N);
+
+    for (int i = 0; i < N; ++i) {
+      double s = ds * i;
+      ss(i)    = s;
+
+      if (s < true_ref_len) {
+        xs(i) = splineX(s).coeff(0);
+        ys(i) = splineY(s).coeff(0);
+      } else {
+        xs(i) = dx * (s - true_ref_len) + px;
+        ys(i) = dy * (s - true_ref_len) + py;
+      }
+    }
+
+    true_ref_len = ss.tail(1)[0];
+
+    const auto fitX = utils::Interp(xs, 3, ss);
+    splineX         = Spline1D(fitX);
+
+    const auto fitY = utils::Interp(ys, 3, ss);
+    splineY         = Spline1D(fitY);
+  }
+
+  std::cout << "received trajectory of length: " << true_ref_len << "\n";
+  std::cout << "trajectory has " << N << " knots\n";
+
+  _ref[0]     = splineX;
+  _ref[1]     = splineY;
+  _ref_length = true_ref_len;
+  _is_set     = true;
+  _mpc->set_reference(_ref, true_ref_len);
 }
 
 // void MPCCore::set_tubes(const std::vector<Spline1D>& tubes)

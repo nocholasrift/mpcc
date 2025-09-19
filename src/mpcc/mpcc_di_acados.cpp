@@ -242,15 +242,15 @@ Eigen::VectorXd DIMPCC::get_cbf_data(const Eigen::VectorXd& state,
     h_val = (signed_d - tube_dist - .1) * exp(-p);
 
   signed_d = is_abv ? signed_d : -signed_d;
-  if (h_val > 100) {
-    std::cout << termcolor::yellow << "ref length is " << _ref_length
-              << std::endl;
-    std::cout << "s: " << s << " h_val: " << h_val << " is abv: " << is_abv
-              << termcolor::reset << std::endl;
-    std::cout << "tube dist: " << tube_dist << " signed_d: " << signed_d
-              << std::endl;
-    exit(-1);
-  }
+  /*if (h_val > 100) {*/
+  /*  std::cout << termcolor::yellow << "ref length is " << _ref_length*/
+  /*            << std::endl;*/
+  /*  std::cout << "s: " << s << " h_val: " << h_val << " is abv: " << is_abv*/
+  /*            << termcolor::reset << std::endl;*/
+  /*  std::cout << "tube dist: " << tube_dist << " signed_d: " << signed_d*/
+  /*            << std::endl;*/
+  /*  exit(-1);*/
+  /*}*/
 
   return Eigen::Vector3d(h_val, signed_d, atan2(obs_diry, obs_dirx));
 }
@@ -260,7 +260,7 @@ double DIMPCC::get_s_from_state(const Eigen::VectorXd& state) {
   double s        = 0;
   double min_dist = 1e6;
   Eigen::Vector2d pos(state(0), state(1));
-  for (double i = 0.0; i < _ref_length; i += .05) {
+  for (double i = 0.0; i < _ref_length; i += .01) {
     Eigen::Vector2d p =
         Eigen::Vector2d(_reference[0](i).coeff(0), _reference[1](i).coeff(0));
 
@@ -380,8 +380,9 @@ bool DIMPCC::set_solver_parameters(
   int num_params =
       ctrls_x.size() + ctrls_y.size() + _tubes[0].size() + _tubes[1].size() + 8;
   if (num_params != kNP) {
-    std::cout << "[MPCC] reference size " << num_params
+    std::cout << termcolor::yellow << "[MPCC] reference size " << num_params
               << " does not match acados parameter size " << kNP << std::endl;
+
     return false;
   }
 
@@ -468,9 +469,9 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   double s                             = get_s_from_state(x0);
   std::array<Spline1D, 2> adjusted_ref = compute_adjusted_ref(s);
 
-  std::cout << "[MPCC] starting s is " << s << std::endl;
-  std::cout << "[MPCC] adjusted ref is " << adjusted_ref[0](0).coeff(0) << ", "
-            << adjusted_ref[1](0).coeff(0) << std::endl;
+  /*std::cout << "[MPCC] starting s is " << s << std::endl;*/
+  /*std::cout << "[MPCC] adjusted ref is " << adjusted_ref[0](0).coeff(0) << ", "*/
+  /*          << adjusted_ref[1](0).coeff(0) << std::endl;*/
 
   // Eigen::Vector2d prev_pos = _prev_x0.head(2);
   Eigen::Vector2d prev_pos = _prev_x0.segment(kNX, 2);
@@ -537,9 +538,6 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
       double h_val = get_cbf_data(x0, Eigen::Vector2d(), true)[0];
       std::cout << "[MPCC] cbf value: " << h_val << std::endl;
 
-      if (h_val < -.1)
-        exit(-1);
-
       warm_start_no_u(x_init);
     }
   }
@@ -575,9 +573,9 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
             << _prev_u0[kIndAy] << std::endl;
   std::cout << "[MPCC] Input is: " << new_velx << " " << new_vely << std::endl;
 
-  _cmd = {new_velx, new_vely};
+  _cmd = {_prev_u0[0], _prev_u0[1]};
 
-  return _cmd;
+  return {new_velx, new_vely};
 }
 
 void DIMPCC::process_solver_output(double s) {
