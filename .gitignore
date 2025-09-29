@@ -15,3 +15,4 @@ third_party/
 build/
 bags/
 logs/
+output/

@@ -1,7 +1,14 @@
 import numpy as np
 
 
-def rollout(env, agent, max_path_length=np.inf, accum_context=True, animated=False, save_frames=False):
+def rollout(
+    env,
+    agent,
+    max_path_length=np.inf,
+    accum_context=True,
+    animated=False,
+    save_frames=False,
+):
     """
     The following value for the following keys will be a 2D array, with the
     first dimension corresponding to the time dimension.
@@ -53,8 +60,9 @@ def rollout(env, agent, max_path_length=np.inf, accum_context=True, animated=Fal
             env.render()
         if save_frames:
             from PIL import Image
+
             image = Image.fromarray(np.flipud(env.get_image()))
-            env_info['frame'] = image
+            env_info["frame"] = image
         env_infos.append(env_info)
         if d:
             break
@@ -66,12 +74,7 @@ def rollout(env, agent, max_path_length=np.inf, accum_context=True, animated=Fal
     if len(observations.shape) == 1:
         observations = np.expand_dims(observations, 1)
         next_o = np.array([next_o])
-    next_observations = np.vstack(
-        (
-            observations[1:, :],
-            np.expand_dims(next_o, 0)
-        )
-    )
+    next_observations = np.vstack((observations[1:, :], np.expand_dims(next_o, 0)))
     return dict(
         observations=observations,
         actions=actions,
@@ -128,7 +131,4 @@ def get_stat_in_paths(paths, dict_name, scalar_name):
         # Support rllab interface
         return [path[dict_name][scalar_name] for path in paths]
 
-    return [
-        [info[scalar_name] for info in path[dict_name]]
-        for path in paths
-    ]
+    return [[info[scalar_name] for info in path[dict_name]] for path in paths]

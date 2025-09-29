@@ -257,7 +257,7 @@ double RLLogger::compute_reward() {
   if (_curr_rl_state.state[8] > 0)
     reward += 7 * _curr_rl_state.state[8];
   if (_curr_rl_state.state[9] > 0)
-    reward += 7 * _curr_rl_state.state[8];
+    reward += 7 * _curr_rl_state.state[9];
 
   if (!_curr_rl_state.solver_status)
     reward -= 25;

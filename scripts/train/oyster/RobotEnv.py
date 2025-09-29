@@ -1,12 +1,15 @@
-from logging import exception
+import os
 import gym
-import time
+import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
 from gym import spaces
-from py_mpcc import MPCCore
-from matplotlib.patches import Circle
+from Plotter import Plotter
+from Bezier import BezierCurve
+from Tubes import TubeGenerator
+from RobotMPC import RobotMPC
+from ParamLoader import ParameterLoader
 
 
 def normalize(val, min, max):
@@ -17,78 +20,20 @@ def unnormalize(val, min, max):
     return val * (max - min) + min
 
 
-class BezierCurve:
-    def __init__(self, p0, p1, p2, p3):
-        self.p0 = np.array(p0, dtype=float)
-        self.p1 = np.array(p1, dtype=float)
-        self.p2 = np.array(p2, dtype=float)
-        self.p3 = np.array(p3, dtype=float)
-
-    def pos(self, t):
-        """Position on curve at param t ∈ [0,1]"""
-        return (
-            (1 - t) ** 3 * self.p0
-            + 3 * (1 - t) ** 2 * t * self.p1
-            + 3 * (1 - t) * t**2 * self.p2
-            + t**3 * self.p3
-        )
-
-    def vel(self, t):
-        """Derivative wrt t"""
-        return (
-            3 * (1 - t) ** 2 * (self.p1 - self.p0)
-            + 6 * (1 - t) * t * (self.p2 - self.p1)
-            + 3 * t**2 * (self.p3 - self.p2)
-        )
-
-    def compute_arclen(self, t0=0.0, tf=1.0, n=100):
-        """Numerical arc length using trapezoidal rule"""
-        ts = np.linspace(t0, tf, n + 1)
-        vels = np.array([self.vel(t) for t in ts])
-        speeds = np.linalg.norm(vels, axis=1)
-        return np.trapz(speeds, ts)
-
-    def binary_search(self, target_s, start=0.0, end=1.0, tol=1e-4):
-        """Find t such that arclen(0,t) ≈ target_s"""
-        t_left, t_right = start, end
-        prev_s, s = 0, -1e9
-
-        while abs(prev_s - s) > tol:
-            prev_s = s
-            t_mid = (t_left + t_right) / 2.0
-            s = self.compute_arclen(0, t_mid)
-            if s < target_s:
-                t_left = t_mid
-            else:
-                t_right = t_mid
-
-        return 0.5 * (t_left + t_right)
-
-    def reparam_traj(self, M=20):
-        """Return M+1 samples evenly spaced in arc length"""
-        total_len = self.compute_arclen(0, 1)
-        ds = total_len / M
-
-        ss, xs, ys = [], [], []
-        prev_t = 0.0
-        for i in range(M + 1):
-            s = i * ds
-            ti = self.binary_search(s, prev_t, 1.0)
-            pos = self.pos(ti)
-            ss.append(s)
-            xs.append(pos[0])
-            ys.append(pos[1])
-            prev_t = ti
-
-        return np.array(ss), np.array(xs), np.array(ys)
-
-
 class RobotEnv(gym.Env):
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self):
+    def __init__(self, task={}, n_tasks=2, randomize_tasks=False, n_obs=100):
 
         super(RobotEnv, self).__init__()
+
+        # each task is loaded from parameter list
+        self.task_loader = self.load_tasks()
+
+        if len(self.task_loader) == 0:
+            raise ValueError("No parameter files found!")
+
+        self.task_idx = 0
 
         self.state_dim = 13
         self.action_dim = 2
@@ -113,109 +58,175 @@ class RobotEnv(gym.Env):
         # set to anything
         self._goal = None
 
-        self.params = {
-            "DT": 0.1,
-            "STEPS": 10,
-            "ANGVEL": 3.2,
-            "LINVEL": 1.0,
-            "MAX_LINACC": 1.5,
-            "MAX_ANGA": 6.28,
-            "BOUND": 1e3,
-            "W_ANGVEL": 0.15,
-            "W_DANGVEL": 0.7,
-            "W_DA": 0.1,
-            "W_LAG": 100,
-            "W_CONTOUR": 0.8,
-            "W_SPEED": 0.1,
-            "REF_LENGTH": 6,
-            "REF_SAMPLES": 11,
-            "CLF_GAMMA": 0.5,
-            "CLF_W_LAG": 1,
-            "USE_CBF": True,
-            "CBF_ALPHA_ABV": 0.05,
-            "CBF_ALPHA_BLW": 0.05,
-            "CBF_COLINEAR": 0.1,
-            "CBF_PADDING": 0.1,
-        }
-
         p0 = [0, 0]
         p1 = [4.2, 13.6]
         p2 = [5, -8.6]
         p3 = [10.0, 10.0]
 
-        curve = BezierCurve(p0, p1, p2, p3)
-        self.knots, self.traj_x, self.traj_y = curve.reparam_traj(M=20)
+        self.curve = BezierCurve(p0, p1, p2, p3)
+        self.current_ref = self.curve.pos(0.0)
 
-        # robot state: x, y, vx, vy
-        self.robot_state = np.zeros(4, dtype=np.float64)
-        self.robot_state[:2] = np.array([self.traj_x[0], self.traj_y[0]]).flatten()
+        self._obs_init(n_obs, min_dist=0.6)
 
-        self.current_ref = (self.traj_x[0], self.traj_y[0])
+        self.tube_gen = TubeGenerator(
+            self.obstacles, (self.curve.knots, self.curve.xs, self.curve.ys)
+        )
+        (
+            self.d_parallel_p,
+            self.perp_dists_p,
+            self.d_parallel_n,
+            self.perp_dists_n,
+        ) = self.tube_gen.get_dists()
 
-        self._plot_init()
-        self._mpc_init()
+        self.upper_coeffs, self.lower_coeffs = self.tube_gen.generate_corridor()
 
+        self.plotter = None
+        self.set_mpc(self.task_loader[self.task_idx])
         self.reset()
+
+    def set_mpc(self, params):
+        self.params = copy.deepcopy(params)
+        self.dynamic_model = self.params["DYNAMIC_MODEL"]
+
+        self.mpc = RobotMPC(self.curve.pos(0.0), self.params)
+        self.robot_state = self.mpc.get_robot_state()
+
+        self.mpc.set_trajectory(
+            self.curve.xs,
+            self.curve.ys,
+            self.curve.knots,
+        )
+
+    def load_tasks(self):
+        param_path = os.path.join(os.path.dirname(__file__), "configs")
+        fnames = []
+        for file in os.listdir(param_path):
+            if file.endswith(".yaml"):
+                fnames.append(os.path.join(param_path, file))
+
+        return ParameterLoader(fnames)
 
     def step(self, action):
 
-        self.len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
+        len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
 
-        if self.len_start > self.knots[-1] - 1e-2:
-            self.robot_state[2] = 0.0
-            self.robot_state[3] = 0.0
+        upper_coeffs, lower_coeffs = self.tube_gen.shift_poly_parameter(
+            len_start, self.mpc.get_params()["REF_LENGTH"]
+        )
+
+        self.mpc.set_tubes(upper_coeffs, lower_coeffs)
+
+        action[0] = unnormalize(action[0], 0.0, 3.0)
+        action[1] = unnormalize(action[1], 0.0, 3.0)
+
+        self.params = self.mpc.get_params()
+
+        dt = self.params["DT"]
+        exceeded_bounds = False
+        alpha_abv = self.params["CBF_ALPHA_ABV"] + action[0] * dt
+        alpha_blw = self.params["CBF_ALPHA_BLW"] + action[1] * dt
+
+        if alpha_abv < self.params["MIN_ALPHA"] or alpha_abv > self.params["MAX_ALPHA"]:
+            exceeded_bounds = True
+
+        if alpha_blw < self.params["MIN_ALPHA"] or alpha_blw > self.params["MAX_ALPHA"]:
+            exceeded_bounds = True
+
+        self.params["CBF_ALPHA_ABV"] = np.clip(
+            alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
+        )
+        self.params["CBF_ALPHA_ABV"] = np.clip(
+            alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
+        )
+
+        self.mpc.load_params(self.params)
+
+        u = self.mpc.get_control()
+        self.robot_state = self.mpc.apply_control(u)
+
+        idx = (np.abs(self.curve.knots.flatten() - len_start)).argmin()
+        self.current_ref = (self.curve.xs[idx], self.curve.ys[idx])
+
+        obs = self._get_obs()
+
+        # check if done
+        # figure out which side of trajectory we are on
+        tangent = self.curve.vel(len_start)
+        tangent /= np.linalg.norm(tangent)
+        normal = np.array([-tangent[1], tangent[0]])
+
+        traj_p = np.array([self.curve.trajx(len_start), self.curve.trajy(len_start)])
+        to_robot = self.robot_state[:2] - traj_p
+        side = np.sign(np.dot(to_robot, normal))
+
+        dist = self._dist_from_traj(self.robot_state[:2])
+
+        if side < 0:
+            is_colliding = dist > np.polyval(self.lower_coeffs[::-1], len_start)
         else:
-            s_dot = min(
-                max((self.len_start - self.prev_s) / self.dt, 0),
-                np.sqrt(2 * self.v_max**2),
-            )
-            self.prev_s = self.len_start
+            is_colliding = dist > np.polyval(self.upper_coeffs[::-1], len_start)
 
-            action = unnormalize(action, 0.0, 3.0)
-            self.params["CBF_ALPHA_ABV"] += action[0] * self.dt
-            self.params["CBF_ALPHA_BLW"] += action[1] * self.dt
-            self.mpc.load_params(self.params)
-
-            state = np.concatenate((self.robot_state, np.array([0, s_dot])))
-            u = self.mpc.solve(state, False)
-
-            self.robot_state[2] = u[0]
-            self.robot_state[3] = u[1]
-
-        # apply dynamics
-        self.robot_state[0] += self.robot_state[2] * self.dt
-        self.robot_state[1] += self.robot_state[3] * self.dt
-
-        self.robot_state[2] = max(min(self.robot_state[2], self.v_max), -self.v_max)
-        self.robot_state[3] = max(min(self.robot_state[3], self.v_max), -self.v_max)
-
-        idx = (np.abs(self.knots.flatten() - self.len_start)).argmin()
-        self.current_ref = (self.traj_x[idx], self.traj_y[idx])
-
-        return (self._get_obs(), self._get_reward(), False, {})
+        return (
+            obs,
+            self._get_reward(obs, exceeded_bounds, is_colliding),
+            is_colliding,
+            {},
+        )
 
     def reset(self):
+        self.plotter = None
         self.robot_state = np.zeros(4, dtype=np.float64)
         obs = np.zeros(13, dtype=np.float64)
-        obs[4] = 0.5
-        obs[5] = -0.5
-        obs[10] = 0.05
-        obs[11] = 0.05
+        obs[4] = 1.0
+        obs[5] = -1.0
+        obs[10] = 0.0
+        obs[11] = 0.0
 
         return obs
 
+    def render(self, mode="human"):
+        if self.plotter is None:
+            self.plotter = Plotter(
+                self.curve,
+                self.upper_coeffs,
+                self.lower_coeffs,
+                self.obstacles,
+                self.dynamic_model,
+                0.25,
+            )
+
+        self.plotter.add_state_to_path(self.robot_state[:2])
+        self.plotter.render(
+            self.robot_state, self.current_ref, self.curve, self.tube_gen, self.mpc
+        )
+        plt.pause(0.001)
+        return self.plotter.ax
+
+    def get_all_task_idx(self):
+        return range(len(self.task_loader))
+
+    def reset_task(self, idx):
+        plt.close("all")
+
+        self.task_idx = idx
+
+        self.set_mpc(self.task_loader[idx])
+        self.reset()
+
     def _get_obs(self):
-        mpc_state = self.mpc.get_state()
+        mpc_state = self.mpc.get_mpc_state()
         mpc_input = self.mpc.get_mpc_command()
         solver_status = self.mpc.get_solver_status()
 
         cbf_data_abv = self.mpc.get_cbf_data(mpc_state, mpc_input, True)
         cbf_data_blw = self.mpc.get_cbf_data(mpc_state, mpc_input, False)
 
-        alpha_abv = self.mpc.get_params()["CBF_ALPHA_ABV"]
-        alpha_blw = self.mpc.get_params()["CBF_ALPHA_BLW"]
+        params = self.mpc.get_params()
+        alpha_abv = params["CBF_ALPHA_ABV"]
+        alpha_blw = params["CBF_ALPHA_BLW"]
 
-        curr_progress = mpc_state[5] / np.sqrt(2 * self.v_max**2)
+        v_max = params["LINVEL"]
+        curr_progress = mpc_state[5] / np.sqrt(2 * v_max**2)
 
         state_limits = self.mpc.get_state_limits()
         input_limits = self.mpc.get_input_limits()
@@ -237,102 +248,99 @@ class RobotEnv(gym.Env):
 
         return obs
 
-    def _get_reward(self):
-        return 1
+    def _get_reward(self, obs, exceeded_bounds, is_done):
+        len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
 
-    def _mpc_init(self):
-        self.tube_degree = 7
-        upper_coeffs = np.zeros(self.tube_degree)
-        lower_coeffs = np.zeros(self.tube_degree)
-        upper_coeffs[0] = 0.5
-        lower_coeffs[0] = -0.5
+        tangent = self.curve.vel(len_start)
+        tangent /= np.linalg.norm(tangent)
+        normal = np.array([-tangent[1], tangent[0]])
 
-        self.dt = self.params["DT"]
-        self.v_max = self.params["LINVEL"]
-        self.ref_len = self.params["REF_LENGTH"]
+        # figure out which side of trajectory we are on
+        traj_p = np.array([self.curve.trajx(len_start), self.curve.trajy(len_start)])
+        to_robot = self.robot_state[:2] - traj_p
+        side = np.sign(np.dot(to_robot, normal))
 
-        self.prev_s = 0.0
+        dist = self._dist_from_traj(self.robot_state[:2])
 
-        self.mpc = MPCCore("double_integrator")
-        self.mpc.load_params(self.params)
-        self.mpc.set_tubes([upper_coeffs, lower_coeffs])
-        self.mpc.set_trajectory(self.traj_x, self.traj_y, 3, self.knots)
+        is_colliding = False
+        if side < 0:
+            is_colliding = dist > np.polyval(self.lower_coeffs[::-1], len_start)
+        else:
+            is_colliding = dist > np.polyval(self.upper_coeffs[::-1], len_start)
 
-    def _plot_init(self):
-        # visualization setup
-        self.fig, self.ax = plt.subplots()
-        self.ax.set_aspect("equal")
+        reward = 0.0
+        if not is_colliding:
+            reward = 5 * obs[4] * obs[5]
 
-        margin = 2.0
-        x_min, x_max = float(np.min(self.traj_x)), float(np.max(self.traj_x))
-        y_min, y_max = float(np.min(self.traj_y)), float(np.max(self.traj_y))
+        reward -= 5 * (1 - obs[7])
+        mid_alpha = (self.params["MIN_ALPHA"] + self.params["MAX_ALPHA"]) / 2.0
+        reward -= 5 * (obs[10] - mid_alpha) ** 2
+        reward -= 5 * (obs[11] - mid_alpha) ** 2
+        reward -= 30 * int(exceeded_bounds)
 
-        self.ax.set_xlim(x_min - margin, x_max + margin)
-        self.ax.set_ylim(y_min - margin, y_max + margin)
+        if obs[8] > 0.0:
+            reward += 7 * obs[8]
+        if obs[9] > 0.0:
+            reward += 7 * obs[9]
 
-        (self.traj_line,) = self.ax.plot(
-            self.traj_x, self.traj_y, "k--", label="trajectory"
-        )
-        self.robot_patch = Circle((0, 0), 0.2, color="blue", label="robot")
-        (self.ref_point,) = self.ax.plot([], [], "ro", label="reference")
+        if bool(obs[12]):
+            reward -= 25
 
-        # tubes (initialized as empty lines)
-        (self.upper_tube_line,) = self.ax.plot([], [], "r-", label="upper tube")
-        (self.lower_tube_line,) = self.ax.plot([], [], "b-", label="lower tube")
+        if is_done:
+            reward -= 25
 
-        self.ax.add_patch(self.robot_patch)
-        self.ax.legend()
+        return reward
 
-    def _plot_tubes(self, tube_radius=0.5):
-        # figure out where to start and stop the tubes
-        if self.len_start > self.knots[-1] - 1e-2:
-            return
+    def _obs_init(self, n_obs, min_dist):
+        obs = []
+        needed = n_obs
 
-        len_stop = min(self.len_start + self.ref_len, self.knots[-1])
+        # get trajectory points
+        traj = self.curve.fill(np.linspace(0, 1, 100))
 
-        mask = (self.knots >= self.len_start) & (self.knots <= len_stop)
-        traj = np.vstack([self.traj_x[mask], self.traj_y[mask]]).T
+        np.random.seed(42)
+        while len(obs) < n_obs:
+            x_min, x_max = float(np.min(self.curve.xs)), float(np.max(self.curve.xs))
+            y_min, y_max = float(np.min(self.curve.ys)), float(np.max(self.curve.ys))
 
-        try:
-            # compute tangents using gradient
-            tangents = np.gradient(traj, axis=0)
-            tangents /= np.linalg.norm(tangents, axis=1, keepdims=True)
-        except Exception:
-            return
+            # oversample to reduce resampling loops
+            cand_x = np.random.rand(5 * needed) * (x_max - x_min) + x_min
+            cand_y = np.random.rand(5 * needed) * (y_max - y_min) + y_min
+            cand = np.vstack([cand_x, cand_y]).T
 
-        # compute normals
-        normals = np.column_stack([-tangents[:, 1], tangents[:, 0]])
+            # compute distances to trajectory (brute force)
+            # None index adds a new axis
+            dists = np.min(
+                np.linalg.norm(cand[:, None, :] - traj[None, :, :], axis=2), axis=1
+            )
+            valid = cand[dists > min_dist]
 
-        # offset trajectory
-        upper = traj + tube_radius * normals
-        lower = traj - tube_radius * normals
+            obs.extend(valid.tolist())
+            needed = n_obs - len(obs)
 
-        # plot tubes
-        self.upper_tube_line.set_data(upper[:, 0], upper[:, 1])
-        self.lower_tube_line.set_data(lower[:, 0], lower[:, 1])
+        self.obstacles = np.array(obs[:n_obs])
 
-    def render(self, mode="human"):
-        # update robot position
-        self.robot_patch.center = (self.robot_state[0], self.robot_state[1])
-        self.ref_point.set_data(self.current_ref[0], self.current_ref[1])
-
-        self._plot_tubes()
-
-        plt.pause(0.001)
-        return self.ax
-
-    def get_all_task_idx(self):
-        return [0]
-
-    def reset_task(self, idx):
-        self.reset()
+    def _dist_from_traj(self, point):
+        traj = self.curve.fill(np.linspace(0, 1, 100))
+        dists = np.linalg.norm(traj - point[None, :], axis=1)
+        return np.min(dists)
 
 
 if __name__ == "__main__":
-    env = RobotEnv()
+    env = RobotEnv(n_obs=150)
 
-    for _ in range(5):
-        env.step([0, 0])
+    i = 0
+    done = False
+    env.reset_task(0)
+    while not done and i < 200:
+        _, _, done, _ = env.step([0, 0])
         env.render()
+        i += 1
 
-    env._get_obs()
+    # i = 0
+    # done = False
+    # env.reset_task(1)
+    # while not done and i < 200:
+    #     _, _, done, _ = env.step([0, 0])
+    #     env.render()
+    #     i += 1

@@ -22,8 +22,12 @@ MPCCore::MPCCore(const std::string& mpc_input_type) {
   _mpc_input_type = mpc_input_type;
 
   if (_mpc_input_type == "unicycle") {
+    std::cout << termcolor::green << "[MPC Core] Using unicycle model"
+              << termcolor::reset << std::endl;
     _mpc = std::make_unique<MPCC>();
   } else if (_mpc_input_type == "double_integrator") {
+    std::cout << termcolor::green << "[MPC Core] Using double integrator model"
+              << termcolor::reset << std::endl;
     _mpc = std::make_unique<DIMPCC>();
   } else {
     throw std::runtime_error("Invalid MPC input type: " + _mpc_input_type);
@@ -251,7 +255,7 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
 
-  std::cout << "[MPC Core] Solve time: " << time_to_solve << std::endl;
+  /*std::cout << "[MPC Core] Solve time: " << time_to_solve << std::endl;*/
 
   // std::array<double, 2> input = mpc_command.getCommand();
 

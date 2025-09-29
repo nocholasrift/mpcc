@@ -171,8 +171,8 @@ void DIMPCC::load_params(const std::map<std::string, double>& params) {
   _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
   _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
 
-  std::cout << "!! MPC Obj parameters updated !! " << std::endl;
-  std::cout << "!! ACADOS model instantiated !! " << std::endl;
+  /*std::cout << "!! MPC Obj parameters updated !! " << std::endl;*/
+  /*std::cout << "!! ACADOS model instantiated !! " << std::endl;*/
 }
 
 void DIMPCC::reset_horizon() {
@@ -319,8 +319,8 @@ void DIMPCC::warm_start_shifted_u(bool correct_perturb,
                                   const Eigen::VectorXd& state) {
   double starting_s = _prev_x0[1 * kNX + 4];
   if (correct_perturb) {
-    std::cout << termcolor::red << "[MPCC] Guess pos. too far, correcting"
-              << termcolor::reset << std::endl;
+    /*std::cout << termcolor::red << "[MPCC] Guess pos. too far, correcting"*/
+    /*          << termcolor::reset << std::endl;*/
 
     Eigen::VectorXd curr = state;
 
@@ -380,8 +380,9 @@ bool DIMPCC::set_solver_parameters(
   int num_params =
       ctrls_x.size() + ctrls_y.size() + _tubes[0].size() + _tubes[1].size() + 8;
   if (num_params != kNP) {
-    std::cout << termcolor::yellow << "[MPCC] reference size " << num_params
-              << " does not match acados parameter size " << kNP << std::endl;
+    /*std::cout << termcolor::yellow << "[MPCC] reference size " << num_params*/
+    /*          << " does not match acados parameter size " << kNP*/
+    /*          << termcolor::reset << std::endl;*/
 
     return false;
   }
@@ -424,8 +425,8 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   /*************************************
   ********** INITIAL CONDITION *********
   **************************************/
-  std::cout << termcolor::yellow << "RUNNING IN DIMPCC SOLVE!\n"
-            << termcolor::reset;
+  /*std::cout << termcolor::yellow << "RUNNING IN DIMPCC SOLVE!\n"*/
+  /*          << termcolor::reset;*/
 
   if (state.size() != kNBX0) {
     std::cout << termcolor::yellow << "[MPCC] state sized passed has size "
@@ -479,11 +480,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
 
   double dist = (prev_pos - curr_pos).norm();
   if (_is_shift_warm && dist > 1e-1) {
-    std::cout << termcolor::red << "[MPCC] Pos too far (" << dist
-              << "), turning off shifted warm start" << std::endl;
-    std::cout << "[MPCC] x0: " << x0.transpose() << termcolor::reset
-              << std::endl;
-    // _is_shift_warm = false;
+    /*std::cout << termcolor::red << "[MPCC] Pos too far (" << dist*/
+    /*          << "), turning off shifted warm start" << std::endl;*/
+    /*std::cout << "[MPCC] x0: " << x0.transpose() << termcolor::reset*/
+    /*          << std::endl;*/
   }
 
   double starting_s = _prev_x0[1 * kNX + kIndS];
@@ -523,7 +523,7 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
       std::cout << "[MPCC] unicycle_model_mpcc_acados_solve(): SUCCESS! "
                 << std::chrono::duration<double>(end - start).count() << "s"
                 << std::endl;
-      //          << elapsed_time * 1000 << std::endl;
+
       _is_shift_warm = true;
       _solve_success = true;
       break;
@@ -533,10 +533,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
                 << "[MPCC] unicycle_model_mpcc_acados_solve() failed with "
                    "status "
                 << status << termcolor::reset << std::endl;
-      std::cout << "[MPCC] using simple warm start procedure" << std::endl;
-      std::cout << "[MPCC] xinit is: " << x0.transpose() << std::endl;
-      double h_val = get_cbf_data(x0, Eigen::Vector2d(), true)[0];
-      std::cout << "[MPCC] cbf value: " << h_val << std::endl;
+      /*std::cout << "[MPCC] using simple warm start procedure" << std::endl;*/
+      /*std::cout << "[MPCC] xinit is: " << x0.transpose() << std::endl;*/
+      /*double h_val = get_cbf_data(x0, Eigen::Vector2d(), true)[0];*/
+      /*std::cout << "[MPCC] cbf value: " << h_val << std::endl;*/
 
       warm_start_no_u(x_init);
     }
@@ -548,10 +548,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
 
   double prev_angvel = _prev_u0[kIndS];
   process_solver_output(s);
-  std::cout << "mpc x[0] is " << _prev_x0.head(kNX).transpose() << std::endl;
-  std::cout << "true x[0] is " << x0.transpose() << std::endl;
-  std::cout << "mpc x[1] is " << _prev_x0.segment(kNX, kNX).transpose()
-            << std::endl;
+  /*std::cout << "mpc x[0] is " << _prev_x0.head(kNX).transpose() << std::endl;*/
+  /*std::cout << "true x[0] is " << x0.transpose() << std::endl;*/
+  /*std::cout << "mpc x[1] is " << _prev_x0.segment(kNX, kNX).transpose()*/
+  /*          << std::endl;*/
 
   _has_run = true;
 
@@ -569,9 +569,9 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   new_velx = std::max(std::min(new_velx, _max_linvel), -_max_linvel);
   new_vely = std::max(std::min(new_vely, _max_linvel), -_max_linvel);
 
-  std::cout << "[MPCC] accelerations are: " << _prev_u0[kIndAx] << " "
-            << _prev_u0[kIndAy] << std::endl;
-  std::cout << "[MPCC] Input is: " << new_velx << " " << new_vely << std::endl;
+  /*std::cout << "[MPCC] accelerations are: " << _prev_u0[kIndAx] << " "*/
+  /*          << _prev_u0[kIndAy] << std::endl;*/
+  /*std::cout << "[MPCC] Input is: " << new_velx << " " << new_vely << std::endl;*/
 
   _cmd = {_prev_u0[0], _prev_u0[1]};
 
@@ -595,7 +595,7 @@ void DIMPCC::process_solver_output(double s) {
   // std::cout << "getting slacks " << NS << std::endl;
   ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, 1, "sl", &slacks[0]);
 
-  std::cout << "[MPCC] Slack values are: " << slacks.transpose() << std::endl;
+  /*std::cout << "[MPCC] Slack values are: " << slacks.transpose() << std::endl;*/
 #endif
 
   _prev_x0 = xtraj;
