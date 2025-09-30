@@ -166,10 +166,13 @@ class RobotEnv(gym.Env):
         else:
             is_colliding = dist > np.polyval(self.upper_coeffs[::-1], len_start)
 
+        len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
+        is_done = len_start > self.curve.knots[-1] - 2e-1
+
         return (
             obs,
             self._get_reward(obs, exceeded_bounds, is_colliding),
-            is_colliding,
+            is_colliding or is_done,
             {},
         )
 
@@ -331,8 +334,8 @@ if __name__ == "__main__":
 
     i = 0
     done = False
-    env.reset_task(0)
-    while not done and i < 200:
+    env.reset_task(2)
+    while not done:
         _, _, done, _ = env.step([0, 0])
         env.render()
         i += 1

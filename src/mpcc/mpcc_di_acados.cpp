@@ -1,7 +1,8 @@
 #include <mpcc/mpcc_di_acados.h>
-#include <mpcc/utils.h>
-#include <cmath>
 #include <mpcc/termcolor.hpp>
+
+#include <chrono>
+#include <cmath>
 
 #ifdef FOUND_PYBIND11
 // the declarations in the header cannot be referenced by pybind...

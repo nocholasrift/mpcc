@@ -1,5 +1,6 @@
 #include "mpcc/mpcc_core.h"
 
+#include <chrono>
 #include <cmath>
 
 #include "mpcc/termcolor.hpp"
@@ -172,7 +173,7 @@ bool MPCCore::orient_robot() {
   // wrap between -pi and pi
   double e = atan2(sin(traj_heading - _odom(2)), cos(traj_heading - _odom(2)));
 
-  if (isnan(e)) {
+  if (std::isnan(e)) {
     std::cout << termcolor::red << "[MPC Core] heading error nan, returning"
               << termcolor::reset << std::endl;
     return false;

@@ -1,17 +1,12 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(mpcc C CXX)
 
-## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++17 -O3)
-
 # add cmake module path
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(AcadosUtils)
 
-## Find catkin macros and libraries
-## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS
+## Try to find catkin (optional)
+find_package(catkin QUIET COMPONENTS
   geometry_msgs
   roscpp
   rospy
@@ -23,74 +18,72 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(pybind11 QUIET)
-
-set(CVXPYGEN_OUTPUT ${CMAKE_SOURCE_DIR}/scripts/tube_gen/LP_codegen/c)
-add_subdirectory(${CVXPYGEN_OUTPUT})
-
-## System dependencies are found with CMake's conventions
 find_package(Python3 REQUIRED)
 find_package(ACADOS REQUIRED)
 find_package(BLASFEO REQUIRED)
 find_package(HPIPM REQUIRED)
-find_package(Eigen3 REQUIRED COMPONENT system)
+find_package(Eigen3 REQUIRED COMPONENTS system)
 
-# if acados_include_dirs has acados_c after /include, remove acados_c from path
-# string(REGEX REPLACE "/acados_c$" "" ACADOS_INCLUDE_DIRS "${ACADOS_INCLUDE_DIRS}")
+set(CVXPYGEN_OUTPUT ${CMAKE_SOURCE_DIR}/scripts/tube_gen/LP_codegen/c)
+add_subdirectory(${CVXPYGEN_OUTPUT})
 
-message("ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
+message(STATUS "ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
 
-add_message_files(
-      DIRECTORY
-      FILES
+########################
+# Catkin-specific stuff
+########################
+if(catkin_FOUND)
+  message(STATUS "Catkin found, building ROS nodes")
+
+  add_message_files(
+    DIRECTORY
+    FILES
       RLState.msg
-)
+  )
 
-add_service_files(
-  FILES
-  QuerySAC.srv
-  QuerySACDI.srv
-)
+  add_service_files(
+    FILES
+      QuerySAC.srv
+      QuerySACDI.srv
+  )
 
-generate_messages(
-      DEPENDENCIES 
+  generate_messages(
+    DEPENDENCIES 
       nav_msgs
       geometry_msgs 
       trajectory_msgs
-)
+  )
 
-catkin_package(
-  CATKIN_DEPENDS message_runtime
-)
+  catkin_package(
+    CATKIN_DEPENDS message_runtime
+  )
+else()
+  message(STATUS "Catkin not found, skipping ROS message/service generation")
+endif()
 
-###########
-## Build ##
-###########
-
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
+########################
+# Common include paths
+########################
 include_directories(
   include
   third_party/autodiff
   ${HPIPM_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
-  ${catkin_INCLUDE_DIRS}
   ${ACADOS_INCLUDE_DIRS}
   ${BLASFEO_INCLUDE_DIRS}
   ${cpg_include}
 )
 
+if(catkin_FOUND)
+  include_directories(${catkin_INCLUDE_DIRS})
+endif()
 
+########################
+# ACADOS model generation
+########################
 set(ACADOS_MODELS
   unicycle_model_mpcc
   double_integrator_mpcc
-)
-
-set(MPCC_SRCS
-  src/mpcc/logger.cpp
-  src/mpcc/mpcc_ros.cpp
-  src/mpcc/mpcc_core.cpp
-  src/mpcc/mpcc_acados.cpp
-  src/mpcc/mpcc_di_acados.cpp
 )
 
 set(ACADOS_OUTPUT_DIRS "")
@@ -98,6 +91,7 @@ set(ACADOS_OUTPUT_SRC "")
 set(ACADOS_OUTPUT_HEADERS "")
 set(ACADOS_OUTPUT_LIBS "")
 set(ACADOS_TARGETS "")
+
 foreach(model ${ACADOS_MODELS})
   set(${model}_SCRIPTS 
     ${CMAKE_SOURCE_DIR}/scripts/${model}/mpcc_model.py
@@ -109,8 +103,6 @@ foreach(model ${ACADOS_MODELS})
   list(APPEND ACADOS_OUTPUT_SRC ${${model}_SRC})
   list(APPEND ACADOS_OUTPUT_HEADERS ${${model}_HEADERS})
   list(APPEND ACADOS_OUTPUT_LIBS ${${model}_LIBS})
-
-  # add model specific output to a variable called ${model}_output_files
 
   add_custom_command(
     OUTPUT ${${model}_OUTPUT_FILES}
@@ -128,10 +120,16 @@ foreach(model ${ACADOS_MODELS})
   list(APPEND ACADOS_TARGETS GenerateAcadosCode_${model})
 endforeach()
 
+########################
+# Core MPCC library
+########################
 add_library(cvxpy_lib STATIC ${cpg_src})
 target_compile_options(cvxpy_lib PRIVATE -O3 -w)
 target_include_directories(cvxpy_lib PRIVATE ${cpg_include})
 
+########################
+# Python bindings
+########################
 if (pybind11_FOUND)
   message(STATUS "Pybind11 found, building mpcc python bindings")
   add_definitions(-DFOUND_PYBIND11)
@@ -164,31 +162,39 @@ else()
   message(STATUS "Pybind11 not found, mpcc python bindings will not be built")
 endif()
 
-add_executable(mpcc_ros 
-  ${MPCC_SRCS}
-  src/mpcc/mpcc_node.cpp
-)
-target_link_libraries(mpcc_ros
-  ${HPIPM_LIBRARIES}
-  ${catkin_LIBRARIES}
-  ${ACADOS_LIBRARIES}
-  ${EIGEN3_LIBRARIES}
-  ${ACADOS_OUTPUT_LIBS}
-  ${BLASFEO_LIBRARIES}
-  cvxpy_lib
-)
-add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages)
-target_compile_options(mpcc_ros PRIVATE -std=c++17 -O3)
-add_dependencies(mpcc_ros ${ACADOS_TARGETS})
-add_dependencies(mpcc_ros cvxpy_lib)
-target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${cpg_include})
+########################
+# ROS executables (only if catkin)
+########################
+if(catkin_FOUND)
+  set(MPCC_SRCS
+    src/mpcc/logger.cpp
+    src/mpcc/mpcc_ros.cpp
+    src/mpcc/mpcc_core.cpp
+    src/mpcc/mpcc_acados.cpp
+    src/mpcc/mpcc_di_acados.cpp
+  )
 
-add_executable(publish_pf_pose src/utils/publish_pf_pose.cpp)
-target_link_libraries(publish_pf_pose
-  ${catkin_LIBRARIES}
-)
-
-add_executable(local_costmap src/utils/local_costmap.cpp)
-target_link_libraries(local_costmap
+  add_executable(mpcc_ros 
+    ${MPCC_SRCS}
+    src/mpcc/mpcc_node.cpp
+  )
+  target_link_libraries(mpcc_ros
+    ${HPIPM_LIBRARIES}
     ${catkin_LIBRARIES}
-)
+    ${ACADOS_LIBRARIES}
+    ${EIGEN3_LIBRARIES}
+    ${ACADOS_OUTPUT_LIBS}
+    ${BLASFEO_LIBRARIES}
+    cvxpy_lib
+  )
+  add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages ${ACADOS_TARGETS} cvxpy_lib)
+  target_compile_options(mpcc_ros PRIVATE -std=c++17 -O3)
+  target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${cpg_include})
+
+  add_executable(publish_pf_pose src/utils/publish_pf_pose.cpp)
+  target_link_libraries(publish_pf_pose ${catkin_LIBRARIES})
+
+  add_executable(local_costmap src/utils/local_costmap.cpp)
+  target_link_libraries(local_costmap ${catkin_LIBRARIES})
+endif()
+

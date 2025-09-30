@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "mpcc/tube_gen.h"
 #include "mpcc/utils.h"
 
 MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
@@ -672,9 +673,9 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   bool status   = true;
   if (_use_cbf) {
     std::cout << "ref_len size is: " << _ref_len << std::endl;
-    status = utils::get_tubes(_tube_degree, _tube_samples, _max_tube_width,
-                              _ref, _ref_len, len_start, horizon, _odom,
-                              _grid_map, _tubes);
+    status = tube_utils::get_tubes(_tube_degree, _tube_samples, _max_tube_width,
+                                   _ref, _ref_len, len_start, horizon, _odom,
+                                   _grid_map, _tubes);
 
     ROS_INFO("finished tube generation");
   } else {
