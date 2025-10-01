@@ -141,7 +141,7 @@ class RobotEnv(gym.Env):
 
         self.mpc.load_params(self.params)
 
-        u = self.mpc.get_control()
+        u = self.mpc.get_control(len_start)
         self.robot_state = self.mpc.apply_control(u)
 
         idx = (np.abs(self.curve.knots.flatten() - len_start)).argmin()
@@ -161,13 +161,16 @@ class RobotEnv(gym.Env):
 
         dist = self._dist_from_traj(self.robot_state[:2])
 
+        is_colliding = False
         if side < 0:
             is_colliding = dist > np.polyval(self.lower_coeffs[::-1], len_start)
         else:
             is_colliding = dist > np.polyval(self.upper_coeffs[::-1], len_start)
 
+
         len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
         is_done = len_start > self.curve.knots[-1] - 2e-1
+
 
         return (
             obs,
@@ -204,7 +207,6 @@ class RobotEnv(gym.Env):
                 0.25,
             )
 
-        print("RENDERING AHH THAT IS BAD!!!")
         self.plotter.add_state_to_path(self.robot_state[:2])
         self.plotter.render(
             self.robot_state, self.current_ref, self.curve, self.tube_gen, self.mpc
@@ -303,11 +305,12 @@ class RobotEnv(gym.Env):
         return reward
 
     def _obs_init(self, n_obs, min_dist):
-        obs = []
+        obs = [[6.12, 2.3], [2.75, 4.45]]
+        # obs = []
         needed = n_obs
 
         # get trajectory points
-        traj = self.curve.fill(np.linspace(0, 1, 100))
+        traj = self.curve.fill(np.linspace(0,1,100))
 
         np.random.seed(42)
         while len(obs) < n_obs:
@@ -332,8 +335,7 @@ class RobotEnv(gym.Env):
         self.obstacles = np.array(obs[:n_obs])
 
     def _dist_from_traj(self, point):
-        traj = self.curve.fill(np.linspace(0, 1, 100))
-        dists = np.linalg.norm(traj - point[None, :], axis=1)
+        dists = np.linalg.norm(self.curve.pts - point[None, :], axis=1)
         return np.min(dists)
 
 
@@ -342,7 +344,7 @@ if __name__ == "__main__":
 
     i = 0
     done = False
-    env.reset_task(2)
+    env.reset_task(0)
     while not done:
         _, _, done, _ = env.step([0, 0])
         env.render()

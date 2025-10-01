@@ -30,9 +30,9 @@ w_lyap_contour_e: 1
 clf_gamma: .5
 
 # CBF params
-use_cbf: false
-cbf_alpha_abv: 2.0
-cbf_alpha_blw: 2.0
+use_cbf: true
+cbf_alpha_abv: 0.5
+cbf_alpha_blw: 0.5
 cbf_colinear: .05
 cbf_padding: .05
 
@@ -53,7 +53,7 @@ prop_gain_thresh: .5
 max_tube_width: .75
 
 # recompile after changing all params from here on
-ref_length_size: 6
+ref_length_size: 4
 mpc_ref_samples: 11
 
 # there will be d+1 variables in the LP formulation

@@ -149,7 +149,6 @@ def main(config, gpu, docker, debug):
     variant = default_config
     if config:
         with open(os.path.join(config)) as f:
-            print("TRYING TO LOAD")
             exp_params = json.load(f)
         variant = deep_update_dict(exp_params, variant)
     variant["util_params"]["gpu_id"] = gpu
@@ -160,5 +159,4 @@ def main(config, gpu, docker, debug):
 if __name__ == "__main__":
     import sys
 
-    print("hello????", file=sys.stderr)
     main()

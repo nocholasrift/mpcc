@@ -19,8 +19,12 @@ class BezierCurve:
         self.trajx_d = self.trajx.derivative(n=1)
         self.trajy_d = self.trajy.derivative(n=1)
 
+        self.pts = self.pos(np.linspace(0,self.knots[-1],200))
+
     def pos(self, s):
-        return np.array([self.trajx(s), self.trajy(s)])
+        x = self.trajx(s)
+        y = self.trajy(s)
+        return np.stack([x,y], axis=-1)
 
     def vel(self, s):
         return np.array([self.trajx_d(s), self.trajy_d(s)])

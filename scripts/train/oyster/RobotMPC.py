@@ -80,8 +80,7 @@ class RobotMPC:
         self.mpc.load_params(params)
         self.params = self.mpc.get_params()
 
-    def get_control(self):
-        len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
+    def get_control(self, len_start):
 
         u = [0, 0]
         if len_start <= self.knots[-1] - 1e-2:
