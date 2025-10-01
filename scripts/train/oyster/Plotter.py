@@ -1,4 +1,7 @@
 import numpy as np
+import matplotlib
+matplotlib.use("TkAgg")
+
 import matplotlib.pyplot as plt
 
 from RobotMPC import Dynamics
@@ -159,7 +162,7 @@ class Plotter:
             # print((footprint + robot_state[:2]).reshape(-1, 2))
             self.robot_patch.set_xy((footprint + robot_state[:2]).reshape(-1, 2))
 
-        self.ref_point.set_data(current_ref[0], current_ref[1])
+        self.ref_point.set_data([current_ref[0]], [current_ref[1]])
 
         if len(self.prev_states) > 1:
             path = np.array(self.prev_states)

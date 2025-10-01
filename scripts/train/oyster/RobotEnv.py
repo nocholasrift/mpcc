@@ -187,7 +187,13 @@ class RobotEnv(gym.Env):
 
         return obs
 
-    def render(self, mode="human"):
+    def render(self, mode="human", close=False):
+        if close:
+            if self.plotter:
+                plt.close(self.plotter.fig)
+                self.plotter = None
+            return None
+
         if self.plotter is None:
             self.plotter = Plotter(
                 self.curve,
@@ -198,11 +204,13 @@ class RobotEnv(gym.Env):
                 0.25,
             )
 
+        print("RENDERING AHH THAT IS BAD!!!")
         self.plotter.add_state_to_path(self.robot_state[:2])
         self.plotter.render(
             self.robot_state, self.current_ref, self.curve, self.tube_gen, self.mpc
         )
         plt.pause(0.001)
+
         return self.plotter.ax
 
     def get_all_task_idx(self):
