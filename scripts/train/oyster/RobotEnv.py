@@ -180,6 +180,8 @@ class RobotEnv(gym.Env):
         )
 
     def reset(self):
+        plt.close("all")
+
         self.plotter = None
         self.robot_state = np.zeros(4, dtype=np.float64)
         obs = np.zeros(13, dtype=np.float64)

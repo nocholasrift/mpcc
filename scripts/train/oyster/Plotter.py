@@ -40,8 +40,32 @@ class Plotter:
     def plot_init(self, curve, upper_coeffs, lower_coeffs, obstacles):
 
         # visualization setup
-        self.fig, self.ax = plt.subplots(figsize=(10, 8))
-        self.ax.set_aspect("equal")
+        self.fig = plt.figure(figsize=(16, 8))
+
+        self.ax = plt.subplot2grid((2, 2), (0, 0), rowspan=2, colspan=1)
+        # self.ax.set_aspect("equal", adjustable="box")
+
+        self.ax_alpha_upper = plt.subplot2grid((2, 2), (0, 1))
+        self.ax_alpha_lower = plt.subplot2grid((2, 2), (1, 1), sharex=self.ax_alpha_upper)
+        # self.fig, (self.ax, self.ax_alpha_col) = plt.subplots(
+        #         1, 2, figsize=(14, 8), gridspec_kw={"width_ratios": [3, 1]}
+        # )
+        # self.ax.set_aspect("equal")
+
+        # self.ax_alpha_upper, self.ax_alpha_lower = self.ax_alpha_col.figure.subplots(2, 1, sharex=True)
+
+        (self.alpha_upper_line,) = self.ax_alpha_upper.plot([], [], "r-", label="alpha_upper")
+        (self.alpha_lower_line,) = self.ax_alpha_lower.plot([], [], "b-", label="alpha_lower")
+
+        self.ax_alpha_upper.set_ylabel(r"$\alpha_{upper}$")
+        self.ax_alpha_lower.set_ylabel(r"$\alpha_{lower}$")
+        self.ax_alpha_lower.set_xlabel("Time step")
+        self.ax_alpha_upper.grid(True, linestyle="--", alpha=0.5)
+        self.ax_alpha_lower.grid(True, linestyle="--", alpha=0.5)
+
+        self.alpha_upper_hist = []
+        self.alpha_lower_hist = []
+        self.alpha_t = []
 
         if self.dynamics == Dynamics.DOUBLE_INTEGRATOR:
             self.robot_patch = Circle(
@@ -170,6 +194,22 @@ class Plotter:
             #     print(path)
             #     exit(0)
             self.path_line.set_data(path[:, 0], path[:, 1])
+
+        params = mpc.get_params()
+        alpha_upper = params["CBF_ALPHA_ABV"]
+        alpha_lower = params["CBF_ALPHA_BLW"]
+
+        t = len(self.alpha_t)
+        self.alpha_t.append(t)
+        self.alpha_upper_hist.append(alpha_upper)
+        self.alpha_lower_hist.append(alpha_lower)
+
+        self.alpha_upper_line.set_data(self.alpha_t, self.alpha_upper_hist)
+        self.alpha_lower_line.set_data(self.alpha_t, self.alpha_lower_hist)
+
+        for ax in [self.ax_alpha_upper, self.ax_alpha_lower]:
+            ax.relim()
+            ax.autoscale_view()
 
         self.plot_tubes(
             curve,
