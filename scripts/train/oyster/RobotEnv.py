@@ -135,7 +135,7 @@ class RobotEnv(gym.Env):
         self.params["CBF_ALPHA_ABV"] = np.clip(
             alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
         )
-        self.params["CBF_ALPHA_ABV"] = np.clip(
+        self.params["CBF_ALPHA_BLW"] = np.clip(
             alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
         )
 
