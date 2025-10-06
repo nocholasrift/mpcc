@@ -15,7 +15,7 @@ const uint16_t DIMPCC::kNBX0;
 #endif
 
 DIMPCC::DIMPCC() {
-  _dt         = .05;
+  _dt         = -1;
   _max_linvel = 2.;
   _max_linacc = 2.;
   _mpc_steps  = 20;
@@ -42,8 +42,7 @@ DIMPCC::DIMPCC() {
   _solve_success = false;
   _is_shift_warm = false;
 
-  _acados_ocp_capsule = nullptr;
-  _new_time_steps     = nullptr;
+  _new_time_steps = nullptr;
 
   _state = Eigen::VectorXd::Zero(kNX);
 
@@ -64,7 +63,7 @@ DIMPCC::DIMPCC() {
 
 DIMPCC::~DIMPCC() {
   if (_acados_ocp_capsule)
-    delete _acados_ocp_capsule;
+    double_integrator_mpcc_acados_free(_acados_ocp_capsule);
   if (_new_time_steps)
     delete _new_time_steps;
 }
@@ -73,9 +72,6 @@ void DIMPCC::load_params(const std::map<std::string, double>& params) {
   _params = params;
 
   // Init parameters for MPC object
-  _dt = params.find("DT") != params.end() ? params.at("DT") : _dt;
-  _mpc_steps =
-      _params.find("STEPS") != _params.end() ? _params.at("STEPS") : _mpc_steps;
   _max_linvel = _params.find("LINVEL") != _params.end() ? _params.at("LINVEL")
                                                         : _max_linvel;
   _max_linacc = _params.find("MAX_LINACC") != _params.end()
@@ -118,34 +114,77 @@ void DIMPCC::load_params(const std::map<std::string, double>& params) {
                    ? params.at("CBF_PADDING")
                    : _padding;
 
-  _acados_ocp_capsule = double_integrator_mpcc_acados_create_capsule();
+  double new_dt = params.find("DT") != params.end() ? params.at("DT") : _dt;
+  double new_steps =
+      _params.find("STEPS") != _params.end() ? _params.at("STEPS") : _mpc_steps;
 
-  if (_new_time_steps)
-    delete[] _new_time_steps;
+  bool should_create = (new_steps != _mpc_steps) || (fabs(new_dt - _dt) > 1e-3);
 
-  _acados_sim_capsule =
-      double_integrator_mpcc_acados_sim_solver_create_capsule();
-  int status = double_integrator_mpcc_acados_sim_create(_acados_sim_capsule);
+  _dt        = new_dt;
+  _mpc_steps = new_steps;
 
-  if (status) {
-    throw std::runtime_error("acados_create() returned status " +
-                             std::to_string(status) + ". Exiting.");
+  if (should_create) {
+
+    int status = initialize_acados();
+
+    if (status) {
+      throw std::runtime_error(
+          "double_integrator_mpcc_acados_create() returned status " +
+          std::to_string(status) + ". Exiting.");
+    }
+
+    mpc_x.resize(_mpc_steps);
+    mpc_y.resize(_mpc_steps);
+    mpc_vx.resize(_mpc_steps);
+    mpc_vy.resize(_mpc_steps);
+    mpc_s.resize(_mpc_steps);
+    mpc_s_dot.resize(_mpc_steps);
+
+    mpc_ax.resize(_mpc_steps - 1);
+    mpc_ay.resize(_mpc_steps - 1);
+    mpc_s_ddots.resize(_mpc_steps - 1);
+
+    _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
+    _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
+  }
+}
+
+int DIMPCC::initialize_acados() {
+  if (_acados_ocp_capsule) {
+    double_integrator_mpcc_acados_free(_acados_ocp_capsule);
   }
 
-  // acados sim
-  _sim_in   = double_integrator_mpcc_acados_get_sim_in(_acados_sim_capsule);
-  _sim_out  = double_integrator_mpcc_acados_get_sim_out(_acados_sim_capsule);
-  _sim_dims = double_integrator_mpcc_acados_get_sim_dims(_acados_sim_capsule);
-  _sim_config =
-      double_integrator_mpcc_acados_get_sim_config(_acados_sim_capsule);
+  // if (_acados_sim_capsule) {
+  //   double_integrator_mpcc_acados_free(_acados_ocp_capsule);
+  // }
 
-  status = double_integrator_mpcc_acados_create_with_discretization(
+  // _acados_sim_capsule =
+  //     double_integrator_mpcc_acados_sim_solver_create_capsule();
+
+  // int status = double_integrator_mpcc_acados_sim_create(_acados_sim_capsule);
+  // if (status) {
+  //   return status;
+  // }
+  //
+  // // acados sim
+  // _sim_in   = double_integrator_mpcc_acados_get_sim_in(_acados_sim_capsule);
+  // _sim_out  = double_integrator_mpcc_acados_get_sim_out(_acados_sim_capsule);
+  // _sim_dims = double_integrator_mpcc_acados_get_sim_dims(_acados_sim_capsule);
+  // _sim_config =
+  //     double_integrator_mpcc_acados_get_sim_config(_acados_sim_capsule);
+  //
+  _acados_ocp_capsule = double_integrator_mpcc_acados_create_capsule();
+
+  if (_new_time_steps) {
+    delete[] _new_time_steps;
+    _new_time_steps = nullptr;
+  }
+
+  int status = double_integrator_mpcc_acados_create_with_discretization(
       _acados_ocp_capsule, _mpc_steps, _new_time_steps);
 
   if (status) {
-    throw std::runtime_error(
-        "double_integrator_mpcc_acados_create() returned status " +
-        std::to_string(status) + ". Exiting.");
+    return status;
   }
 
   // acados solver
@@ -158,22 +197,7 @@ void DIMPCC::load_params(const std::map<std::string, double>& params) {
   _nlp_config =
       double_integrator_mpcc_acados_get_nlp_config(_acados_ocp_capsule);
 
-  mpc_x.resize(_mpc_steps);
-  mpc_y.resize(_mpc_steps);
-  mpc_vx.resize(_mpc_steps);
-  mpc_vy.resize(_mpc_steps);
-  mpc_s.resize(_mpc_steps);
-  mpc_s_dot.resize(_mpc_steps);
-
-  mpc_ax.resize(_mpc_steps - 1);
-  mpc_ay.resize(_mpc_steps - 1);
-  mpc_s_ddots.resize(_mpc_steps - 1);
-
-  _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
-  _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
-
-  /*std::cout << "!! MPC Obj parameters updated !! " << std::endl;*/
-  /*std::cout << "!! ACADOS model instantiated !! " << std::endl;*/
+  return 0;
 }
 
 void DIMPCC::reset_horizon() {
@@ -418,6 +442,11 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
                                     bool is_reverse) {
   _solve_success = false;
 
+  if (!_acados_ocp_capsule) {
+    std::cout << termcolor::yellow << "[MPCC] Parameters not yet loaded!"
+              << termcolor::reset << std::endl;
+  }
+
   if (_tubes.size() == 0) {
     std::cout << "[MPCC] tubes are not set yet, mpc cannot run" << std::endl;
     return {0, 0};
@@ -521,19 +550,19 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
     // elapsed_time += timer;
 
     if (status == ACADOS_SUCCESS) {
-      std::cout << "[MPCC] unicycle_model_mpcc_acados_solve(): SUCCESS! "
-                << std::chrono::duration<double>(end - start).count() << "s"
-                << std::endl;
+      // std::cout << "[MPCC] unicycle_model_mpcc_acados_solve(): SUCCESS! "
+      //           << std::chrono::duration<double>(end - start).count() << "s"
+      //           << std::endl;
 
       _is_shift_warm = true;
       _solve_success = true;
       break;
     } else {
       _is_shift_warm = false;
-      std::cout << termcolor::red
-                << "[MPCC] unicycle_model_mpcc_acados_solve() failed with "
-                   "status "
-                << status << termcolor::reset << std::endl;
+      // std::cout << termcolor::red
+      //           << "[MPCC] unicycle_model_mpcc_acados_solve() failed with "
+      //              "status "
+      //           << status << termcolor::reset << std::endl;
       /*std::cout << "[MPCC] using simple warm start procedure" << std::endl;*/
       /*std::cout << "[MPCC] xinit is: " << x0.transpose() << std::endl;*/
       /*double h_val = get_cbf_data(x0, Eigen::Vector2d(), true)[0];*/

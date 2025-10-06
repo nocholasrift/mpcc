@@ -71,6 +71,8 @@ void MPCCore::load_params(const std::map<std::string, double>& params) {
   _mpc->load_params(params);
 }
 
+void MPCCore::set_alpha(const std::array<double, 2>& alphas) {}
+
 void MPCCore::set_dyna_obs(const Eigen::MatrixXd& dyna_obs) {
   /*_mpc->set_dyna_obs(dyna_obs);*/
 }

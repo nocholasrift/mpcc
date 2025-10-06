@@ -71,6 +71,7 @@ class MPCCore {
   void set_trajectory(const std::array<Spline1D, 2>& ref, double arclen);
   void set_tubes(const std::array<Eigen::VectorXd, 2>& tubes);
   void set_dyna_obs(const Eigen::MatrixXd& dyna_obs);
+  void set_alpha(const std::array<double, 2>& alphas);
 
   const bool get_solver_status() const;
   const Eigen::VectorXd& get_state() const;

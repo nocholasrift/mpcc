@@ -62,13 +62,12 @@ class DIMPCC : public MPCBase {
   Eigen::VectorXd next_state(const Eigen::VectorXd& current_state,
                              const Eigen::VectorXd& control);
 
-  void warm_start_no_u(double* x_init);
-
-  void warm_start_shifted_u(bool correct_perturb, const Eigen::VectorXd& state);
-
   void process_solver_output(double s);
-
+  void warm_start_no_u(double* x_init);
+  void warm_start_shifted_u(bool correct_perturb, const Eigen::VectorXd& state);
   bool set_solver_parameters(const std::array<Spline1D, 2>& adjusted_ref);
+
+  int initialize_acados();
 
  private:
   static constexpr uint8_t kIndX        = 0;
@@ -107,6 +106,6 @@ class DIMPCC : public MPCBase {
 
   bool _use_cbf;
 
-  double_integrator_mpcc_sim_solver_capsule* _acados_sim_capsule;
-  double_integrator_mpcc_solver_capsule* _acados_ocp_capsule;
+  double_integrator_mpcc_sim_solver_capsule* _acados_sim_capsule = nullptr;
+  double_integrator_mpcc_solver_capsule* _acados_ocp_capsule     = nullptr;
 };
