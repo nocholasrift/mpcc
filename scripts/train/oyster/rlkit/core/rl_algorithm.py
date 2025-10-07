@@ -170,25 +170,30 @@ class MetaRLAlgorithm(metaclass=abc.ABCMeta):
                 self.enc_replay_buffer.task_buffers[idx].clear()
 
                 # collect some trajectories with z ~ prior
+                # print("COLLECTING PRIOR STEPS")
                 if self.num_steps_prior > 0:
                     self.collect_data(self.num_steps_prior, 1, np.inf)
                 # collect some trajectories with z ~ posterior
                 if self.num_steps_posterior > 0:
                     self.collect_data(self.num_steps_posterior, 1, self.update_post_train)
                 # even if encoder is trained only on samples from the prior, the policy needs to learn to handle z ~ posterior
+                # print("COLLECTING POSTERIOR EXTRA STEPS")
                 if self.num_extra_rl_steps_posterior > 0:
                     self.collect_data(self.num_extra_rl_steps_posterior, 1, self.update_post_train, add_to_enc_buffer=False)
 
             # Sample train tasks and compute gradient updates on parameters.
             for train_step in range(self.num_train_steps_per_itr):
+                # print("GOING THROUGH TRAINING: ", train_step)
                 indices = np.random.choice(self.train_tasks, self.meta_batch)
                 self._do_training(indices)
+                # print("done training iteration!", train_step)
                 self._n_train_steps_total += 1
             gt.stamp('train')
 
             self.training_mode(False)
 
             # eval
+            # print("EVALUATING!!!", train_step)
             self._try_to_eval(it_)
             gt.stamp('eval')
 

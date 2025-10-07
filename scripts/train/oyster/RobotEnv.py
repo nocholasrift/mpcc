@@ -136,7 +136,7 @@ class RobotEnv(gym.Env):
             alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
         )
         self.params["CBF_ALPHA_BLW"] = np.clip(
-            alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
+            alpha_blw, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
         )
 
         self.mpc.load_params(self.params)
@@ -262,6 +262,9 @@ class RobotEnv(gym.Env):
         obs[12] = float(solver_status)
 
         return obs
+
+    # def _get_reward(self, obs, exceeded_bounds, is_done):
+    #     pass
 
     def _get_reward(self, obs, exceeded_bounds, is_done):
         len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
