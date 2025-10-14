@@ -133,6 +133,9 @@ class RobotMPC:
     def get_mpc_state(self):
         return self.mpc.get_state()
 
+    def set_mpc_state(self, state):
+        self.robot_state = state
+
     def get_mpc_command(self):
         return self.mpc.get_mpc_command()
 

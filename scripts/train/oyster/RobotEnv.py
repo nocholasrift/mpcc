@@ -58,9 +58,13 @@ class RobotEnv(gym.Env):
         # set to anything
         self._goal = None
 
+        # p0 = [0, 0]
+        # p1 = [4.2, 13.6]
+        # p2 = [5, -8.6]
+        # p3 = [10.0, 10.0]
         p0 = [0, 0]
-        p1 = [4.2, 13.6]
-        p2 = [5, -8.6]
+        p1 = [10,11.8]
+        p2 = [10,-9.9]
         p3 = [10.0, 10.0]
 
         self.curve = BezierCurve(p0, p1, p2, p3)
@@ -85,11 +89,13 @@ class RobotEnv(gym.Env):
         self.reset()
 
     def set_mpc(self, params):
+
         self.params = copy.deepcopy(params)
         self.dynamic_model = self.params["DYNAMIC_MODEL"]
 
         self.mpc = RobotMPC(self.curve.pos(0.0), self.params)
         self.robot_state = self.mpc.get_robot_state()
+
 
         self.mpc.set_trajectory(
             self.curve.xs,
@@ -122,15 +128,16 @@ class RobotEnv(gym.Env):
         self.params = self.mpc.get_params()
 
         dt = self.params["DT"]
-        exceeded_bounds = False
+        exceeded_bounds_abv = False
+        exceeded_bounds_blw = False
         alpha_abv = self.params["CBF_ALPHA_ABV"] + action[0] * dt
         alpha_blw = self.params["CBF_ALPHA_BLW"] + action[1] * dt
 
         if alpha_abv < self.params["MIN_ALPHA"] or alpha_abv > self.params["MAX_ALPHA"]:
-            exceeded_bounds = True
+            exceeded_bounds_abv = True
 
         if alpha_blw < self.params["MIN_ALPHA"] or alpha_blw > self.params["MAX_ALPHA"]:
-            exceeded_bounds = True
+            exceeded_bounds_blw = True
 
         self.params["CBF_ALPHA_ABV"] = np.clip(
             alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
@@ -174,7 +181,8 @@ class RobotEnv(gym.Env):
 
         return (
             obs,
-            self._get_reward(obs, exceeded_bounds, is_colliding),
+            self._get_reward(obs, exceeded_bounds_abv, exceeded_bounds_blw, is_colliding),
+            # self._get_reward(obs, exceeded_bounds_blw or exceeded_bounds_abv, is_colliding),
             is_colliding or is_done,
             {},
         )
@@ -182,8 +190,12 @@ class RobotEnv(gym.Env):
     def reset(self):
         plt.close("all")
 
+        self.set_mpc(self.task_loader[self.task_idx])
+
         self.plotter = None
         self.robot_state = np.zeros(4, dtype=np.float64)
+        self.mpc.set_mpc_state(self.robot_state)
+
         obs = np.zeros(13, dtype=np.float64)
         obs[4] = 1.0
         obs[5] = -1.0
@@ -225,7 +237,6 @@ class RobotEnv(gym.Env):
 
         self.task_idx = idx
 
-        self.set_mpc(self.task_loader[idx])
         self.reset()
 
     def _get_obs(self):
@@ -255,69 +266,112 @@ class RobotEnv(gym.Env):
         obs[5] = normalize(cbf_data_blw[1], 0, 1.0)
         obs[6] = normalize(cbf_data_abv[2], -np.pi, np.pi)
         obs[7] = curr_progress
-        obs[8] = normalize(cbf_data_abv[0], 0, 100)
-        obs[9] = normalize(cbf_data_blw[0], 0, 100)
+        obs[8] = normalize(cbf_data_abv[0], -100, 100)
+        obs[9] = normalize(cbf_data_blw[0], -100, 100)
         obs[10] = normalize(alpha_abv, 0, 5)
         obs[11] = normalize(alpha_blw, 0, 5)
         obs[12] = float(solver_status)
 
         return obs
 
+    def _get_reward(self, obs, exceeded_bounds_abv, exceeded_bounds_blw, is_done):
+        progress = obs[7]
+
+        h_abv = obs[8]
+        h_blw = obs[9]
+
+        mpc_success = bool(obs[12])
+
+        # mpc_failed = bool(obs[12])
+        # weights
+        w_feas = 10
+        w_safety = 6
+        w_progress = 10
+        w_collision = 50
+        w_alpha_exceeded = 10
+
+        safety_abv = self.safety_penalty(h_abv)
+        safety_blw = self.safety_penalty(h_blw)
+
+        bounds_penalty = 0
+        if exceeded_bounds_abv:
+            bounds_penalty -= w_alpha_exceeded
+        if exceeded_bounds_blw:
+            bounds_penalty -= w_alpha_exceeded
+
+        collision = -w_collision if is_done else 0
+
+        feasibility = 0
+        if not mpc_success:
+            feasibility = -w_feas
+
+        return float(
+            w_safety * safety_abv + 
+            w_safety * safety_blw + 
+            # w_progress * (1 - progress) +
+            w_progress * progress +
+            bounds_penalty +
+            collision + 
+            feasibility
+        )
+
+    def safety_penalty(self, h, min_val=-10.0, max_val=1.0):
+        penalty = -np.exp(-10 * (h-0.5)) + 1
+        return np.clip(penalty, min_val, max_val)
+
     # def _get_reward(self, obs, exceeded_bounds, is_done):
-    #     pass
-
-    def _get_reward(self, obs, exceeded_bounds, is_done):
-        len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
-
-        tangent = self.curve.vel(len_start)
-        tangent /= np.linalg.norm(tangent)
-        normal = np.array([-tangent[1], tangent[0]])
-
-        # figure out which side of trajectory we are on
-        traj_p = np.array([self.curve.trajx(len_start), self.curve.trajy(len_start)])
-        to_robot = self.robot_state[:2] - traj_p
-        side = np.sign(np.dot(to_robot, normal))
-
-        dist = self._dist_from_traj(self.robot_state[:2])
-
-        is_colliding = False
-        if side < 0:
-            is_colliding = dist > np.polyval(self.lower_coeffs[::-1], len_start)
-        else:
-            is_colliding = dist > np.polyval(self.upper_coeffs[::-1], len_start)
-
-        reward = 0.0
-        if not is_colliding:
-            reward = 5 * obs[4] * obs[5]
-
-        reward -= 5 * (1 - obs[7])
-        mid_alpha = (self.params["MIN_ALPHA"] + self.params["MAX_ALPHA"]) / 2.0
-        reward -= 5 * (obs[10] - mid_alpha) ** 2
-        reward -= 5 * (obs[11] - mid_alpha) ** 2
-        reward -= 30 * int(exceeded_bounds)
-
-        if obs[8] > 0.0:
-            reward += 7 * obs[8]
-        if obs[9] > 0.0:
-            reward += 7 * obs[9]
-
-        if bool(obs[12]):
-            reward -= 25
-
-        if is_done:
-            reward -= 25
-
-        return reward
+    #     len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
+    #
+    #     tangent = self.curve.vel(len_start)
+    #     tangent /= np.linalg.norm(tangent)
+    #     normal = np.array([-tangent[1], tangent[0]])
+    #
+    #     # figure out which side of trajectory we are on
+    #     traj_p = np.array([self.curve.trajx(len_start), self.curve.trajy(len_start)])
+    #     to_robot = self.robot_state[:2] - traj_p
+    #     side = np.sign(np.dot(to_robot, normal))
+    #
+    #     dist = self._dist_from_traj(self.robot_state[:2])
+    #
+    #     is_colliding = False
+    #     if side < 0:
+    #         is_colliding = dist > np.polyval(self.lower_coeffs[::-1], len_start)
+    #     else:
+    #         is_colliding = dist > np.polyval(self.upper_coeffs[::-1], len_start)
+    #
+    #     reward = 0.0
+    #     if not is_colliding:
+    #         reward = 5 * obs[4] * obs[5]
+    #
+    #     reward -= 5 * (1 - obs[7])
+    #     mid_alpha = (self.params["MIN_ALPHA"] + self.params["MAX_ALPHA"]) / 2.0
+    #     reward -= 5 * (obs[10] - mid_alpha) ** 2
+    #     reward -= 5 * (obs[11] - mid_alpha) ** 2
+    #     reward -= 30 * int(exceeded_bounds)
+    #
+    #     if obs[8] > 0.0:
+    #         reward += 7 * obs[8]
+    #     if obs[9] > 0.0:
+    #         reward += 7 * obs[9]
+    #
+    #     if bool(obs[12]):
+    #         reward -= 25
+    #
+    #     if is_done:
+    #         reward -= 25
+    #
+    #     return reward
 
     def _obs_init(self, n_obs, min_dist):
-        obs = [[6.12, 2.3], [2.75, 4.45]]
-        # obs = []
+        # obs = [[6.12, 2.3], [2.75, 4.45]]
+        obs = []
+        # obs = [[7.54, 9.32]]
         needed = n_obs
 
         # get trajectory points
         traj = self.curve.fill(np.linspace(0,1,100))
 
-        np.random.seed(42)
+        np.random.seed(43)
         while len(obs) < n_obs:
             x_min, x_max = float(np.min(self.curve.xs)), float(np.max(self.curve.xs))
             y_min, y_max = float(np.min(self.curve.ys)), float(np.max(self.curve.ys))
@@ -349,16 +403,16 @@ if __name__ == "__main__":
 
     i = 0
     done = False
-    env.reset_task(0)
+    env.reset_task(1)
     while not done:
-        _, _, done, _ = env.step([0, 0])
+        _, reward, done, _ = env.step([0, 0])
         env.render()
         i += 1
 
-    # i = 0
-    # done = False
-    # env.reset_task(1)
-    # while not done and i < 200:
-    #     _, _, done, _ = env.step([0, 0])
-    #     env.render()
-    #     i += 1
+    i = 0
+    done = False
+    env.reset_task(2)
+    while not done and i < 200:
+        _, _, done, _ = env.step([0, 0])
+        env.render()
+        i += 1

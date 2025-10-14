@@ -7,6 +7,7 @@ import click
 import torch
 
 from RobotEnv import RobotEnv
+from matplotlib import pyplot as plt
 from rlkit.torch.sac.policies import TanhGaussianPolicy
 from rlkit.torch.networks import FlattenMlp, MlpEncoder, RecurrentEncoder
 from rlkit.torch.sac.agent import PEARLAgent
@@ -33,7 +34,8 @@ def sim_policy(variant, path_to_exp, num_trajs=1, deterministic=False, save_vide
     tasks = env.get_all_task_idx()
     obs_dim = int(np.prod(env.observation_space.shape))
     action_dim = int(np.prod(env.action_space.shape))
-    eval_tasks=list(tasks[-variant['n_eval_tasks']:])
+    # eval_tasks=list(tasks[-variant['n_eval_tasks']:])
+    eval_tasks=list(tasks[:variant['n_train_tasks']])
     print('testing on {} test tasks, {} trajectories each'.format(len(eval_tasks), num_trajs))
 
     # instantiate networks
@@ -79,7 +81,7 @@ def sim_policy(variant, path_to_exp, num_trajs=1, deterministic=False, save_vide
         agent.clear_z()
         paths = []
         for n in range(num_trajs):
-            path = rollout(env, agent, max_path_length=variant['algo_params']['max_path_length'], accum_context=True, save_frames=save_video, animated=True)
+            path = rollout(env, agent, max_path_length=variant['algo_params']['max_path_length'], accum_context=True, save_frames=False, animated=True)
             paths.append(path)
             # if save_video:
             #     video_frames += [t['frame'] for t in path['env_infos']]
@@ -87,6 +89,11 @@ def sim_policy(variant, path_to_exp, num_trajs=1, deterministic=False, save_vide
                 agent.infer_posterior(agent.context)
         all_rets.append([sum(p['rewards']) for p in paths])
 
+        if save_video:
+            from datetime import datetime
+            current_datetime = datetime.now()
+            date_str = current_datetime.strftime("%H_%M_%S_%d-%m-%Y")
+            plt.savefig(f"./output/{date_str}")
     # if save_video:
     #     # save frames to file temporarily
     #     temp_dir = os.path.join(path_to_exp, 'temp')
