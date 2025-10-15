@@ -5,10 +5,10 @@ from scipy.interpolate import UnivariateSpline
 
 class BezierCurve:
     def __init__(self, p0, p1, p2, p3, n_samples=20):
-        self.p0 = np.array(p0, dtype=float)
-        self.p1 = np.array(p1, dtype=float)
-        self.p2 = np.array(p2, dtype=float)
-        self.p3 = np.array(p3, dtype=float)
+        self.p0 = np.array(p0, dtype=float).flatten()
+        self.p1 = np.array(p1, dtype=float).flatten()
+        self.p2 = np.array(p2, dtype=float).flatten()
+        self.p3 = np.array(p3, dtype=float).flatten()
 
         self.knots, self.xs, self.ys = self.reparam_traj(M=n_samples)
 
@@ -22,6 +22,7 @@ class BezierCurve:
         self.pts = self.pos(np.linspace(0,self.knots[-1],200))
 
     def pos(self, s):
+        """Position on curve at param s ∈ [0,len]"""
         x = self.trajx(s)
         y = self.trajy(s)
         return np.stack([x,y], axis=-1)
@@ -31,20 +32,37 @@ class BezierCurve:
 
     def _pos(self, t):
         """Position on curve at param t ∈ [0,1]"""
-        return (
+        is_scalar = np.isscalar(t)
+        t = np.atleast_1d(t)[..., None]
+        p = (
             (1 - t) ** 3 * self.p0
             + 3 * (1 - t) ** 2 * t * self.p1
             + 3 * (1 - t) * t**2 * self.p2
             + t**3 * self.p3
         )
 
+        return p.flatten() if is_scalar else p
+
     def _vel(self, t):
         """Derivative wrt t"""
-        return (
+        is_scalar = np.isscalar(t)
+        t = np.atleast_1d(t)[..., None]
+        v = (
             3 * (1 - t) ** 2 * (self.p1 - self.p0)
             + 6 * (1 - t) * t * (self.p2 - self.p1)
             + 3 * t**2 * (self.p3 - self.p2)
         )
+        return v.flatten() if is_scalar else v
+
+    def _acc(self, t):
+        """Derivative wrt t"""
+        is_scalar = np.isscalar(t)
+        t = np.atleast_1d(t)[..., None]
+        a = (
+            6 * (1 - t) * (self.p2 - 2*self.p1 + self.p0)
+            + 6 * t * (self.p3 - 2*self.p2 + self.p1)
+        )
+        return a.flatten() if is_scalar else a
 
     def get_arclen(self):
         return self.knots[-1]
@@ -93,3 +111,15 @@ class BezierCurve:
     def fill(self, ts):
         """Return positions for a list of t values"""
         return np.array([self._pos(t) for t in ts])
+
+    def get_max_k_appx(self, n_samples=100):
+        ts = np.linspace(0, 1, n_samples)
+
+        vels = self._vel(ts)
+        accs = self._acc(ts)
+
+        cross = vels[:, 0] * accs[:, 1] - vels[:, 1] * accs[:, 0]
+        ks = np.abs(cross) / np.linalg.norm(vels, axis=1) ** 3
+
+        return np.max(ks)
+        

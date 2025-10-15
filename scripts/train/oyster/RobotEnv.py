@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 
 from gym import spaces
 from Plotter import Plotter
+from RobotMPC import RobotMPC
 from Bezier import BezierCurve
 from Tubes import TubeGenerator
-from RobotMPC import RobotMPC
+from TrajLibGen import TrajLibLoader
 from ParamLoader import ParameterLoader
 
 
@@ -23,7 +24,7 @@ def unnormalize(val, min, max):
 class RobotEnv(gym.Env):
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, task={}, n_tasks=2, randomize_tasks=False, n_obs=100):
+    def __init__(self, task={}, n_tasks=2, randomize_tasks=False, n_obs=100, randomize_traj=False):
 
         super(RobotEnv, self).__init__()
 
@@ -62,15 +63,50 @@ class RobotEnv(gym.Env):
         # p1 = [4.2, 13.6]
         # p2 = [5, -8.6]
         # p3 = [10.0, 10.0]
-        p0 = [0, 0]
-        p1 = [10,11.8]
-        p2 = [10,-9.9]
-        p3 = [10.0, 10.0]
+        # p0 = np.array([0, 0])
+        # p1 = [10,11.8]
+        # p2 = [10,-9.9]
+        # p3 = [10.0, 10.0]
 
-        self.curve = BezierCurve(p0, p1, p2, p3)
+        # np.random.seed(130)
+        # if randomize_traj:
+        #     r = 10
+        #
+        #     # random goal point
+        #     theta = 2 * np.pi * np.random.rand()
+        #     p3 = p0 + r * np.array([np.cos(theta), np.sin(theta)])
+        #
+        #     # random p1 p2
+        #     k = 1e6
+        #     while k > 2:
+        #         p1 = r * np.random.rand(1,2)
+        #         p2 = r * np.random.rand(1,2)
+        #
+        #         self.curve = BezierCurve(p0, p1, p2, p3)
+        #         k = self.curve.get_max_k_appx()
+        #         print("k is", k)
+        # else:
+        #     # p0 = [0, 0]
+        #     # p1 = [4.2, 13.6]
+        #     # p2 = [5, -8.6]
+        #     # p3 = [10.0, 10.0]
+        #     p0 = np.array([0, 0])
+        #     p1 = [10,11.8]
+        #     p2 = [10,-9.9]
+        #     p3 = [10.0, 10.0]
+        #
+        #     self.curve = BezierCurve(p0, p1, p2, p3)
+        #     print(self.curve.get_max_k_appx())
+
+        # exit(0)
+
+        traj_loader = TrajLibLoader("./envs")
+        ret = traj_loader.get(69)
+        self.curve = ret["curve"]
+        self.obstacles = ret["obs_points"]
         self.current_ref = self.curve.pos(0.0)
 
-        self._obs_init(n_obs, min_dist=0.6)
+        # self._obs_init(n_obs, min_dist=0.6)
 
         self.tube_gen = TubeGenerator(
             self.obstacles, (self.curve.knots, self.curve.xs, self.curve.ys)
@@ -319,62 +355,44 @@ class RobotEnv(gym.Env):
         penalty = -np.exp(-10 * (h-0.5)) + 1
         return np.clip(penalty, min_val, max_val)
 
-    # def _get_reward(self, obs, exceeded_bounds, is_done):
-    #     len_start = self.mpc.get_s_from_pose(self.robot_state[:2])
-    #
-    #     tangent = self.curve.vel(len_start)
-    #     tangent /= np.linalg.norm(tangent)
-    #     normal = np.array([-tangent[1], tangent[0]])
-    #
-    #     # figure out which side of trajectory we are on
-    #     traj_p = np.array([self.curve.trajx(len_start), self.curve.trajy(len_start)])
-    #     to_robot = self.robot_state[:2] - traj_p
-    #     side = np.sign(np.dot(to_robot, normal))
-    #
-    #     dist = self._dist_from_traj(self.robot_state[:2])
-    #
-    #     is_colliding = False
-    #     if side < 0:
-    #         is_colliding = dist > np.polyval(self.lower_coeffs[::-1], len_start)
-    #     else:
-    #         is_colliding = dist > np.polyval(self.upper_coeffs[::-1], len_start)
-    #
-    #     reward = 0.0
-    #     if not is_colliding:
-    #         reward = 5 * obs[4] * obs[5]
-    #
-    #     reward -= 5 * (1 - obs[7])
-    #     mid_alpha = (self.params["MIN_ALPHA"] + self.params["MAX_ALPHA"]) / 2.0
-    #     reward -= 5 * (obs[10] - mid_alpha) ** 2
-    #     reward -= 5 * (obs[11] - mid_alpha) ** 2
-    #     reward -= 30 * int(exceeded_bounds)
-    #
-    #     if obs[8] > 0.0:
-    #         reward += 7 * obs[8]
-    #     if obs[9] > 0.0:
-    #         reward += 7 * obs[9]
-    #
-    #     if bool(obs[12]):
-    #         reward -= 25
-    #
-    #     if is_done:
-    #         reward -= 25
-    #
-    #     return reward
-
     def _obs_init(self, n_obs, min_dist):
         # obs = [[6.12, 2.3], [2.75, 4.45]]
         obs = []
+
+        # get initial obstacles
+        d_min = 0.1
+        d_max = 0.3
+        n = np.random.randint(0,4) + 1
+        ss = []
+        for i in range(0, n):
+
+            s = np.random.rand() * self.curve.get_arclen()
+            while len(ss) > 0 and np.abs(np.min(np.array(ss) - s)) < 1:
+                s = np.random.rand() * self.curve.get_arclen()
+            
+            d = np.random.rand() * (d_max-d_min) + d_min
+            d = -d if np.random.rand() > 0.5 else d
+            pos = self.curve.pos(s)
+            tan = self.curve.vel(s)
+            tan = tan / np.linalg.norm(tan)
+            normal = np.array([-tan[1],tan[0]])
+
+            obs.append((pos + normal * d).tolist())
+
         # obs = [[7.54, 9.32]]
         needed = n_obs
 
         # get trajectory points
         traj = self.curve.fill(np.linspace(0,1,100))
 
-        np.random.seed(43)
         while len(obs) < n_obs:
-            x_min, x_max = float(np.min(self.curve.xs)), float(np.max(self.curve.xs))
-            y_min, y_max = float(np.min(self.curve.ys)), float(np.max(self.curve.ys))
+            p_min = min(np.min(self.curve.xs), np.min(self.curve.ys))
+            p_max = max(np.max(self.curve.xs), np.max(self.curve.ys))
+
+            x_min, y_min = p_min, p_min
+            x_max, y_max = p_max, p_max
+            # x_min, x_max = float(np.min(self.curve.xs)), float(np.max(self.curve.xs))
+            # y_min, y_max = float(np.min(self.curve.ys)), float(np.max(self.curve.ys))
 
             # oversample to reduce resampling loops
             cand_x = np.random.rand(5 * needed) * (x_max - x_min) + x_min
@@ -399,7 +417,7 @@ class RobotEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    env = RobotEnv(n_obs=150)
+    env = RobotEnv(n_obs=150, randomize_traj=True)
 
     i = 0
     done = False

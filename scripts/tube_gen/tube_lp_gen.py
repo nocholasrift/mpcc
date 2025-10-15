@@ -40,8 +40,11 @@ def main():
     x = cp.Variable(n)
 
     # cost is maximizing area of the curve on domain
-    coeffs = 1 / np.arange(1, n + 1)
-    cost = coeffs @ x * (domain[1] - domain[0])
+    powers = np.arange(1, n + 1)
+    coeffs = (domain[1] ** powers - domain[0] ** powers) / powers
+    cost = coeffs @ x
+    # coeffs = 1 / np.arange(1, n + 1)
+    # cost = coeffs @ x * (domain[1] - domain[0])
 
     A = cp.Parameter((2 * N, n), name="A_mat")
     b = cp.Parameter(2 * N, name="b_vec")

@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import cvxpy as cp
 
@@ -77,7 +78,7 @@ class TubeGenerator:
 
         cost = 0
         for k in range(n_vars):
-            cost += x[k] / (k + 1)
+            cost += x[k] * (self.curve_len ** (k + 1)) / (k + 1)
 
         # constraints
         constraints = []

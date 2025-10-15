@@ -80,10 +80,12 @@ class Plotter:
             )
 
         margin = 2.0
-        x_min, x_max = float(np.min(curve.xs)), float(np.max(curve.xs))
-        y_min, y_max = float(np.min(curve.ys)), float(np.max(curve.ys))
-        # x_min, x_max = -1, 1
-        # y_min, y_max = 1, 1
+
+        p_min = min(np.min(curve.xs), np.min(curve.ys))
+        p_max = max(np.max(curve.xs), np.max(curve.ys))
+
+        x_min, y_min = p_min, p_min
+        x_max, y_max = p_max, p_max
 
         self.ax.set_xlim(x_min - margin, x_max + margin)
         self.ax.set_ylim(y_min - margin, y_max + margin)
