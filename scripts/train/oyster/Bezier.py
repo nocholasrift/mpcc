@@ -30,6 +30,11 @@ class BezierCurve:
     def vel(self, s):
         return np.array([self.trajx_d(s), self.trajy_d(s)])
 
+    def heading(self, s):
+        v = self.vel(s)
+        mag = np.linalg.norm(self.vel(s))
+        return np.arctan2(v[1], v[0]) if mag > 1e-3 else 0.
+
     def _pos(self, t):
         """Position on curve at param t ∈ [0,1]"""
         is_scalar = np.isscalar(t)

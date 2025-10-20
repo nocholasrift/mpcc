@@ -4,7 +4,10 @@ import csv
 import numpy as np
 
 from tqdm import tqdm
+from Plotter import Plotter
 from Bezier import BezierCurve
+from Tubes import TubeGenerator
+
 
 class TrajLibGen:
 
@@ -13,18 +16,51 @@ class TrajLibGen:
         if seed != None:
             np.random.seed(seed)
 
-    def create_library(self, n_traj, n_obs, min_dist, max_dist, out_dir):
+        self.tube_generator = TubeGenerator()
 
+    def create_library(self, n_traj, n_obs, min_dist, max_dist, out_dir):
+        import matplotlib
+        matplotlib.use('Agg')
+        from matplotlib import pyplot as plt
+
+        i = 0
+        pbar = tqdm(total=n_traj)
         rows = []
-        for i in tqdm(range(n_traj)):
+        while i < n_traj:
             curve = self.gen_traj()
             if curve is None:
                 continue
 
             obs = self.gen_obs(curve, n_obs, min_dist, max_dist)
 
+            knots = (curve.knots, curve.xs, curve.ys)
+            self.tube_generator.set_curve(knots)
+            self.tube_generator.set_obstacles(obs)
+
+            # try to generate corridor and if it fails, skip
+            try:
+                upper_coeffs, lower_coeffs = self.tube_generator.generate_corridor()
+
+                if upper_coeffs is None or lower_coeffs is None:
+                    continue
+
+            except Exception as e:
+                print(e)
+                continue
+
+            fig, ax = plt.subplots()
+
+
+            plotter = Plotter(curve, upper_coeffs, lower_coeffs, obs, render=False)
+            plotter.init_curve(curve, ax=ax)
+            plotter.init_tubes(curve, upper_coeffs, lower_coeffs, ax=ax)
+            plotter.init_obs(obs, ax=ax)
+
+            fname = f"traj_{i:04d}.jpg"
+            fig.savefig(os.path.join(out_dir, fname))
+
             np.savez_compressed(
-                os.path.join(out_dir, f"traj_{i:04d}.npz"),
+                os.path.join(out_dir, fname),
                 p0=curve.p0,
                 p1=curve.p1,
                 p2=curve.p2,
@@ -32,6 +68,10 @@ class TrajLibGen:
                 obs=obs,
             )
 
+            plt.close(fig)
+
+            i += 1
+            pbar.update(1)
 
     def gen_traj(self):
         r = 10

@@ -6,10 +6,16 @@ from scipy.interpolate import UnivariateSpline
 
 
 class TubeGenerator:
-    def __init__(self, obstacles, curve, tube_degree=6):
-        self.obstacles = obstacles
+    def __init__(self, obstacles=None, curve=None, tube_degree=6):
         self.degree = tube_degree
 
+        if curve is not None:
+            self.set_curve(curve)
+
+        if obstacles is not None:
+            self.set_obstacles(obstacles)
+
+    def set_curve(self, curve):
         knots, xs, ys = curve
         self.curve_len = knots[-1]
         self.curve_x = UnivariateSpline(knots, xs, k=3, s=0)
@@ -23,6 +29,9 @@ class TubeGenerator:
 
         self.coeffs_p = None
         self.coeffs_n = None
+
+    def set_obstacles(self, obstacles):
+        self.obstacles = obstacles
 
     def get_dists(self):
         ss = np.linspace(0, self.curve_len, 100)
@@ -63,6 +72,9 @@ class TubeGenerator:
 
         prob_p.solve(solver=cp.CLARABEL)
         prob_n.solve(solver=cp.CLARABEL)
+
+        if prob_p.status != 'optimal' or prob_n.status != 'optimal':
+            return None, None
 
         self.coeffs_p = x_p.value
         self.coeffs_n = x_n.value

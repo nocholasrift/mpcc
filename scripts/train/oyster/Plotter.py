@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib
-matplotlib.use("TkAgg")
+# matplotlib.use("TkAgg")
 
 import matplotlib.pyplot as plt
 
@@ -15,9 +15,10 @@ class Plotter:
         upper_coeffs,
         lower_coeffs,
         obstacles,
-        dynamics,
+        dynamics=Dynamics.DOUBLE_INTEGRATOR,
         robot_size=0.2,
         theta=np.pi / 3,
+        render=True
     ):
         self.dynamics = dynamics
         self.robot_size = robot_size
@@ -35,9 +36,10 @@ class Plotter:
 
         self.prev_states = []
 
-        self.plot_init(curve, upper_coeffs, lower_coeffs, obstacles)
+        if render:
+            self.init_plot(curve, upper_coeffs, lower_coeffs, obstacles)
 
-    def plot_init(self, curve, upper_coeffs, lower_coeffs, obstacles):
+    def init_plot(self, curve, upper_coeffs, lower_coeffs, obstacles):
 
         # visualization setup
         self.fig = plt.figure(figsize=(16, 8))
@@ -78,6 +80,21 @@ class Plotter:
                 color="blue",
                 label="robot",
             )
+        
+        self.init_curve(curve)
+
+        (self.ref_point,) = self.ax.plot([], [], "ro", label="reference")
+
+        (self.path_line,) = self.ax.plot([], [], "b-", linewidth=1.5)
+
+        self.init_tubes(curve, upper_coeffs, lower_coeffs)
+        self.init_obs(obstacles)
+
+        self.ax.add_patch(self.robot_patch)
+
+    def init_curve(self, curve, ax=None):
+        if ax is None:
+            ax = self.ax
 
         margin = 2.0
 
@@ -87,19 +104,21 @@ class Plotter:
         x_min, y_min = p_min, p_min
         x_max, y_max = p_max, p_max
 
-        self.ax.set_xlim(x_min - margin, x_max + margin)
-        self.ax.set_ylim(y_min - margin, y_max + margin)
+        ax.set_xlim(x_min - margin, x_max + margin)
+        ax.set_ylim(y_min - margin, y_max + margin)
 
-        (self.traj_line,) = self.ax.plot(curve.xs, curve.ys, "k--", label="trajectory")
-        (self.ref_point,) = self.ax.plot([], [], "ro", label="reference")
+        (self.traj_line,) = ax.plot(curve.xs, curve.ys, "k--", label="trajectory")
 
-        (self.path_line,) = self.ax.plot([], [], "b-", linewidth=1.5)
+
+    def init_tubes(self, curve, upper_coeffs, lower_coeffs, ax=None):
+        if ax is None:
+            ax = self.ax
 
         # tubes (initialized as empty lines)
-        (self.upper_tube_line,) = self.ax.plot(
+        (self.upper_tube_line,) = ax.plot(
             [], [], "r-", label="upper tube", linewidth=2.5
         )
-        (self.lower_tube_line,) = self.ax.plot(
+        (self.lower_tube_line,) = ax.plot(
             [], [], "b-", label="lower tube", linewidth=2.5
         )
 
@@ -119,28 +138,30 @@ class Plotter:
         upper = traj + upper_d[:, None] * normals
         lower = traj - lower_d[:, None] * normals
 
-        self.ax.plot(
+        ax.plot(
             upper[:, 0], upper[:, 1], "r-", label="upper tube", alpha=0.3, linewidth=2.5
         )
-        self.ax.plot(
+        ax.plot(
             lower[:, 0], lower[:, 1], "r-", label="lower tube", alpha=0.3, linewidth=2.5
         )
 
-        self.ax.plot(
+    def init_obs(self, obstacles, ax=None):
+        if ax is None:
+            ax = self.ax
+
+        ax.plot(
             obstacles[:, 0],
             obstacles[:, 1],
             "ko",
             label="obstacles_p",
         )
 
-        self.ax.plot(
+        ax.plot(
             obstacles[:, 0],
             obstacles[:, 1],
             "bo",
             label="obstacles_n",
         )
-
-        self.ax.add_patch(self.robot_patch)
 
     def plot_tubes(self, curve, tube_gen, robot_state, mpc):
 
@@ -220,6 +241,8 @@ class Plotter:
             mpc,
         )
 
+        plt.pause(0.001)
+
     def add_state_to_path(self, robot_state):
         # if more than 60 points, remove oldest
         if len(self.prev_states) > 100:
@@ -228,3 +251,6 @@ class Plotter:
 
     def clear_state_path(self):
         self.prev_states.clear()
+
+    def close(self):
+        plt.close("all")

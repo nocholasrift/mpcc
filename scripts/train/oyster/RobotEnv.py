@@ -2,14 +2,13 @@ import os
 import gym
 import copy
 import numpy as np
-import matplotlib.pyplot as plt
 
 from gym import spaces
 from Plotter import Plotter
-from RobotMPC import RobotMPC
 from Bezier import BezierCurve
 from Tubes import TubeGenerator
 from TrajLibGen import TrajLibLoader
+from RobotMPC import RobotMPC, Dynamics
 from ParamLoader import ParameterLoader
 
 
@@ -59,49 +58,8 @@ class RobotEnv(gym.Env):
         # set to anything
         self._goal = None
 
-        # p0 = [0, 0]
-        # p1 = [4.2, 13.6]
-        # p2 = [5, -8.6]
-        # p3 = [10.0, 10.0]
-        # p0 = np.array([0, 0])
-        # p1 = [10,11.8]
-        # p2 = [10,-9.9]
-        # p3 = [10.0, 10.0]
-
-        # np.random.seed(130)
-        # if randomize_traj:
-        #     r = 10
-        #
-        #     # random goal point
-        #     theta = 2 * np.pi * np.random.rand()
-        #     p3 = p0 + r * np.array([np.cos(theta), np.sin(theta)])
-        #
-        #     # random p1 p2
-        #     k = 1e6
-        #     while k > 2:
-        #         p1 = r * np.random.rand(1,2)
-        #         p2 = r * np.random.rand(1,2)
-        #
-        #         self.curve = BezierCurve(p0, p1, p2, p3)
-        #         k = self.curve.get_max_k_appx()
-        #         print("k is", k)
-        # else:
-        #     # p0 = [0, 0]
-        #     # p1 = [4.2, 13.6]
-        #     # p2 = [5, -8.6]
-        #     # p3 = [10.0, 10.0]
-        #     p0 = np.array([0, 0])
-        #     p1 = [10,11.8]
-        #     p2 = [10,-9.9]
-        #     p3 = [10.0, 10.0]
-        #
-        #     self.curve = BezierCurve(p0, p1, p2, p3)
-        #     print(self.curve.get_max_k_appx())
-
-        # exit(0)
-
         traj_loader = TrajLibLoader("./envs")
-        ret = traj_loader.get(69)
+        ret = traj_loader.get(10)
         self.curve = ret["curve"]
         self.obstacles = ret["obs_points"]
         self.current_ref = self.curve.pos(0.0)
@@ -121,15 +79,16 @@ class RobotEnv(gym.Env):
         self.upper_coeffs, self.lower_coeffs = self.tube_gen.generate_corridor()
 
         self.plotter = None
-        self.set_mpc(self.task_loader[self.task_idx])
         self.reset()
 
     def set_mpc(self, params):
 
         self.params = copy.deepcopy(params)
         self.dynamic_model = self.params["DYNAMIC_MODEL"]
+        print("LOADING MODEL: ", Dynamics.int2str[self.dynamic_model])
 
-        self.mpc = RobotMPC(self.curve.pos(0.0), self.params)
+        init_pose = np.concatenate((self.curve.pos(0.), [self.curve.heading(0.)]))
+        self.mpc = RobotMPC(init_pose, self.params)
         self.robot_state = self.mpc.get_robot_state()
 
 
@@ -182,7 +141,8 @@ class RobotEnv(gym.Env):
             alpha_blw, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
         )
 
-        self.mpc.load_params(self.params)
+        if self.params["USE_CBF"]:
+            self.mpc.load_params(self.params)
 
         u = self.mpc.get_control(len_start)
         self.robot_state = self.mpc.apply_control(u)
@@ -224,13 +184,14 @@ class RobotEnv(gym.Env):
         )
 
     def reset(self):
-        plt.close("all")
+        if self.plotter:
+            self.plotter.close()
 
         self.set_mpc(self.task_loader[self.task_idx])
 
         self.plotter = None
-        self.robot_state = np.zeros(4, dtype=np.float64)
-        self.mpc.set_mpc_state(self.robot_state)
+        # self.robot_state = np.zeros(4, dtype=np.float64)
+        # self.mpc.set_mpc_state(self.robot_state)
 
         obs = np.zeros(13, dtype=np.float64)
         obs[4] = 1.0
@@ -243,7 +204,7 @@ class RobotEnv(gym.Env):
     def render(self, mode="human", close=False):
         if close:
             if self.plotter:
-                plt.close(self.plotter.fig)
+                self.plotter.close()
                 self.plotter = None
             return None
 
@@ -261,7 +222,6 @@ class RobotEnv(gym.Env):
         self.plotter.render(
             self.robot_state, self.current_ref, self.curve, self.tube_gen, self.mpc
         )
-        plt.pause(0.001)
 
         return self.plotter.ax
 
@@ -269,7 +229,8 @@ class RobotEnv(gym.Env):
         return range(len(self.task_loader))
 
     def reset_task(self, idx):
-        plt.close("all")
+        if self.plotter:
+            self.plotter.close()
 
         self.task_idx = idx
 
@@ -421,16 +382,16 @@ if __name__ == "__main__":
 
     i = 0
     done = False
-    env.reset_task(1)
+    # env.reset_task(1)
     while not done:
         _, reward, done, _ = env.step([0, 0])
         env.render()
         i += 1
 
-    i = 0
-    done = False
-    env.reset_task(2)
-    while not done and i < 200:
-        _, _, done, _ = env.step([0, 0])
-        env.render()
-        i += 1
+    # i = 0
+    # done = False
+    # env.reset_task(2)
+    # while not done and i < 200:
+    #     _, _, done, _ = env.step([0, 0])
+    #     env.render()
+    #     i += 1

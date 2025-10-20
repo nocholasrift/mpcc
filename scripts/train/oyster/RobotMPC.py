@@ -6,7 +6,8 @@ from py_mpcc import MPCCore
 class Dynamics:
     DOUBLE_INTEGRATOR = 0
     UNICYCLE = 1
-    int2str = ["double_integrator", "unicycle"]
+    BICYCLE = 2
+    int2str = ["double_integrator", "unicycle", "bicycle"]
 
 
 class RobotMPC:
@@ -44,10 +45,11 @@ class RobotMPC:
 
         # robot state: x, y, vx, vy
         self.robot_state = np.zeros(4, dtype=np.float64)
-        self.robot_state[:2] = init_pos
+        self.robot_state[:2] = init_pos[:2]
 
-        # if self.dyn_model == Dynamics.UNICYCLE:
-        #     self.robot_state[2] = np.pi / 2
+        if self.dyn_model in [Dynamics.UNICYCLE, Dynamics.BICYCLE]:
+            print(init_pos[2])
+            self.robot_state[2] = init_pos[2]
 
         self.dt = params["DT"]
         self.v_max = params["LINVEL"]
@@ -91,7 +93,7 @@ class RobotMPC:
             self.prev_s = len_start
 
             state = np.concatenate((self.robot_state, np.array([0, s_dot])))
-            if self.dyn_model == Dynamics.UNICYCLE:
+            if self.dyn_model in [Dynamics.UNICYCLE, Dynamics.BICYCLE]:
                 v = self.robot_state[3]
                 state[2] = v * np.cos(self.robot_state[2])
                 state[3] = v * np.sin(self.robot_state[2])
@@ -117,9 +119,31 @@ class RobotMPC:
             u_uni = self._di_to_uni_cmd_mapper(self.robot_state, u)
             # print("mapped u:", u_uni)
 
+            
+
             self.robot_state[0] += u_uni[0] * np.cos(self.robot_state[2]) * self.dt
             self.robot_state[1] += u_uni[0] * np.sin(self.robot_state[2]) * self.dt
             self.robot_state[2] += u_uni[1] * self.dt
+            self.robot_state[3] = u_uni[0]
+
+        elif self.dyn_model == Dynamics.BICYCLE:
+            # print("initial u:", u)
+            u_uni = self._di_to_uni_cmd_mapper(self.robot_state, u)
+            L = 0.5
+            if u_uni[0] > 1e-3:
+                delta = np.arctan2(L * u_uni[1], u_uni[0])
+            elif u_uni[1] > 1e-2:
+                u_uni[0] = 0.1
+                delta = np.arctan2(L * u_uni[1], u_uni[0])
+            else:
+                delta = 0.
+
+            delta = np.clip(delta, -np.pi / 6, np.pi / 6)
+            # print("mapped u:", u_uni)
+
+            self.robot_state[0] += u_uni[0] * np.cos(self.robot_state[2]) * self.dt
+            self.robot_state[1] += u_uni[0] * np.sin(self.robot_state[2]) * self.dt
+            self.robot_state[2] += u_uni[0] * np.tan(delta) / L * self.dt
             self.robot_state[3] = u_uni[0]
 
         return self.robot_state
@@ -157,7 +181,7 @@ class RobotMPC:
     def get_input_limits(self):
         return self.mpc.get_input_limits()
 
-    def _di_to_uni_cmd_mapper(self, state, u):
+    def _di_to_uni_cmd_mapper(self, state, u, kp=10.0):
 
         theta_v = np.arctan2(u[1], u[0])
         error = theta_v - state[2]
@@ -165,7 +189,6 @@ class RobotMPC:
         # bound to -pi and pi
         error = np.arctan2(np.sin(error), np.cos(error))
 
-        kp = 10.0
         u_new = [0.0, 0.0]
 
         # if error is too high, turn in place (20 degrees threshold)
