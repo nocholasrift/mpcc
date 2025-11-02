@@ -7,11 +7,13 @@
 #include <map>
 #include <memory>
 
+enum class MPCType {kDoubleIntegrator, kUnicycle};
+
 class MPCCore {
  public:
   MPCCore();
 
-  MPCCore(const std::string& mpc_input_type);
+  MPCCore(const MPCType& mpc_input_type);
 
   ~MPCCore();
 
@@ -119,5 +121,5 @@ class MPCCore {
 
   std::unique_ptr<MPCBase> _mpc;
 
-  std::string _mpc_input_type;
+  MPCType _mpc_input_type;
 };

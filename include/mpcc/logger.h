@@ -26,7 +26,7 @@ class RLLogger {
  public:
   RLLogger(ros::NodeHandle& nh,
            const std::unordered_map<std::string_view, double>& params,
-           bool is_logging, const std::string& mpc_type);
+           bool is_logging);
 
   void load_params(const std::unordered_map<std::string_view, double>& params);
 
@@ -62,7 +62,6 @@ class RLLogger {
 
   std::string _table_name;
   std::string _topic_name;
-  std::string _mpc_type;
 
   int _task_id;
   int _num_samples;

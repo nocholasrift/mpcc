@@ -7,7 +7,7 @@
 
 MPCCore::MPCCore() {
   _mpc            = std::make_unique<MPCC>();
-  _mpc_input_type = "unicycle";
+  _mpc_input_type = MPCType::kUnicycle;
 
   _curr_vel    = 0;
   _curr_angvel = 0;
@@ -19,19 +19,19 @@ MPCCore::MPCCore() {
   _ref_length = 0;
 }
 
-MPCCore::MPCCore(const std::string& mpc_input_type) {
+MPCCore::MPCCore(const MPCType& mpc_input_type) {
   _mpc_input_type = mpc_input_type;
 
-  if (_mpc_input_type == "unicycle") {
+  if (_mpc_input_type == MPCType::kUnicycle) {
     std::cout << termcolor::green << "[MPC Core] Using unicycle model"
               << termcolor::reset << std::endl;
     _mpc = std::make_unique<MPCC>();
-  } else if (_mpc_input_type == "double_integrator") {
+  } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
     std::cout << termcolor::green << "[MPC Core] Using double integrator model"
               << termcolor::reset << std::endl;
     _mpc = std::make_unique<DIMPCC>();
   } else {
-    throw std::runtime_error("Invalid MPC input type: " + _mpc_input_type);
+    throw std::runtime_error("Invalid MPC input type: " + std::to_string(static_cast<unsigned int>(_mpc_input_type)));
   }
 
   _curr_vel    = 0;
@@ -228,7 +228,7 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   }
 
   if (_ref_length > .1 && _traj_reset) {
-    if (_mpc_input_type == "unicycle" && orient_robot())
+    if (_mpc_input_type == MPCType::kUnicycle && orient_robot())
       return {_curr_vel, _curr_angvel};
   }
 
@@ -321,7 +321,7 @@ const std::array<Eigen::VectorXd, 2> MPCCore::get_input_limits() const {
 
 std::vector<Eigen::VectorXd> MPCCore::get_horizon() const {
   std::vector<Eigen::VectorXd> ret;
-  if (_mpc_input_type == "unicycle") {
+  if (_mpc_input_type == MPCType::kUnicycle) {
     MPCC* _mpc_unicycle = dynamic_cast<MPCC*>(_mpc.get());
     ret.reserve(_mpc_unicycle->mpc_x.size());
     if (_mpc_unicycle->mpc_x.size() == 0)
@@ -335,7 +335,7 @@ std::vector<Eigen::VectorXd> MPCCore::get_horizon() const {
           _mpc_unicycle->mpc_linaccs[i], _mpc_unicycle->mpc_s[i];
       t += _dt;
     }
-  } else if (_mpc_input_type == "double_integrator") {
+  } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
     DIMPCC* _mpc_double_integrator = dynamic_cast<DIMPCC*>(_mpc.get());
     ret.reserve(_mpc_double_integrator->mpc_x.size());
     if (_mpc_double_integrator->mpc_x.size() == 0)

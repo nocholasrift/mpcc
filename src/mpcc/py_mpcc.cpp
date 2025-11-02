@@ -7,9 +7,13 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(py_mpcc, m) {
 
+  py::enum_<MPCType>(m, "MPCType")
+       .value("DOUBLE_INTEGRATOR", MPCType::kDoubleIntegrator)
+       .value("UNICYCLE", MPCType::kUnicycle);
+
   py::class_<MPCCore>(m, "MPCCore")
       .def(py::init<>())
-      .def(py::init<const std::string&>())
+      .def(py::init<const MPCType&>())
       .def("load_params", &MPCCore::load_params)
       .def("get_params", &MPCCore::get_params)
       .def("set_odom", &MPCCore::set_odom)

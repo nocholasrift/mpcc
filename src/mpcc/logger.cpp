@@ -10,7 +10,7 @@ namespace logger {
 
 RLLogger::RLLogger(ros::NodeHandle& nh,
                    const std::unordered_map<std::string_view, double>& params,
-                   bool is_logging, const std::string& mpc_type) {
+                   bool is_logging) {
 
   _nh            = nh;
   _min_alpha     = 0.01;
@@ -25,8 +25,6 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
 
   _table_name = "replay_buffer";
   _topic_name = "/cbf_rl_learning";
-
-  _mpc_type = mpc_type;
 
   _done_pub      = _nh.advertise<std_msgs::Bool>("/mpc_done", 100);
   _alpha_pub_abv = _nh.advertise<std_msgs::Float64>("/cbf_alpha_abv", 100);

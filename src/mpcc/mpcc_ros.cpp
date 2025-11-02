@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "mpcc/mpcc_core.h"
 #include "mpcc/tube_gen.h"
 #include "mpcc/utils.h"
 
@@ -51,7 +52,12 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _nh.param("vel_pub_freq", _vel_pub_freq, 20.0);
   _nh.param("controller_frequency", freq, 10.0);
   _nh.param("mpc_steps", _mpc_steps, 10.0);
-  _nh.param<std::string>("mpc_input_type", _mpc_input_type, "unicycle");
+
+  // param cant do unsigned ints?
+  int input_type;
+  _nh.param("mpc_input_type", input_type,
+            static_cast<int>(MPCType::kDoubleIntegrator));
+  _mpc_input_type = static_cast<MPCType>(input_type);
 
   // Cost function params
   _nh.param("w_vel", _w_vel, 1.0);
@@ -67,9 +73,10 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _nh.param("w_speed", _w_q_speed, .3);
 
   // Constraint params
-  _nh.param("w_max", _max_angvel, 3.0);
-  _nh.param("v_max", _max_linvel, 2.0);
-  _nh.param("a_max", _max_linacc, 3.0);
+  _nh.param("max_angvel", _max_angvel, 3.0);
+  _nh.param("max_linvel", _max_linvel, 2.0);
+  _nh.param("max_linacc", _max_linacc, 3.0);
+  _nh.param("max_angacc", _max_anga, 2 * M_PI);
   _nh.param("min_alpha", _min_alpha, .1);
   _nh.param("max_alpha", _max_alpha, 10.);
   _nh.param("min_alpha_dot", _min_alpha_dot, -1.0);
@@ -77,7 +84,6 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _nh.param("min_h_val", _min_h_val, -1e8);
   _nh.param("max_h_val", _max_h_val, 1e8);
 
-  _nh.param("anga_max", _max_anga, 2 * M_PI);
   _nh.param("bound_value", _bound_value, 1.0e19);
 
   // Goal params
@@ -114,11 +120,11 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _nh.param("ref_length_size", _mpc_ref_len_sz, 4.);
   _nh.param("mpc_ref_samples", _mpc_ref_samples, 10);
 
-  _nh.param("/train/task_id", _task_id, -1);
-  _nh.param("/train/is_eval", _is_eval, false);
-  _nh.param("/train/logging", _is_logging, false);
-  _nh.param("/train/num_samples", _num_samples, static_cast<int>(1e6));
-  _nh.param("/train/max_path_length", _max_path_length, static_cast<int>(1e6));
+  _nh.param("task_id", _task_id, -1);
+  _nh.param("is_eval", _is_eval, false);
+  _nh.param("logging", _is_logging, false);
+  _nh.param("num_samples", _num_samples, static_cast<int>(1e6));
+  _nh.param("max_path_length", _max_path_length, static_cast<int>(1e6));
 
   _dt = 1.0 / freq;
 
@@ -216,8 +222,8 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
     logger_params["NUM_SAMPLES"]     = _num_samples;
     logger_params["MAX_PATH_LENGTH"] = _max_path_length;
 
-    _logger = std::make_unique<logger::RLLogger>(nh, logger_params, _is_logging,
-                                                 _mpc_input_type);
+    _logger =
+        std::make_unique<logger::RLLogger>(nh, logger_params, _is_logging);
   } else if (!_use_cbf) {
     _cbf_alpha_abv = 100.;
     _cbf_alpha_blw = 100.;
@@ -650,9 +656,9 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   if (len_start > _true_ref_len - 5e-1) {
     ROS_INFO("Reached end of traj %.2f / %.2f", len_start, _true_ref_len);
     _vel_msg.angular.z = 0;
-    if (_mpc_input_type == "unicycle")
+    if (_mpc_input_type == MPCType::kUnicycle)
       _vel_msg.linear.x = 0;
-    else if (_mpc_input_type == "double_integrator") {
+    else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
       _vel_msg.linear.x = 0;
       _vel_msg.linear.y = 0;
     }
@@ -709,28 +715,30 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   }
 
   Eigen::VectorXd state(6);
-  if (_mpc_input_type == "unicycle")
+  if (_mpc_input_type == MPCType::kUnicycle)
     state << _odom(0), _odom(1), _odom(2), _vel_msg.linear.x, 0, _s_dot;
-  else if (_mpc_input_type == "double_integrator")
+  else if (_mpc_input_type == MPCType::kDoubleIntegrator)
     state << _odom(0), _odom(1), _vel_msg.linear.x, _vel_msg.linear.y, 0,
         _s_dot;
   else {
-    ROS_ERROR("Unknown MPC input type: %s", _mpc_input_type.c_str());
+    ROS_ERROR("Unknown MPC input type: %d",
+              static_cast<unsigned int>(_mpc_input_type));
     return;
   }
 
   std::array<double, 2> input = _mpc_core->solve(state);
 
-  if (_mpc_input_type == "unicycle") {
+  if (_mpc_input_type == MPCType::kUnicycle) {
     _vel_msg.linear.x  = input[0];
     _vel_msg.angular.z = input[1];
-  } else if (_mpc_input_type == "double_integrator") {
+  } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
     _vel_msg.linear.x = input[0];
     _vel_msg.linear.y = input[1];
     ROS_INFO("Setting linear vels to (%.2f, %.2f)", _vel_msg.linear.x,
              _vel_msg.linear.y);
   } else {
-    ROS_ERROR("Unknown MPC input type: %s", _mpc_input_type.c_str());
+    ROS_ERROR("Unknown MPC input type: %d",
+              static_cast<unsigned int>(_mpc_input_type));
     return;
   }
 
@@ -819,7 +827,7 @@ void MPCCROS::publishMPCTrajectory() {
 
   _trajPub.publish(pathMsg);
 
-  if (horizon.size() > 1 && _mpc_input_type == "unicycle") {
+  if (horizon.size() > 1 && _mpc_input_type == MPCType::kUnicycle) {
     // convert to JointTrajectory
     trajectory_msgs::JointTrajectory traj;
     traj.header.stamp    = ros::Time::now();
@@ -878,7 +886,8 @@ void MPCCROS::publishMPCTrajectory() {
     }
 
     _horizonPub.publish(traj);
-  } else if (horizon.size() > 1 && _mpc_input_type == "double_integrator") {
+  } else if (horizon.size() > 1 &&
+             _mpc_input_type == MPCType::kDoubleIntegrator) {
     // convert to JointTrajectory
     trajectory_msgs::JointTrajectory traj;
     traj.header.stamp    = ros::Time::now();
