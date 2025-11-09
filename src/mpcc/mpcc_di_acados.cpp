@@ -41,6 +41,7 @@ DIMPCC::DIMPCC() {
   _has_run       = false;
   _solve_success = false;
   _is_shift_warm = false;
+  _odom_init = false;
 
   _new_time_steps = nullptr;
 
@@ -217,7 +218,6 @@ void DIMPCC::reset_horizon() {
   }
 }
 
-void DIMPCC::set_odom(const Eigen::VectorXd& odom) {}
 
 Eigen::VectorXd DIMPCC::get_cbf_data(const Eigen::VectorXd& state,
                                      const Eigen::VectorXd& control,
@@ -405,9 +405,9 @@ bool DIMPCC::set_solver_parameters(
   int num_params =
       ctrls_x.size() + ctrls_y.size() + _tubes[0].size() + _tubes[1].size() + 8;
   if (num_params != kNP) {
-    /*std::cout << termcolor::yellow << "[MPCC] reference size " << num_params*/
-    /*          << " does not match acados parameter size " << kNP*/
-    /*          << termcolor::reset << std::endl;*/
+    std::cout << termcolor::yellow << "[MPCC] reference size " << num_params
+              << " does not match acados parameter size " << kNP
+              << termcolor::reset << std::endl;
 
     return false;
   }

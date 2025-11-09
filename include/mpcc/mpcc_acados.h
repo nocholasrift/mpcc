@@ -89,7 +89,6 @@ class MPCC : public MPCBase {
    * Setters and Getters
    ***********************/
   void reset_horizon() override;
-  virtual void set_odom(const Eigen::VectorXd& odom) override;
   void set_dyna_obs(const Eigen::MatrixXd& dyna_obs);
 
   Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,

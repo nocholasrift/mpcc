@@ -22,6 +22,7 @@
 #include "mpcc/mpcc_core.h"
 #include "mpcc/tube_gen.h"
 #include "mpcc/utils.h"
+#include "ros/console.h"
 
 MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _estop        = false;
@@ -230,7 +231,7 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   }
 
   // num coeffs is tube_W_ANGVELdegree + 1
-  _tube_degree += 1;
+  /*_tube_degree += 1;*/
 
   // tube width technically from traj to tube boundary
   _max_tube_width /= 2;
@@ -249,7 +250,7 @@ bool MPCCROS::toggleBackup(std_srvs::Empty::Request& req,
 
 void MPCCROS::visualizeTubes() {
   const Eigen::VectorXd& state = _mpc_core->get_state();
-  double max_view_horizon      = 2.0;
+  double max_view_horizon      = 4.0;
   double len_start             = state(4);
   double horizon = _mpc_ref_len_sz;  //2 * _max_linvel * _dt * _mpc_steps;
 
@@ -679,9 +680,18 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   bool status   = true;
   if (_use_cbf) {
     std::cout << "ref_len size is: " << _ref_len << std::endl;
-    status = tube_utils::get_tubes(_tube_degree, _tube_samples, _max_tube_width,
+    /*status = tube_utils::get_tubes(_tube_degree, _tube_samples, _max_tube_width,*/
+    /*                               _ref, _ref_len, len_start, horizon, _odom,*/
+    /*                               _grid_map, _tubes);*/
+
+    ros::Time start = ros::Time::now();
+    status = tube_utils::get_tubes2(_tube_degree, _tube_samples, _max_tube_width,
                                    _ref, _ref_len, len_start, horizon, _odom,
                                    _grid_map, _tubes);
+
+    ROS_INFO("runtime: %.3f", (ros::Time::now()-start).toSec());
+
+    /*exit(0);*/
 
     ROS_INFO("finished tube generation");
   } else {

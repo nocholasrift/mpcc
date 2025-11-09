@@ -46,6 +46,7 @@ MPCC::MPCC() {
   _ref_length  = 0;
 
   _has_run = false;
+  _odom_init = false;
 
   _acados_ocp_capsule = nullptr;
   _new_time_steps     = nullptr;
@@ -227,9 +228,6 @@ void MPCC::set_dyna_obs(const Eigen::MatrixXd& dyna_obs) {
   _dyna_obs     = dyna_obs;
 }
 
-void MPCC::set_odom(const Eigen::VectorXd& odom) {
-  _odom = odom;
-}
 
 Eigen::VectorXd MPCC::next_state(const Eigen::VectorXd& current_state,
                                  const Eigen::VectorXd& control) {

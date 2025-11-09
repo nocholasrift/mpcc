@@ -3,7 +3,7 @@
 <launch>
 	<arg name="odomTopic" default="/gmapping/odometry" />
 	<arg name="cmdTopic" default="/cmd_vel" />
-  <arg name="mpc_type" value="double_integrator_mpcc0" />
+  <arg name="mpc_type" value="zz_double_integrator_mpcc0" />
   <arg name="use_rl" default="false" />
   <arg name="db_filename" default="$(env HOME)/dbs/rl_learning.db" />
 

@@ -39,7 +39,14 @@ class MPCBase {
   virtual std::array<double, 2> solve(const Eigen::VectorXd& state,
                                       bool is_reverse = false) = 0;
 
-  virtual void set_odom(const Eigen::VectorXd& odom) = 0;
+  void set_odom(const Eigen::VectorXd& odom) { 
+    _odom = odom;
+
+    if (!_odom_init){
+      _odom_init = true;
+      reset_horizon();
+    }
+  }
   virtual void reset_horizon()                       = 0;
 
   void set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {
@@ -146,4 +153,5 @@ class MPCBase {
   double _ref_len_sz;
 
   bool _solve_success;
+  bool _odom_init;
 };

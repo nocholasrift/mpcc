@@ -123,19 +123,27 @@ class ModelServer:
         alpha_abv = self.params["CBF_ALPHA_ABV"] + action[0] * self.params["DT"]
         alpha_blw = self.params["CBF_ALPHA_BLW"] + action[1] * self.params["DT"]
 
+        exceed_count = 0
+        if alpha_abv < self.params["MIN_ALPHA"] or alpha_abv > self.params["MAX_ALPHA"]:
+            exceed_count += 1
+
+        if alpha_blw < self.params["MIN_ALPHA"] or alpha_blw > self.params["MAX_ALPHA"]:
+            exceed_count += 1
+
         self.params["CBF_ALPHA_ABV"] = np.clip(
             alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
         )
         self.params["CBF_ALPHA_BLW"] = np.clip(
             alpha_blw, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
         )
+
         if self.prev_obs is not None:
-            r = RobotEnv.get_reward(obs, action, False, self.params)
+            r = RobotEnv.get_reward(obs, action, exceed_count, False, self.params)
             self.agent.update_context(
                 [self.prev_obs, self.prev_action, r, obs, False, {}]
             )
 
-            if self.posterior_counter > 20:
+            if self.posterior_counter > 50:
                 self.agent.infer_posterior(self.agent.context)
 
         self.prev_obs = obs

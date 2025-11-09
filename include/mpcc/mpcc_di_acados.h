@@ -23,7 +23,6 @@ class DIMPCC : public MPCBase {
       const std::map<std::string, double>& params) override;
 
   void reset_horizon() override;
-  virtual void set_odom(const Eigen::VectorXd& odom) override;
 
   Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
                                const Eigen::VectorXd& control,

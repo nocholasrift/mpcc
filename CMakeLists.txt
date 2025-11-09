@@ -27,6 +27,8 @@ find_package(Eigen3 REQUIRED COMPONENTS system)
 set(CVXPYGEN_OUTPUT ${CMAKE_SOURCE_DIR}/scripts/tube_gen/LP_codegen/c)
 add_subdirectory(${CVXPYGEN_OUTPUT})
 
+add_subdirectory(third_party/HiGHS)
+
 message(STATUS "ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
 
 ########################
@@ -61,12 +63,32 @@ else()
   message(STATUS "Catkin not found, skipping ROS message/service generation")
 endif()
 
+set(HiGHS_INCLUDE_DIRS
+  ${HIGHS_BINARY_DIR}
+  third_party/autodiff
+  third_party/HiGHS/app
+  third_party/HiGHS/extern
+  third_party/HiGHS/extern/zstr
+  third_party/HiGHS/highs
+  third_party/HiGHS/highs/io
+  third_party/HiGHS/highs/pdlp/cupdlp
+  third_party/HiGHS/highs/ipm/ipx
+  third_party/HiGHS/highs/ipm/basiclu
+  third_party/HiGHS/highs/lp_data
+  third_party/HiGHS/highs/mip
+  third_party/HiGHS/highs/model
+  third_party/HiGHS/highs/presolve
+  third_party/HiGHS/highs/qpsolver
+  third_party/HiGHS/highs/simplex
+  third_party/HiGHS/highs/test_kkt
+  third_party/HiGHS/highs/util
+)
+
 ########################
 # Common include paths
 ########################
 include_directories(
   include
-  third_party/autodiff
   ${HPIPM_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
   ${ACADOS_INCLUDE_DIRS}
@@ -148,10 +170,12 @@ if (pybind11_FOUND)
   target_include_directories(py_mpcc PRIVATE 
     ${ACADOS_OUTPUT_DIRS} 
     ${cpg_include}
+    ${HiGHS_INCLUDE_DIRS}
   )
 
   target_link_libraries(py_mpcc
     PRIVATE
+    highs
     ${HPIPM_LIBRARIES}
     ${ACADOS_LIBRARIES}
     ${EIGEN3_LIBRARIES}
@@ -185,11 +209,12 @@ if(catkin_FOUND)
     ${EIGEN3_LIBRARIES}
     ${ACADOS_OUTPUT_LIBS}
     ${BLASFEO_LIBRARIES}
+    highs
     cvxpy_lib
   )
   add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages ${ACADOS_TARGETS} cvxpy_lib)
   target_compile_options(mpcc_ros PRIVATE -std=c++17 -O3)
-  target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${cpg_include})
+  target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${cpg_include} ${HiGHS_INCLUDE_DIRS})
 
   add_executable(publish_pf_pose src/utils/publish_pf_pose.cpp)
   target_link_libraries(publish_pf_pose ${catkin_LIBRARIES})

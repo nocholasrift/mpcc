@@ -93,7 +93,7 @@ def create_ocp(yaml_file):
     ocp.constraints.idxbu = np.array([0, 1, 2])
 
     # theta can be whatever
-    max_vel = 2.0
+    max_vel = 10.0
     max_sdot = np.sqrt(2 * max_vel**2)
     ocp.constraints.lbx = np.array([-1e6, -1e6, -max_vel, -max_vel, 0, 0])
     ocp.constraints.ubx = np.array([1e6, 1e6, max_vel, max_vel, max_s, max_sdot])

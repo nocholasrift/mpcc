@@ -11,6 +11,8 @@ extern "C" {
 #include <cpg_workspace.h>
 }
 
+#include "Highs.h"
+
 namespace tube_utils {
 /**********************************************************************
  * Function: raycast_grid
@@ -94,15 +96,15 @@ inline bool raycast_grid(const Eigen::Vector2d& start,
 inline void setup_lp(int d, int N, double len_start, double traj_arc_len,
                      double min_dist, const std::vector<double>& dist_vec) {
   // set arc length domain for LP
-  cpg_update_Domain(0, 0);
-  cpg_update_Domain(1, traj_arc_len);
+  /*cpg_update_Domain(0, 0);*/
+  /*cpg_update_Domain(1, traj_arc_len);*/
 
   double ds = traj_arc_len / (N - 1);
 
   for (int i = 0; i < N; ++i) {
     double s   = i * ds;
     double s_k = 1;
-    for (int j = 0; j < d; ++j) {
+    for (int j = 0; j <= d; ++j) {
       // matrices are in column-major order for cpg
       // index for -polynomial <= -min_dist constraint
       size_t ind_upper = i + j * 2 * N;
@@ -122,45 +124,19 @@ inline void setup_lp(int d, int N, double len_start, double traj_arc_len,
   }
 }
 
-/**********************************************************************
- * Function: get_tubes
- * Description: Generates the upper and lower tubes for a trajectory
- * Parameters:
- * @param d: int
- * @param N: int
- * @param max_dist: double
- * @param traj: const std::array<Spline1D, 2>&
- * @param traj_arc_len: double
- * @param len_start: double
- * @param horizon: double
- * @param grid_map: const grid_map::GridMap&
- * @param tubes: std::array<Eigen::VectorXd, 2>&
- * Returns:
- * bool - true if successful, false otherwise
- * Notes:
- * This function generates the upper and lower tubes for a trajectory
- * using the CPG solver. For more details, see Differentiable Collision-Free
- * Parametric Corridors by J. Arrizabalaga, et al. Each tube is
- * represented as a polynomial of degree d, parameterized by arc len.
- **********************************************************************/
-inline bool get_tubes(int d, int N, double max_dist,
-                      const std::array<Spline1D, 2>& traj, double traj_arc_len,
-                      double len_start, double horizon,
-                      const Eigen::VectorXd& odom,
-                      const grid_map::GridMap& grid_map,
-                      std::array<Eigen::VectorXd, 2>& tubes) {
-  /*************************************
-    ********* Get Traj Distances *********
-    **************************************/
-  double min_dist_abv = 1e6;
-  double min_dist_blw = 1e6;
-  // double ds = traj_arc_len / (N-1);
-  double ds = horizon / (N - 1);
+inline bool get_distances(const std::array<Spline1D, 2>& traj, int N,
+                          double max_dist, double len_start, double horizon,
+                          const grid_map::GridMap& grid_map,
+                          double& min_dist_abv, double& min_dist_blw,
+                          std::vector<double>& ds_above,
+                          std::vector<double>& ds_below) {
 
-  std::vector<double> ds_above;
-  std::vector<double> ds_below;
   ds_above.resize(N);
   ds_below.resize(N);
+
+  double ds    = horizon / (N - 1);
+  min_dist_abv = 1e6;
+  min_dist_blw = 1e6;
 
   for (int i = 0; i < N; ++i) {
     double s  = len_start + i * ds;
@@ -250,34 +226,75 @@ inline bool get_tubes(int d, int N, double max_dist,
 
     // check if odom above or below traj, ensure odom
     // is within tube
-    if (i == 0) {
-      Eigen::Vector2d pos = odom.head(2);
-      Eigen::Vector2d dp  = pos - point;
-      double dot_prod     = dp.dot(normal);
-      double odom_dist    = dp.norm();
-
-      if (dot_prod > 0 && dist_above < odom_dist) {
-        std::cout << "forcefully setting dist_above to be " << dp.norm()
-                  << std::endl;
-        dist_above = dp.norm();
-      } else if (dot_prod < 0 && dist_below < odom_dist) {
-        std::cout << "forcefully setting dist_below to be " << dp.norm()
-                  << std::endl;
-        dist_below = dp.norm();
-      }
-    }
+    /*if (i == 0) {*/
+    /*  Eigen::Vector2d pos = odom.head(2);*/
+    /*  Eigen::Vector2d dp  = pos - point;*/
+    /*  double dot_prod     = dp.dot(normal);*/
+    /*  double odom_dist    = dp.norm();*/
+    /**/
+    /*  if (dot_prod > 0 && dist_above < odom_dist) {*/
+    /*    std::cout << "forcefully setting dist_above to be " << dp.norm()*/
+    /*              << std::endl;*/
+    /*    dist_above = dp.norm();*/
+    /*  } else if (dot_prod < 0 && dist_below < odom_dist) {*/
+    /*    std::cout << "forcefully setting dist_below to be " << dp.norm()*/
+    /*              << std::endl;*/
+    /*    dist_below = dp.norm();*/
+    /*  }*/
+    /*}*/
 
     ds_above[i] = dist_above;
     ds_below[i] = dist_below;
   }
 
-  /*************************************
-    ********** Setup & Solve Up **********
-    **************************************/
+  return true;
+}
 
-  // setup_lp(d, N, traj_arc_len, 0, ds_above);
-  /*std::cout << "len_start is: " << len_start << std::endl;*/
-  /*std::cout << "horizon is: " << horizon << std::endl;*/
+/**********************************************************************
+ * Function: get_tubes
+ * Description: Generates the upper and lower tubes for a trajectory
+ * Parameters:
+ * @param d: int
+ * @param N: int
+ * @param max_dist: double
+ * @param traj: const std::array<Spline1D, 2>&
+ * @param traj_arc_len: double
+ * @param len_start: double
+ * @param horizon: double
+ * @param grid_map: const grid_map::GridMap&
+ * @param tubes: std::array<Eigen::VectorXd, 2>&
+ * Returns:
+ * bool - true if successful, false otherwise
+ * Notes:
+ * This function generates the upper and lower tubes for a trajectory
+ * using the CPG solver. For more details, see Differentiable Collision-Free
+ * Parametric Corridors by J. Arrizabalaga, et al. Each tube is
+ * represented as a polynomial of degree d, parameterized by arc len.
+ **********************************************************************/
+inline bool get_tubes(int d, int N, double max_dist,
+                      const std::array<Spline1D, 2>& traj, double traj_arc_len,
+                      double len_start, double horizon,
+                      const Eigen::VectorXd& odom,
+                      const grid_map::GridMap& grid_map,
+                      std::array<Eigen::VectorXd, 2>& tubes) {
+  /*************************************
+    ********* Get Traj Distances *********
+    **************************************/
+  // double ds = traj_arc_len / (N-1);
+  double min_dist_abv;
+  double min_dist_blw;
+  std::vector<double> ds_above;
+  std::vector<double> ds_below;
+  bool status = get_distances(traj, N, max_dist, len_start, horizon, grid_map,
+                              min_dist_abv, min_dist_blw, ds_above, ds_below);
+
+  if (!status) {
+    std::cerr << "[Tube Gen] Failed to get map distances\n";
+  }
+
+  /*************************************
+    ********** Setup & Solve ***********
+    **************************************/
 
   setup_lp(d, N, len_start, horizon, min_dist_abv / 1.1, ds_above);
   // setup_lp(d, N, horizon, 0, ds_above);
@@ -290,36 +307,30 @@ inline bool get_tubes(int d, int N, double max_dist,
   // if(strcmp(CPG_Info.status, solved_str.c_str()) != 0)
   // if (status.find(solved_str) == std::string::npos)
   if (CPG_Info.status != 0) {
-    std::cout << "LP Above Tube Failed: " << CPG_Info.status << std::endl;
+    std::cerr << "[Tube Gen] LP Above Tube Failed: " << CPG_Info.status << "\n";
     tubes[0] = Eigen::VectorXd(d);
     tubes[1] = Eigen::VectorXd(d);
     return false;
   }
 
-  /*for (int i = 0; i < d; ++i)*/
-  /*  std::cout << CPG_Result.prim->var2[i] << ", ";*/
-  /*std::cout << std::endl;*/
+  std::cout << "abv coeffs:\n";
+  for (int i = 0; i < d; ++i)
+    std::cout << CPG_Result.prim->coeffs[i] << ", ";
+  std::cout << "\n";
 
   Eigen::VectorXd upper_coeffs;
   upper_coeffs.resize(d);
   bool is_straight = true;
   for (int i = 0; i < d; ++i) {
-    double val = CPG_Result.prim->var2[i];
+    double val = CPG_Result.prim->coeffs[i];
     if (i == 0 && fabs(1 - val) > 1e-1)
       is_straight = false;
     else if (fabs(val) > 1e-1)
       is_straight = false;
 
-    upper_coeffs[i] = CPG_Result.prim->var2[i];
+    upper_coeffs[i] = CPG_Result.prim->coeffs[i];
   }
 
-  // print out dist abv as a row vector
-  /*std::cout << "dist_above = [";*/
-  /*for (int i = 0; i < N; ++i)*/
-  /*  std::cout << ds_above[i] << ", ";*/
-  /*std::cout << "];" << std::endl;*/
-
-  // cpg_set_solver_default_settings();
   /*************************************
     ********* Setup & Solve Down *********
     **************************************/
@@ -332,14 +343,14 @@ inline bool get_tubes(int d, int N, double max_dist,
   // if(strcmp(CPG_Info.status, solved_str.c_str()) != 0)
   // if (status.find(solved_str) == std::string::npos)
   if (CPG_Info.status != 0) {
-    std::cout << "LP Below Tube Failed: " << CPG_Info.status << std::endl;
+    std::cerr << "[Tube Gen] LP Below Tube Failed: " << CPG_Info.status << "\n";
     tubes[0] = Eigen::VectorXd(d);
     tubes[1] = Eigen::VectorXd(d);
     return false;
   }
 
   /*for (int i = 0; i < d; ++i)*/
-  /*  std::cout << CPG_Result.prim->var2[i] << ", ";*/
+  /*  std::cout << CPG_Result.prim->coeffs[i] << ", ";*/
   /*std::cout << std::endl;*/
 
   /*std::cout << "dist_below= [";*/
@@ -350,12 +361,158 @@ inline bool get_tubes(int d, int N, double max_dist,
   Eigen::VectorXd lower_coeffs;
   lower_coeffs.resize(d);
   for (int i = 0; i < d; ++i)
-    lower_coeffs[i] = CPG_Result.prim->var2[i];
+    lower_coeffs[i] = CPG_Result.prim->coeffs[i];
 
   tubes[0] = upper_coeffs;
   tubes[1] = -1 * lower_coeffs;
 
   // ecos_workspace = 0;
+
+  return true;
+}
+
+inline void setup_highs_model(HighsModel& model, int d, int N,
+                              double traj_arc_len, double horizon,
+                              double min_dist,
+                              const std::vector<double>& dist_vec) {
+  if (dist_vec.size() != N) {
+    std::cerr << "[Tube Gen] Distance vector does not equal sample size N\n";
+    return;
+  }
+
+  // setup cost function
+  std::vector<double> cost_coeffs;
+  cost_coeffs.resize(d + 1);
+
+  double h_pow = 1.0;
+  for (int i = 0; i < d + 1; ++i) {
+    cost_coeffs[i] = -h_pow / (i + 1);
+    h_pow *= horizon;
+  }
+
+  model.lp_.num_col_  = d + 1;
+  model.lp_.num_row_  = N;
+  model.lp_.sense_    = ObjSense::kMinimize;
+  model.lp_.offset_   = 0.;
+  model.lp_.col_cost_ = cost_coeffs;
+
+  model.lp_.col_lower_.resize(d + 1);
+  model.lp_.col_upper_.resize(d + 1);
+  for (int i = 0; i <= d; ++i) {
+    model.lp_.col_lower_[i] = -1.0e30;
+    model.lp_.col_upper_[i] = 1.0e30;
+  }
+
+  model.lp_.row_lower_.resize(N);
+  model.lp_.row_upper_.resize(N);
+  for (int i = 0; i < N; ++i) {
+    model.lp_.row_lower_[i] = min_dist;
+    model.lp_.row_upper_[i] = dist_vec[i];
+  }
+
+  // slower but for now will just follow highs tutorial
+  model.lp_.a_matrix_.format_ = MatrixFormat::kColwise;
+  model.lp_.a_matrix_.start_.resize(d + 2);
+  model.lp_.a_matrix_.index_.resize(N * (d + 1) - d);
+  model.lp_.a_matrix_.value_.resize(N * (d + 1) - d);
+
+  double ds = traj_arc_len / (N - 1);
+
+  size_t idx                    = 0;
+  model.lp_.a_matrix_.start_[0] = 0;
+  for (int j = 0; j <= d; ++j) {
+    model.lp_.a_matrix_.start_[j + 1] = (j + 1) * N - j;
+
+    for (int i = 0; i < N; ++i) {
+
+      if (j == 0)
+        model.lp_.a_matrix_.value_[idx] = 1;
+
+      if (j > 0 && i == 0)
+        continue;
+
+      model.lp_.a_matrix_.index_[idx] = i;
+
+      if (j > 0)
+        model.lp_.a_matrix_.value_[idx] =
+            model.lp_.a_matrix_.value_[idx - N] * i * ds;
+
+      ++idx;
+    }
+  }
+}
+
+inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
+                       double min_dist, const std::vector<double>& dists,
+                       Eigen::VectorXd& coeffs) {
+
+  HighsModel model;
+  setup_highs_model(model, d, N, traj_arc_len, horizon, min_dist, dists);
+
+  /*std::cout << "highs\n";*/
+  Highs highs;
+  HighsStatus return_status = highs.passModel(model);
+  if (return_status != HighsStatus::kOk)
+    return false;
+
+  /*std::cout << "get lp\n";*/
+  const HighsLp& lp = highs.getLp();
+
+  return_status = highs.run();
+
+  if (return_status != HighsStatus::kOk) {
+    std::cerr << "[Tube Gen] Highs solver could not find tubes\n";
+    return false;
+  }
+
+  /*std::cout << "model status\n";*/
+  const HighsModelStatus& model_status = highs.getModelStatus();
+  if (model_status != HighsModelStatus::kOptimal) {
+    std::cerr << "[Tube Gen] Warning: model status was not optimal"
+              << highs.modelStatusToString(model_status) << "\n";
+  }
+
+  std::cout << "solution:\n";
+  coeffs.resize(lp.num_col_);
+  const HighsSolution& solution = highs.getSolution();
+  for (int col = 0; col < lp.num_col_; ++col) {
+    coeffs[col] = solution.col_value[col];
+    std::cout << solution.col_value[col] << ", ";
+  }
+  std::cout << "\n";
+  /*highs.resetGlobalScheduler(true);*/
+
+  /*std::cout << "done getting coeffs\n";*/
+
+  return true;
+}
+
+inline bool get_tubes2(int d, int N, double max_dist,
+                       const std::array<Spline1D, 2>& traj, double traj_arc_len,
+                       double len_start, double horizon,
+                       const Eigen::VectorXd& odom,
+                       const grid_map::GridMap& grid_map,
+                       std::array<Eigen::VectorXd, 2>& tubes) {
+
+  // get distances
+  double min_dist_abv;
+  double min_dist_blw;
+  std::vector<double> ds_above;
+  std::vector<double> ds_below;
+  bool status = get_distances(traj, N, max_dist, len_start, horizon, grid_map,
+                              min_dist_abv, min_dist_blw, ds_above, ds_below);
+
+  if (!get_coeffs(d, N, traj_arc_len, horizon, min_dist_abv, ds_above,
+                  tubes[0])) {
+    return false;
+  }
+
+  if (!get_coeffs(d, N, traj_arc_len, horizon, min_dist_blw, ds_below,
+                  tubes[1])) {
+    return false;
+  }
+
+  tubes[1] *= -1;
 
   return true;
 }

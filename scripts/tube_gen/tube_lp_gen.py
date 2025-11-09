@@ -35,14 +35,20 @@ def main():
     N = params["tube_num_samples"]
 
     # arc length domain
-    domain = cp.Parameter(2, name="Domain")
-
-    x = cp.Variable(n)
+    # domain = cp.Parameter(2, name="Domain")
+    x = cp.Variable(n, name="coeffs")
 
     # cost is maximizing area of the curve on domain
-    powers = np.arange(1, n + 1)
-    coeffs = (domain[1] ** powers - domain[0] ** powers) / powers
-    cost = coeffs @ x
+    cost = 0
+    for p in range(1, n + 1):
+        coeff = 1.0 / p
+        cost += coeff * x[p - 1]
+
+    # powers = np.arange(1, n + 1)
+    # coeffs = np.array([(domain[1] ** p - domain[0] ** p) / p for p in powers])
+    # cost = coeffs @ x
+    # coeffs = (domain[1] ** powers - domain[0] ** powers) / powers
+    # cost = coeffs @ x
     # coeffs = 1 / np.arange(1, n + 1)
     # cost = coeffs @ x * (domain[1] - domain[0])
 
