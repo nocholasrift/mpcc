@@ -31,7 +31,9 @@ MPCCore::MPCCore(const MPCType& mpc_input_type) {
               << termcolor::reset << std::endl;
     _mpc = std::make_unique<DIMPCC>();
   } else {
-    throw std::runtime_error("Invalid MPC input type: " + std::to_string(static_cast<unsigned int>(_mpc_input_type)));
+    throw std::runtime_error(
+        "Invalid MPC input type: " +
+        std::to_string(static_cast<unsigned int>(_mpc_input_type)));
   }
 
   _curr_vel    = 0;

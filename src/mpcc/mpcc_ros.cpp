@@ -669,10 +669,10 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
     return;
   }
 
-  double horizon = _mpc_ref_len_sz;
+  double horizon = _true_ref_len;
 
   if (len_start + horizon > _ref_len)
-    horizon = _ref_len - len_start;
+    horizon = _true_ref_len - len_start;
 
   // generate tubes
   // std::vector<SplineWrapper> tubes;
@@ -685,11 +685,11 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
     /*                               _grid_map, _tubes);*/
 
     ros::Time start = ros::Time::now();
-    status = tube_utils::get_tubes2(_tube_degree, _tube_samples, _max_tube_width,
-                                   _ref, _ref_len, len_start, horizon, _odom,
-                                   _grid_map, _tubes);
+    status          = tube_utils::get_tubes2(_tube_degree, _tube_samples,
+                                             _max_tube_width, _ref, _ref_len, len_start,
+                                             horizon, _odom, _grid_map, _tubes);
 
-    ROS_INFO("runtime: %.3f", (ros::Time::now()-start).toSec());
+    ROS_INFO("runtime: %.3f", (ros::Time::now() - start).toSec());
 
     /*exit(0);*/
 

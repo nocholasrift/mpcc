@@ -2,6 +2,12 @@
 function(collect_acados_generated_code model_prefix)
   set(output_dir ${CMAKE_SOURCE_DIR}/scripts/${model}/c_generated_code)
 
+  if(APPLE)
+      set(lib_ext "dylib")
+  else()
+      set(lib_ext "so")
+  endif()
+
   set(${model_prefix}_SRC
     ${output_dir}/acados_solver_unicycle_model_mpcc.c
     ${output_dir}/acados_sim_solver_unicycle_model_mpcc.c
@@ -28,8 +34,8 @@ function(collect_acados_generated_code model_prefix)
   )
 
   set(${model_prefix}_LIBS
-    ${output_dir}/libacados_ocp_solver_${model}.so
-    ${output_dir}/libacados_sim_solver_${model}.so
+    ${output_dir}/libacados_ocp_solver_${model}.${lib_ext}
+    ${output_dir}/libacados_sim_solver_${model}.${lib_ext}
   )
 
   set(${model_prefix}_OUTPUT_FILES 

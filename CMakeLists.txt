@@ -5,6 +5,7 @@ project(mpcc C CXX)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(AcadosUtils)
 
+
 ## Try to find catkin (optional)
 find_package(catkin QUIET COMPONENTS
   geometry_msgs
@@ -22,10 +23,8 @@ find_package(Python3 REQUIRED)
 find_package(ACADOS REQUIRED)
 find_package(BLASFEO REQUIRED)
 find_package(HPIPM REQUIRED)
-find_package(Eigen3 REQUIRED COMPONENTS system)
+find_package(Eigen3 REQUIRED)
 
-set(CVXPYGEN_OUTPUT ${CMAKE_SOURCE_DIR}/scripts/tube_gen/LP_codegen/c)
-add_subdirectory(${CVXPYGEN_OUTPUT})
 
 add_subdirectory(third_party/HiGHS)
 
@@ -35,6 +34,7 @@ message(STATUS "ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
 # Catkin-specific stuff
 ########################
 if(catkin_FOUND)
+  add_definitions(-DFOUND_CATKIN)
   message(STATUS "Catkin found, building ROS nodes")
 
   add_message_files(
@@ -90,7 +90,8 @@ set(HiGHS_INCLUDE_DIRS
 include_directories(
   include
   ${HPIPM_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIR}
+  # ${EIGEN3_INCLUDE_DIRS}
+  /opt/homebrew/opt/eigen/include/eigen3
   ${ACADOS_INCLUDE_DIRS}
   ${BLASFEO_INCLUDE_DIRS}
   ${cpg_include}
@@ -142,12 +143,14 @@ foreach(model ${ACADOS_MODELS})
   list(APPEND ACADOS_TARGETS GenerateAcadosCode_${model})
 endforeach()
 
+message(WARNING "include dir: ${EIGEN3_INCLUDE_DIRS}")
+
 ########################
 # Core MPCC library
 ########################
-add_library(cvxpy_lib STATIC ${cpg_src})
-target_compile_options(cvxpy_lib PRIVATE -O3 -w)
-target_include_directories(cvxpy_lib PRIVATE ${cpg_include})
+# add_library(cvxpy_lib STATIC ${cpg_src})
+# target_compile_options(cvxpy_lib PRIVATE -O3 -w)
+# target_include_directories(cvxpy_lib PRIVATE ${cpg_include})
 
 ########################
 # Python bindings
@@ -173,6 +176,7 @@ if (pybind11_FOUND)
     ${HiGHS_INCLUDE_DIRS}
   )
 
+  target_compile_options(py_mpcc PRIVATE -std=c++17 -O3)
   target_link_libraries(py_mpcc
     PRIVATE
     highs
@@ -210,9 +214,9 @@ if(catkin_FOUND)
     ${ACADOS_OUTPUT_LIBS}
     ${BLASFEO_LIBRARIES}
     highs
-    cvxpy_lib
+    # cvxpy_lib
   )
-  add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages ${ACADOS_TARGETS} cvxpy_lib)
+  add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages ${ACADOS_TARGETS})
   target_compile_options(mpcc_ros PRIVATE -std=c++17 -O3)
   target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${cpg_include} ${HiGHS_INCLUDE_DIRS})
 
