@@ -471,8 +471,8 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   // Eigen::VectorXd x0(kNBX0);
   // x0 << state(0), state(1), state(2), state(3), 0, _s_dot;
   Eigen::VectorXd x0 = state;
-  if (x0.segment(2, 2).norm() < 1e-3) {
-    x0(2) = 1e-3;
+  if (x0.segment(2, 2).norm() < 1e-6) {
+    x0(2) = 1e-6;
   }
 
   memcpy(lbx0, &x0[0], kNBX0 * sizeof(double));

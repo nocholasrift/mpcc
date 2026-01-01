@@ -5,6 +5,7 @@
 #include <geometry_msgs/PolygonStamped.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <grid_map_msgs/GridMap.h>
 #include <math.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
@@ -19,6 +20,7 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include <grid_map_ros/GridMapRosConverter.hpp>
 #include "mpcc/mpcc_core.h"
 #include "mpcc/tube_gen.h"
 #include "mpcc/utils.h"
@@ -175,7 +177,9 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _mpc_core->load_params(_mpc_params);
   ROS_INFO("done loading params!");
 
-  _mapSub  = nh.subscribe("/map", 1, &MPCCROS::mapcb, this);
+  _laserSub = nh.subscribe("/front/scan", 1, &MPCCROS::lidarcb, this);
+  /*_mapSub   = nh.subscribe("/map", 1, &MPCCROS::mapcb, this);*/
+  _mapSub  = nh.subscribe("/grid_map", 1, &MPCCROS::mapcb, this);
   _odomSub = nh.subscribe("/odometry/filtered", 1, &MPCCROS::odomcb, this);
   _trajSub =
       nh.subscribe("/reference_trajectory", 1, &MPCCROS::trajectorycb, this);
@@ -252,7 +256,7 @@ void MPCCROS::visualizeTubes() {
   const Eigen::VectorXd& state = _mpc_core->get_state();
   double max_view_horizon      = 4.0;
   double len_start             = state(4);
-  double horizon = _mpc_ref_len_sz;  //2 * _max_linvel * _dt * _mpc_steps;
+  double horizon = _true_ref_len;  //2 * _max_linvel * _dt * _mpc_steps;
 
   if (len_start > _true_ref_len)
     return;
@@ -305,7 +309,8 @@ void MPCCROS::visualizeTubes() {
   tubemsg_b.points.reserve(2 * (horizon / .05));
   tubemsg_a.colors.reserve(2 * (horizon / .05));
   tubemsg_b.colors.reserve(2 * (horizon / .05));
-  normals_msg.points.reserve(2 * (horizon / .05));
+  /*normals_msg.points.reserve(2 * (horizon / .05));*/
+  normals_msg.points.reserve(2);
   normals_below_msg.points.reserve(2 * (horizon / .05));
   ROS_WARN("LEN START _ HORIZON IS: %.2f", len_start + horizon);
   for (double s = len_start; s < len_start + horizon; s += .05) {
@@ -367,11 +372,8 @@ void MPCCROS::visualizeTubes() {
     tangent_pt.y = point(1) + .025 * tangent(1);
     tangent_pt.z = 1.0;
 
-    normals_msg.points.push_back(normal_pt);
-    normals_msg.points.push_back(tangent_pt);
-
-    // normals_msg.points.push_back(normal_pt);
-    // normals_msg.points.push_back(pt_a);
+    /*normals_msg.points.push_back(normal_pt);*/
+    /*normals_msg.points.push_back(tangent_pt);*/
 
     // normals_below_msg.points.push_back(normal_pt);
     // normals_below_msg.points.push_back(pt_b);
@@ -381,8 +383,8 @@ void MPCCROS::visualizeTubes() {
   tube_ma.markers.reserve(2);
   tube_ma.markers.push_back(std::move(tubemsg_a));
   tube_ma.markers.push_back(std::move(tubemsg_b));
-  // tube_ma.markers.push_back(std::move(normals_msg));
-  // tube_ma.markers.push_back(std::move(normals_below_msg));
+  tube_ma.markers.push_back(std::move(normals_msg));
+  tube_ma.markers.push_back(std::move(normals_below_msg));
 
   _tubeVizPub.publish(tube_ma);
 
@@ -440,8 +442,23 @@ void MPCCROS::publishVel() {
   }
 }
 
-void MPCCROS::mapcb(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
-  grid_map::GridMapRosConverter::fromOccupancyGrid(*msg, "layer", _grid_map);
+void MPCCROS::lidarcb(const sensor_msgs::LaserScan::ConstPtr& msg) {
+  // resize is a no-op if already at appropriate size...
+  if (!_is_init) {
+    return;
+  }
+
+  _laser_scan.resize(msg->ranges.size(), 2);
+  for (int i = 0; i < msg->ranges.size(); ++i) {
+    double theta = msg->angle_min + msg->angle_increment * i + _odom(2);
+    Eigen::Vector2d e_theta(cos(theta), sin(theta));
+    _laser_scan.row(i) = msg->ranges[i] * e_theta + _odom.head(2);
+  }
+}
+
+void MPCCROS::mapcb(const grid_map_msgs::GridMap::ConstPtr& msg) {
+  /*grid_map::GridMapRosConverter::fromOccupancyGrid(*msg, "layer", _grid_map);*/
+  grid_map::GridMapRosConverter::fromMessage(*msg, _grid_map);
 }
 
 void MPCCROS::goalcb(const geometry_msgs::PoseStamped::ConstPtr& msg) {
@@ -585,7 +602,7 @@ void MPCCROS::trajectorycb(
   _ref[0] = splineX;
   _ref[1] = splineY;
 
-  _mpc_core->set_trajectory(_ref, _ref_len);
+  _mpc_core->set_trajectory(_ref, _ref_len, _true_ref_len);
 
   visualizeTraj();
 
@@ -648,11 +665,11 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
 
   _prev_s = get_s_from_state(_ref, _true_ref_len);
 
-  ROS_INFO("S DOT IS: %.2f", _s_dot);
-  ROS_INFO("corrected len is: %.2f / %.2f", corrected_len, _true_ref_len);
-  ROS_INFO("prev_s is: %.2f", _prev_s);
-  ROS_INFO("corrected len - prev_s / dt is %.2f",
-           (corrected_len - _prev_s) / _dt);
+  /*ROS_INFO("S DOT IS: %.2f", _s_dot);*/
+  /*ROS_INFO("corrected len is: %.2f / %.2f", corrected_len, _true_ref_len);*/
+  /*ROS_INFO("prev_s is: %.2f", _prev_s);*/
+  /*ROS_INFO("corrected len - prev_s / dt is %.2f",*/
+  /*         (corrected_len - _prev_s) / _dt);*/
 
   if (len_start > _true_ref_len - 5e-1) {
     ROS_INFO("Reached end of traj %.2f / %.2f", len_start, _true_ref_len);
@@ -679,7 +696,7 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   ros::Time now = ros::Time::now();
   bool status   = true;
   if (_use_cbf) {
-    std::cout << "ref_len size is: " << _ref_len << std::endl;
+    /*std::cout << "ref_len size is: " << _ref_len << std::endl;*/
     /*status = tube_utils::get_tubes(_tube_degree, _tube_samples, _max_tube_width,*/
     /*                               _ref, _ref_len, len_start, horizon, _odom,*/
     /*                               _grid_map, _tubes);*/
@@ -687,12 +704,9 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
     ros::Time start = ros::Time::now();
     status          = tube_utils::get_tubes2(_tube_degree, _tube_samples,
                                              _max_tube_width, _ref, _ref_len, len_start,
-                                             horizon, _odom, _grid_map, _tubes);
+                                             horizon, _grid_map, _tubes);
 
     ROS_INFO("runtime: %.3f", (ros::Time::now() - start).toSec());
-
-    /*exit(0);*/
-
     ROS_INFO("finished tube generation");
   } else {
     Eigen::VectorXd upper_coeffs(_tube_degree);
@@ -709,8 +723,10 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
 
   if (!status)
     ROS_WARN("could not generate tubes, mpc not running");
-  else
+  else {
     visualizeTubes();
+    /*exit(0);*/
+  }
 
   _mpc_core->set_tubes(_tubes);
 
@@ -749,12 +765,15 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   } else {
     ROS_ERROR("Unknown MPC input type: %d",
               static_cast<unsigned int>(_mpc_input_type));
+
     return;
   }
 
   // log data back to db if logging enabled
   if (_is_logging || _is_eval)
     _logger->log_transition(*_mpc_core, len_start, _true_ref_len);
+
+  ROS_WARN("runtime: %.3f", (ros::Time::now() - now).toSec());
 
   publishReference();
   publishMPCTrajectory();

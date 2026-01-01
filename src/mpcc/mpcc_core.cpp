@@ -85,9 +85,10 @@ void MPCCore::set_odom(const Eigen::Vector3d& odom) {
 }
 
 void MPCCore::set_trajectory(const std::array<Spline1D, 2>& ref,
-                             double ref_len) {
+                             double ref_len, double true_ref_len) {
   _ref        = ref;
   _ref_length = ref_len;
+  _true_ref_length = true_ref_len;
   _is_set     = true;
   _traj_reset = true;
   _mpc->set_reference(ref, ref_len);
@@ -103,6 +104,7 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
   double true_ref_len = knot_parameters.tail(1)[0];
   double ref_len      = _params["REF_LENGTH"];
 
+  _true_ref_length = true_ref_len;
   if (true_ref_len < ref_len) {
     double end = true_ref_len - 1e-1;
     double px  = splineX(end).coeff(0);
@@ -154,6 +156,10 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
 // void MPCCore::set_tubes(const std::vector<Spline1D>& tubes)
 void MPCCore::set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {
   _mpc->set_tubes(tubes);
+}
+
+const std::array<Eigen::VectorXd, 2>& MPCCore::get_tubes() const {
+  return _mpc->get_tubes();
 }
 
 bool MPCCore::orient_robot() {
@@ -307,6 +313,10 @@ Eigen::VectorXd MPCCore::get_cbf_data(const Eigen::VectorXd& state,
 
 const bool MPCCore::get_solver_status() const {
   return _mpc->get_solver_status();
+}
+
+const double MPCCore::get_true_ref_len() const{
+  return _true_ref_length;
 }
 
 const Eigen::VectorXd& MPCCore::get_state() const {

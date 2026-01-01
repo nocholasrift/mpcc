@@ -14,6 +14,15 @@
 #include "Highs.h"
 
 namespace tube_utils {
+
+struct Distances {
+  Eigen::VectorXd d_parallel_p;
+  Eigen::VectorXd perp_dists_p;
+  Eigen::VectorXd d_parallel_n;
+  Eigen::VectorXd perp_dists_n;
+};
+typedef struct Distances distances_t;
+
 /**********************************************************************
  * Function: raycast_grid
  * Description: Casts a ray from a start point in a direction and
@@ -58,11 +67,12 @@ inline bool raycast_grid(const Eigen::Vector2d& start,
     Eigen::Vector2d ray_end = end;
     for (grid_map::LineIterator iterator(grid_map, start_ind, end_ind);
          !iterator.isPastEnd(); ++iterator) {
-      Eigen::Vector2d tmp;
-      if (grid_map.at("layer", *iterator) > .5) {
+
+      if (grid_map.at("layer", *iterator) > 90) {
         // I'm pretty sure this isn't possible
         if (!grid_map.getPosition(*iterator, ray_end))
           return false;
+
 
         break;
       }
@@ -73,6 +83,7 @@ inline bool raycast_grid(const Eigen::Vector2d& start,
       min_dist = dist;
   }
 
+  /*actual_dist = std::max(min_dist - 0.25, 0.);*/
   actual_dist = min_dist;
   return true;
 }
@@ -186,15 +197,15 @@ inline bool get_distances(const std::array<Spline1D, 2>& traj, int N,
     }
 #endif
 
-    if (curvature > 1e-1 && curvature > 1 / (2 * max_dist)) {
-      Eigen::Vector2d n_vec(nx, ny);
-      Eigen::Vector2d abv_n_vec(-ty, tx);
-
-      if (n_vec.dot(abv_n_vec) > 0)
-        dist_above = std::min(dist_above, 1 / (2 * curvature));
-      else
-        dist_below = std::min(dist_below, 1 / (2 * curvature));
-    }
+    /*if (curvature > 1e-1 && curvature > 1 / (2 * max_dist)) {*/
+    /*  Eigen::Vector2d n_vec(nx, ny);*/
+    /*  Eigen::Vector2d abv_n_vec(-ty, tx);*/
+    /**/
+    /*  if (n_vec.dot(abv_n_vec) > 0)*/
+    /*    dist_above = std::min(dist_above, 1 / (2 * curvature));*/
+    /*  else*/
+    /*    dist_below = std::min(dist_below, 1 / (2 * curvature));*/
+    /*}*/
 
     if (dist_above < min_dist_abv)
       min_dist_abv = dist_above;
@@ -312,6 +323,7 @@ inline void setup_highs_model(HighsModel& model, int d, int N,
   }
 }
 
+
 inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
                        double min_dist, double max_dist,
                        const std::vector<double>& dists,
@@ -323,7 +335,7 @@ inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
 
   /*std::cout << "highs\n";*/
   Highs highs;
-  // highs.setOptionValue("output_flag", false);
+  highs.setOptionValue("output_flag", false);
   HighsStatus return_status = highs.passModel(model);
   if (return_status != HighsStatus::kOk) {
     std::cerr << "[Tube Gen] Highs solver could not be properly setup!\n";
@@ -376,20 +388,20 @@ inline bool get_tubes2(int d, int N, double max_dist,
                        double traj_arc_len, double len_start, double horizon,
                        const map_util::OccupancyGrid& grid_map,
                        std::vector<Eigen::VectorXd>& tubes) {
-#endif
 
   Spline1D splineX(utils::Interp(x_pts, degree, knot_parameters));
   Spline1D splineY(utils::Interp(y_pts, degree, knot_parameters));
-#ifndef FOUND_CATKIN
+
   tubes.resize(2);
+  std::array<Spline1D, 2> traj{splineX, splineY};
 #endif
 
-  std::array<Spline1D, 2> traj{splineX, splineY};
   // get distances
   double min_dist_abv;
   double min_dist_blw;
   std::vector<double> ds_above;
   std::vector<double> ds_below;
+
   bool status = get_distances(traj, N, max_dist, len_start, horizon, grid_map,
                               min_dist_abv, min_dist_blw, ds_above, ds_below);
 

@@ -26,13 +26,16 @@ from oyster.rlkit.samplers.util import rollout
 class ModelServer:
     def __init__(self, variant):
 
-        low = np.array(np.zeros(13), dtype=np.float64)
-        high = np.array(np.ones(13), dtype=np.float64)
+        self.n_obs = 11
+        self.n_actions = 2
+
+        low = np.array(np.zeros(self.n_obs), dtype=np.float64)
+        high = np.array(np.ones(self.n_obs), dtype=np.float64)
 
         observation_space = spaces.Box(low, high, dtype=np.float64)
         action_space = spaces.Box(
-            low=np.zeros(2),
-            high=np.ones(2),
+            low=np.zeros(self.n_actions),
+            high=np.ones(self.n_actions),
             dtype=np.float64,
         )
 
@@ -109,19 +112,19 @@ class ModelServer:
     def query_sac(self, req):
 
         obs = list(req.state.state)
-        obs.append(float(req.state.solver_status))
-        obs = np.array(obs)
+        obs = np.array(obs[: self.n_obs])
 
         # obs = torch.FloatTensor(obs).to(ptu.device)
 
-        action, _ = self.agent.get_action(obs)
+        print(obs)
+        raw_act, _ = self.agent.get_action(obs)
 
         action = self.unnormalize(
-            action, self.params["MIN_ALPHA_DOT"], self.params["MAX_ALPHA_DOT"]
+            raw_act, self.params["MIN_ALPHA_DOT"], self.params["MAX_ALPHA_DOT"]
         )
 
-        alpha_abv = self.params["CBF_ALPHA_ABV"] + action[0] * self.params["DT"]
-        alpha_blw = self.params["CBF_ALPHA_BLW"] + action[1] * self.params["DT"]
+        alpha_abv = obs[9] + action[0] * self.params["DT"]
+        alpha_blw = obs[10] + action[1] * self.params["DT"]
 
         exceed_count = 0
         if alpha_abv < self.params["MIN_ALPHA"] or alpha_abv > self.params["MAX_ALPHA"]:
@@ -130,15 +133,26 @@ class ModelServer:
         if alpha_blw < self.params["MIN_ALPHA"] or alpha_blw > self.params["MAX_ALPHA"]:
             exceed_count += 1
 
-        self.params["CBF_ALPHA_ABV"] = np.clip(
-            alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
-        )
-        self.params["CBF_ALPHA_BLW"] = np.clip(
-            alpha_blw, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
-        )
+        # self.params["CBF_ALPHA_ABV"] = np.clip(
+        #     alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
+        # )
+        # self.params["CBF_ALPHA_BLW"] = np.clip(
+        #     alpha_blw, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
+        # )
 
         if self.prev_obs is not None:
-            r = RobotEnv.get_reward(obs, action, exceed_count, False, self.params)
+            v_max = self.params["LINVEL"]
+            v_prog = req.state.state[self.n_obs]
+            v_prog /= np.sqrt(2 * v_max**2)
+            r = RobotEnv.get_reward(
+                obs,
+                req.state.solver_status,
+                v_prog,
+                action,
+                exceed_count,
+                False,
+                self.params,
+            )
             self.agent.update_context(
                 [self.prev_obs, self.prev_action, r, obs, False, {}]
             )
@@ -150,7 +164,7 @@ class ModelServer:
         self.prev_action = action
 
         resp = QuerySACResponse()
-        resp.alpha_dot = [action[0], action[1]]
+        resp.alpha_dot = [raw_act[0], raw_act[1]]
         resp.success = True
 
         alpha_dot_msg = Float32()

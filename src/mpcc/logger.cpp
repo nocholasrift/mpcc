@@ -1,4 +1,5 @@
 #include <mpcc/logger.h>
+#include <mpcc/utils.h>
 #include <std_msgs/Float64.h>
 
 #include <Eigen/Core>
@@ -7,6 +8,24 @@
 #include "ros/console.h"
 
 namespace logger {
+
+double get_max_width(const std::array<Eigen::VectorXd, 2>& tubes, double length,
+                     unsigned int n_samples = 100) {
+  double champ       = -1e6;
+  Eigen::VectorXd ss = Eigen::VectorXd::LinSpaced(n_samples, 0, length);
+
+  for (size_t i = 0; i < ss.size(); ++i) {
+    double d_abv = utils::eval_traj(tubes[0], ss[i]);
+    double d_blw = utils::eval_traj(tubes[1], ss[i]);
+    double width = d_abv - d_blw;
+
+    if (width > champ) {
+      champ = width;
+    }
+  }
+
+  return champ;
+}
 
 RLLogger::RLLogger(ros::NodeHandle& nh,
                    const std::unordered_map<std::string_view, double>& params,
@@ -125,7 +144,9 @@ bool RLLogger::request_alpha(MPCCore& mpc_core, double ref_len) {
   // received action is between -1 and 1, scale to min/max alpha_dot
   auto scale = [](double val, double min_val, double max_val) {
     if (fabs(min_val - max_val) < 1e-8) {
-      std::cerr << "[Logger] Warning: min and max are too close for proper "
+      std::cerr << "[Logger] Warning: min (" << min_val << ") and max ("
+                << max_val
+                << ") are too close for proper "
                    "normalization!"
                 << std::endl;
       return 0.;
@@ -230,6 +251,7 @@ void RLLogger::log_transition(const MPCCore& mpc_core, double len_start,
 }
 
 double RLLogger::compute_reward() {
+
   double reward = 0;
   if (!_is_colliding) {
     // weight distance to obstacle
@@ -267,9 +289,11 @@ double RLLogger::compute_reward() {
 }
 
 void RLLogger::fill_state(const MPCCore& mpc_core, mpcc::RLState& state) {
-  Eigen::VectorXd mpc_state       = mpc_core.get_state();
-  std::array<double, 2> mpc_input = mpc_core.get_mpc_command();
-  bool solver_status              = mpc_core.get_solver_status();
+  Eigen::VectorXd mpc_state                   = mpc_core.get_state();
+  std::array<double, 2> mpc_input             = mpc_core.get_mpc_command();
+  bool solver_status                          = mpc_core.get_solver_status();
+  const std::array<Eigen::VectorXd, 2>& tubes = mpc_core.get_tubes();
+  double ref_len                              = mpc_core.get_true_ref_len();
 
   Eigen::VectorXd cbf_data_abv = mpc_core.get_cbf_data(
       mpc_state, Eigen::Vector2d(mpc_input[0], mpc_input[1]), true);
@@ -285,26 +309,45 @@ void RLLogger::fill_state(const MPCCore& mpc_core, mpcc::RLState& state) {
   std::array<Eigen::VectorXd, 2> state_limits = mpc_core.get_state_limits();
   std::array<Eigen::VectorXd, 2> input_limits = mpc_core.get_input_limits();
 
+  double remaining_length =
+      std::min(ref_len - mpc_state[4], mpc_core.get_params().at("REF_LENGTH"));
+  double max_width = get_max_width(tubes, remaining_length);
+
   state.state.resize(12);
 
   state.state[0] =
       normalize(mpc_state[2], state_limits[0][2], state_limits[1][2]);
   state.state[1] =
       normalize(mpc_state[3], state_limits[0][3], state_limits[1][3]);
-  state.state[2] =
-      normalize(mpc_input[0], input_limits[0][0], input_limits[1][0]);
-  state.state[3] =
-      normalize(mpc_input[1], input_limits[0][1], input_limits[1][1]);
-  state.state[4] = normalize(cbf_data_abv[1], 0, _max_obs_dist);
-  state.state[5] = normalize(cbf_data_blw[1], 0, _max_obs_dist);
-  state.state[6] = normalize(cbf_data_abv[2], -M_PI, M_PI);
+  /*state.state[2] =*/
+  /*    normalize(mpc_input[0], input_limits[0][0], input_limits[1][0]);*/
+  /*state.state[3] =*/
+  /*    normalize(mpc_input[1], input_limits[0][1], input_limits[1][1]);*/
+  state.state[2] = normalize(utils::eval_traj(tubes[0], 0), 0, max_width);
+  state.state[3] = normalize(-1 * utils::eval_traj(tubes[1], 0), 0, max_width);
+
+  state.state[4] =
+      normalize(utils::eval_traj(tubes[0], std::min(0.25, remaining_length)), 0,
+                max_width);
+  state.state[5] = normalize(
+      -1 * utils::eval_traj(tubes[1], std::min(0.25, remaining_length)), 0,
+      max_width);
+
+  state.state[6] =
+      normalize(utils::eval_traj(tubes[0], std::min(0.5, remaining_length)), 0,
+                max_width);
+  state.state[7] = normalize(
+      -1 * utils::eval_traj(tubes[1], std::min(0.5, remaining_length)), 0,
+      max_width);
 
   // curr progress is already normalized, can't norm h value
-  state.state[7]      = curr_progress;
-  state.state[8]      = normalize(cbf_data_abv[0], _min_h_val, _max_h_val);
-  state.state[9]      = normalize(cbf_data_blw[0], _min_h_val, _max_h_val);
-  state.state[10]     = normalize(alpha_abv, _min_alpha, _max_alpha);
-  state.state[11]     = normalize(alpha_blw, _min_alpha, _max_alpha);
+  /*state.state[7]      = curr_progress;*/
+  state.state[8] = normalize(cbf_data_abv[2], -M_PI, M_PI);
+  /*state.state[8]      = normalize(cbf_data_abv[0], _min_h_val, _max_h_val);*/
+  /*state.state[9]      = normalize(cbf_data_blw[0], _min_h_val, _max_h_val);*/
+  state.state[9]      = normalize(alpha_abv, _min_alpha, _max_alpha);
+  state.state[10]     = normalize(alpha_blw, _min_alpha, _max_alpha);
+  state.state[11]     = mpc_state[5] / sqrt(2 * max_vel * max_vel);
   state.solver_status = solver_status;
 
   /*ROS_INFO("obs abv and below are: %.2f\t%.2f", cbf_data_abv[1],*/
@@ -345,7 +388,8 @@ std::string RLLogger::serialize_state(const mpcc::RLState& state) {
 
 double normalize(double val, double min, double max) {
   if (fabs(min - max) < 1e-8) {
-    std::cerr << "[Logger] Warning: min and max are too close for proper "
+    std::cerr << "[Logger] Warning: min (" << min << ") and max (" << max
+              << ") are too close for proper "
                  "normalization!"
               << std::endl;
     return 0.;

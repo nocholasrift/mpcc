@@ -147,7 +147,9 @@ def run_sim(args):
 
         from datetime import datetime
 
-        bag_dir = rospy.get_param("/train/bag_dir", "./")
+        bag_dir = rospy.get_param(
+            "/train/bag_dir", "/home/nick/catkin_ws/src/mpcc/bags"
+        )
         dt_str = "{:%Y_%m_%d-%H-%M-%S}".format(datetime.now())
         bag_fname = f"world_{args.world_idx}_{dt_str}.bag"
         bag_launch_file = os.path.join(base_path, "launch/record_bag.launch")
@@ -167,7 +169,7 @@ def run_sim(args):
             # executable="/usr/bin/zsh",
         )
 
-    time.sleep(5)
+    time.sleep(2)
 
     nav_stack_launch_file = join(base_path, "launch/jackal_mpc_track.launch")
     # if args.double_integrator:
@@ -181,7 +183,7 @@ def run_sim(args):
         ["roslaunch", nav_stack_launch_file, *params],
         # executable="/usr/bin/zsh",
     )
-    time.sleep(3)
+    time.sleep(2)
 
     planner_launch_file = join(planner_path, "launch/planner_gurobi.launch")
     planner_process = subprocess.Popen(
@@ -277,9 +279,9 @@ def run_sim(args):
         bag_process.terminate()
         bag_process.wait()
 
-    if args.bag and status == "timeout":
+    if args.bag and status != "succeeded":
         print(
-            "Navigation timed out, so deleting bag file",
+            "Navigation crashed, so deleting bag file",
             os.path.join(bag_dir, bag_fname),
         )
         os.remove(os.path.join(bag_dir, bag_fname))
@@ -332,6 +334,7 @@ if __name__ == "__main__":
     trainer = None
 
     rospy.loginfo("Starting simulation")
+    # eval_worlds = np.array([38, 44, 91, 151, 187, 236, 249, 270, 275, 278, 290])
     eval_worlds = np.array(
         [
             10,
@@ -386,9 +389,45 @@ if __name__ == "__main__":
             290,
         ]
     )
+    high_alpha_fail_worlds = np.array(
+        [
+            7,
+            31,
+            33,
+            43,
+            52,
+            55,
+            96,
+            102,
+            112,
+            118,
+            157,
+            171,
+            179,
+            191,
+            214,
+            221,
+            228,
+            237,
+            242,
+            243,
+            247,
+            262,
+            264,
+            265,
+            272,
+            281,
+            282,
+            283,
+            292,
+            294,
+            296,
+        ]
+    )
 
-    world_list = np.array([i for i in range(0, 300)])
-
+    # world_list = np.array([i for i in range(0, 300)])
+    # eval_worlds = world_list
+    eval_worlds = high_alpha_fail_worlds
     # print(world_list)
 
     if args.world_idx >= 0:
