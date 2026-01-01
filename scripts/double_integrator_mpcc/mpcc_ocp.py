@@ -139,6 +139,14 @@ def create_ocp(yaml_file):
     # ocp.solver_options.qp_solver_iter_max = 100
     # ocp.solver_options.globalization_line_search_use_sufficient_descent = True
 
+    opts = {"cpp": True, "with_header": True}
+    mpcc_model.compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
+    mpcc_model.compute_lfh_abv.generate("compute_lfh_abv.cpp", opts)
+    mpcc_model.compute_lgh_abv.generate("compute_lgh_abv.cpp", opts)
+    mpcc_model.compute_cbf_blw.generate("compute_cbf_blw.cpp", opts)
+    mpcc_model.compute_lfh_blw.generate("compute_lfh_blw.cpp", opts)
+    mpcc_model.compute_lgh_blw.generate("compute_lgh_blw.cpp", opts)
+
     return ocp
 
 

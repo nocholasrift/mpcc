@@ -80,7 +80,9 @@ class MPCCROS {
      **********************************************************************/
   void odomcb(const nav_msgs::Odometry::ConstPtr& msg);
   void dynaobscb(const nav_msgs::Odometry::ConstPtr& msg);
-  void mapcb(const nav_msgs::OccupancyGrid::ConstPtr& msg);
+  /*void mapcb(const nav_msgs::OccupancyGrid::ConstPtr& msg);*/
+  void mapcb(const grid_map_msgs::GridMap::ConstPtr& msg);
+  void lidarcb(const sensor_msgs::LaserScan::ConstPtr& msg);
   void goalcb(const geometry_msgs::PoseStamped::ConstPtr& msg);
   void trajectorycb(const trajectory_msgs::JointTrajectory::ConstPtr& msg);
 
@@ -133,6 +135,7 @@ class MPCCROS {
      **********************************************************************/
   std::unique_ptr<logger::RLLogger> _logger;
 
+  ros::Subscriber _laserSub;
   ros::Subscriber _trajSub;
   ros::Subscriber _trajNoResetSub;
   ros::Subscriber _obsSub;
@@ -168,6 +171,7 @@ class MPCCROS {
   ros::Timer _timer, _velPubTimer;
 
   Eigen::VectorXd _odom;
+  Eigen::MatrixXd _laser_scan;
 
   trajectory_msgs::JointTrajectory _trajectory;
 

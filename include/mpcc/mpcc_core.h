@@ -70,13 +70,15 @@ class MPCCore {
                       const Eigen::VectorXd& y_pts, int degree,
                       const Eigen::VectorXd& knot_parameters);
 #endif
-  void set_trajectory(const std::array<Spline1D, 2>& ref, double arclen);
+  void set_trajectory(const std::array<Spline1D, 2>& ref, double ref_len, double true_ref_len);
   void set_tubes(const std::array<Eigen::VectorXd, 2>& tubes);
   void set_dyna_obs(const Eigen::MatrixXd& dyna_obs);
   void set_alpha(const std::array<double, 2>& alphas);
 
   const bool get_solver_status() const;
+  const double get_true_ref_len() const;
   const Eigen::VectorXd& get_state() const;
+  const std::array<Eigen::VectorXd, 2>& get_tubes() const;
   double get_s_from_pose(const Eigen::VectorXd& pose) const;
   const std::array<Eigen::VectorXd, 2> get_state_limits() const;
   const std::array<Eigen::VectorXd, 2> get_input_limits() const;
@@ -96,6 +98,7 @@ class MPCCore {
   double _max_vel;
   double _max_angvel;
   double _ref_length;
+  double _true_ref_length;
 
   double _prop_gain;
   double _prop_angle_thresh;

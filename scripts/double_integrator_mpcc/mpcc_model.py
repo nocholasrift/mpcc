@@ -68,6 +68,44 @@ class mpcc_ode_model:
             self.gamma,
         )
 
+        self.compute_cbf_abv = Function(
+            "h_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [self.h_abv],
+        )
+
+        self.compute_lfh_abv = Function(
+            "lfh_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [self.Lfh_abv],
+        )
+
+        Lgh_abv = self.h_dot_abv @ self.g
+        self.compute_lgh_abv = Function(
+            "lgh_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [Lgh_abv],
+        )
+
+        self.compute_cbf_blw = Function(
+            "h_blw",
+            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
+            [self.h_blw],
+        )
+
+        self.compute_lfh_blw = Function(
+            "lfh_blw",
+            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
+            [self.Lfh_blw],
+        )
+
+        Lgh_blw = self.h_dot_blw @ self.g
+        self.compute_lgh_blw = Function(
+            "lgh_blw",
+            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
+            [Lgh_blw],
+        )
+
         self.model = AcadosModel()
 
         self.model.f_impl_expr = self.f_impl
@@ -243,12 +281,14 @@ class mpcc_ode_model:
         self.p_abv = (
             self.obs_dirx * self.vx1 + self.obs_diry * self.vy1
         ) / vel + vel * 0.05
-        self.h_abv = (self.d_abv - self.signed_d - 0.1) * exp(-self.p_abv)
+        # self.h_abv = (self.d_abv - self.signed_d - 0.1) * exp(-self.p_abv)
+        self.h_abv = (self.d_abv - self.signed_d) * exp(-self.p_abv)
 
         self.p_blw = (
             -self.obs_dirx * self.vx1 - self.obs_diry * self.vy1
         ) / vel + vel * 0.05
-        self.h_blw = (self.signed_d - self.d_blw - 0.1) * exp(-self.p_blw)
+        # self.h_blw = (self.signed_d - self.d_blw - 0.1) * exp(-self.p_blw)
+        self.h_blw = (self.signed_d - self.d_blw) * exp(-self.p_blw)
 
         self.h_dot_abv = jacobian(self.h_abv, self.x)
         self.Lfh_abv = self.h_dot_abv @ self.f

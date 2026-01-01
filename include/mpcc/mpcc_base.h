@@ -53,6 +53,10 @@ class MPCBase {
     _tubes = tubes;
   }
 
+  const std::array<Eigen::VectorXd, 2>& get_tubes() const {
+    return _tubes;
+  }
+
   void set_reference(const std::array<Spline1D, 2>& reference, double arclen) {
     _reference  = reference;
     _ref_length = arclen;

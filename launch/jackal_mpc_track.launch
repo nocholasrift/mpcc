@@ -20,6 +20,7 @@
     </node>
 	</group>
 
+	<!--<node name="mpcc" pkg="mpcc" type="mpcc_ros">-->
 	<node name="mpcc" pkg="mpcc" type="mpcc_ros" output="screen">
 	<!-- <node name="jackal_mpc_track" pkg="cbf_tracking" type="jackal_mpc_tracking" 
 		launch-prefix="lldb" output="screen"> -->
