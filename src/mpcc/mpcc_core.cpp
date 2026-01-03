@@ -236,7 +236,6 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
 
   _traj_reset = false;
 
-  // std::cout << "odometry is " << _odom.transpose() << std::endl;
   double new_vel;
   double time_to_solve = 0.;
 

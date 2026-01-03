@@ -83,7 +83,7 @@ class DIMPCC : public MPCBase {
   static constexpr uint8_t kIndInputInc = 3;
 
   bool _has_run;
-  bool _solve_success;
+  // bool _solve_success;
   bool _is_shift_warm;
 
   double _s_dot;

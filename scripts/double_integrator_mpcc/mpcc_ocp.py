@@ -88,8 +88,9 @@ def create_ocp(yaml_file):
     ocp.cost.zl = grad_cost * np.ones((1,))
     ocp.cost.zu = grad_cost * np.ones((1,))
 
-    ocp.constraints.lbu = np.array([-1.5, -1.5, -1.5])
-    ocp.constraints.ubu = np.array([1.5, 1.5, 1.5])
+    max_acc = 3.0
+    ocp.constraints.lbu = np.array([-max_acc, -max_acc, -max_acc])
+    ocp.constraints.ubu = np.array([max_acc, max_acc, max_acc])
     ocp.constraints.idxbu = np.array([0, 1, 2])
 
     # theta can be whatever

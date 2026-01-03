@@ -84,14 +84,17 @@ set(HiGHS_INCLUDE_DIRS
   third_party/HiGHS/highs/util
 )
 
+if (APPLE)
+  set(EIGEN3_INCLUDE_DIRS /opt/homebrew/opt/eigen/include/eigen3)
+endif()
+
 ########################
 # Common include paths
 ########################
 include_directories(
   include
   ${HPIPM_INCLUDE_DIRS}
-  # ${EIGEN3_INCLUDE_DIRS}
-  /opt/homebrew/opt/eigen/include/eigen3
+  ${EIGEN3_INCLUDE_DIRS}
   ${ACADOS_INCLUDE_DIRS}
   ${BLASFEO_INCLUDE_DIRS}
   ${cpg_include}

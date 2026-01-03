@@ -405,7 +405,7 @@ bool DIMPCC::set_solver_parameters(
   int num_params =
       ctrls_x.size() + ctrls_y.size() + _tubes[0].size() + _tubes[1].size() + 8;
   if (num_params != kNP) {
-    std::cout << termcolor::yellow << "[MPCC] reference size " << num_params
+    std::cerr << termcolor::yellow << "[MPCC] reference size " << num_params
               << " does not match acados parameter size " << kNP
               << termcolor::reset << std::endl;
 
@@ -443,12 +443,12 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   _solve_success = false;
 
   if (!_acados_ocp_capsule) {
-    std::cout << termcolor::yellow << "[MPCC] Parameters not yet loaded!"
+    std::cerr << termcolor::yellow << "[MPCC] Parameters not yet loaded!"
               << termcolor::reset << std::endl;
   }
 
   if (_tubes.size() == 0) {
-    std::cout << "[MPCC] tubes are not set yet, mpc cannot run" << std::endl;
+    std::cerr << "[MPCC] tubes are not set yet, mpc cannot run" << std::endl;
     return {0, 0};
   }
 
@@ -459,7 +459,7 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   /*          << termcolor::reset;*/
 
   if (state.size() != kNBX0) {
-    std::cout << termcolor::yellow << "[MPCC] state sized passed has size "
+    std::cerr << termcolor::yellow << "[MPCC] state size passed has size "
               << state.size() << " but should be " << kNBX0 << termcolor::reset
               << std::endl;
     return {0, 0};
@@ -528,8 +528,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   ********* SET REFERENCE PARAMS *******
   **************************************/
 
-  if (!set_solver_parameters(adjusted_ref))
+  if (!set_solver_parameters(adjusted_ref)){
+    std::cout << "setting solver params failed\n";
     return {0, 0};
+  }
 
   /*************************************
   ************* RUN SOLVER *************
@@ -578,10 +580,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
 
   double prev_angvel = _prev_u0[kIndS];
   process_solver_output(s);
-  /*std::cout << "mpc x[0] is " << _prev_x0.head(kNX).transpose() << std::endl;*/
-  /*std::cout << "true x[0] is " << x0.transpose() << std::endl;*/
-  /*std::cout << "mpc x[1] is " << _prev_x0.segment(kNX, kNX).transpose()*/
-  /*          << std::endl;*/
+  // std::cout << "mpc x[0] is " << _prev_x0.head(kNX).transpose() << std::endl;
+  // std::cout << "true x[0] is " << x0.transpose() << std::endl;
+  // std::cout << "mpc x[1] is " << _prev_x0.segment(kNX, kNX).transpose()
+  //           << std::endl;
 
   _has_run = true;
 
@@ -604,6 +606,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   /*std::cout << "[MPCC] Input is: " << new_velx << " " << new_vely << std::endl;*/
 
   _cmd = {_prev_u0[0], _prev_u0[1]};
+
+  if (!_solve_success){
+    std::cout << "[MPCC] SOLVER STATUS WAS INFEASIBLE AHHH!!!\n";
+  }
 
   return {new_velx, new_vely};
 }
