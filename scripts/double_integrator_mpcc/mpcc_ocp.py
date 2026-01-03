@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 import yaml
 import time
@@ -139,12 +140,20 @@ def create_ocp(yaml_file):
     # ocp.solver_options.globalization_line_search_use_sufficient_descent = True
 
     opts = {"cpp": True, "with_header": True}
+
+    dir_name = "cpp_generated_code"
+    if not os.path.exists(dir_name):
+        os.mkdir(dir_name)
+
+    current_dir = os.getcwd()
+    os.chdir(dir_name)
     mpcc_model.compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
     mpcc_model.compute_lfh_abv.generate("compute_lfh_abv.cpp", opts)
     mpcc_model.compute_lgh_abv.generate("compute_lgh_abv.cpp", opts)
     mpcc_model.compute_cbf_blw.generate("compute_cbf_blw.cpp", opts)
     mpcc_model.compute_lfh_blw.generate("compute_lfh_blw.cpp", opts)
     mpcc_model.compute_lgh_blw.generate("compute_lgh_blw.cpp", opts)
+    os.chdir(current_dir)
 
     return ocp
 
@@ -159,3 +168,4 @@ if __name__ == "__main__":
     ocp = create_ocp(args.yaml)
     acados_ocp_solver = AcadosOcpSolver(ocp)
     acados_integrator = AcadosSimSolver(ocp)
+
