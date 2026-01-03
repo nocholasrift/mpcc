@@ -841,8 +841,15 @@ void MPCCROS::publishMPCTrajectory() {
 
   for (int i = 0; i < horizon.size(); ++i) {
     // don't visualize mpc horizon past end of reference trajectory
-    if (horizon[i](6) > _true_ref_len)
-      break;
+    // eventually fix this so that MPCC ros does not need to know this much
+    // info about lower level class structure
+    if (_mpc_input_type == MPCCType::kUnicycle) {
+      if (horizon[i](6) > _true_ref_len)
+        break;
+    } else if (_mpc_input_type == MPCCType::kUnicycle) {
+      if (horizon[i][4] > _true_ref_len)
+        break;
+    }
 
     Eigen::VectorXd state = horizon[i];
     geometry_msgs::PoseStamped tmp;

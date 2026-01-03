@@ -84,13 +84,13 @@ void MPCCore::set_odom(const Eigen::Vector3d& odom) {
   _mpc->set_odom(odom);
 }
 
-void MPCCore::set_trajectory(const std::array<Spline1D, 2>& ref,
-                             double ref_len, double true_ref_len) {
-  _ref        = ref;
-  _ref_length = ref_len;
+void MPCCore::set_trajectory(const std::array<Spline1D, 2>& ref, double ref_len,
+                             double true_ref_len) {
+  _ref             = ref;
+  _ref_length      = ref_len;
   _true_ref_length = true_ref_len;
-  _is_set     = true;
-  _traj_reset = true;
+  _is_set          = true;
+  _traj_reset      = true;
   _mpc->set_reference(ref, ref_len);
 }
 
@@ -314,7 +314,7 @@ const bool MPCCore::get_solver_status() const {
   return _mpc->get_solver_status();
 }
 
-const double MPCCore::get_true_ref_len() const{
+const double MPCCore::get_true_ref_len() const {
   return _true_ref_length;
 }
 
@@ -353,11 +353,12 @@ std::vector<Eigen::VectorXd> MPCCore::get_horizon() const {
       return ret;
     double t = 0;
     for (int i = 0; i < _mpc_double_integrator->mpc_x.size() - 1; ++i) {
-      ret.emplace_back(7);
+      ret.emplace_back(9);
       ret.back() << t, _mpc_double_integrator->mpc_x[i],
           _mpc_double_integrator->mpc_y[i], _mpc_double_integrator->mpc_vx[i],
-          _mpc_double_integrator->mpc_vy[i], _mpc_double_integrator->mpc_ax[i],
-          _mpc_double_integrator->mpc_ay[i];
+          _mpc_double_integrator->mpc_vy[i], _mpc_double_integrator->mpc_s[i],
+          _mpc_double_integrator->mpc_s_dot[i],
+          _mpc_double_integrator->mpc_ax[i], _mpc_double_integrator->mpc_ay[i];
       t += _dt;
     }
   }
