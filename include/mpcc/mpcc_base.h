@@ -39,23 +39,21 @@ class MPCBase {
   virtual std::array<double, 2> solve(const Eigen::VectorXd& state,
                                       bool is_reverse = false) = 0;
 
-  void set_odom(const Eigen::VectorXd& odom) { 
+  void set_odom(const Eigen::VectorXd& odom) {
     _odom = odom;
 
-    if (!_odom_init){
+    if (!_odom_init) {
       _odom_init = true;
       reset_horizon();
     }
   }
-  virtual void reset_horizon()                       = 0;
+  virtual void reset_horizon() = 0;
 
   void set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {
     _tubes = tubes;
   }
 
-  const std::array<Eigen::VectorXd, 2>& get_tubes() const {
-    return _tubes;
-  }
+  const std::array<Eigen::VectorXd, 2>& get_tubes() const { return _tubes; }
 
   void set_reference(const std::array<Spline1D, 2>& reference, double arclen) {
     _reference  = reference;

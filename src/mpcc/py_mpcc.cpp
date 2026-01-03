@@ -7,64 +7,7 @@
 #include <mpcc/map_util.h>
 #include <mpcc/mpcc_core.h>
 
-#include <compute_cbf_abv.h>
-#include <compute_cbf_blw.h>
-
-#include <compute_lfh_abv.h>
-#include <compute_lfh_blw.h>
-
-#include <compute_lgh_abv.h>
-#include <compute_lgh_blw.h>
-
 #include <mpcc/tube_gen.h>
-
-// casadi cbf wrappers
-double get_cbf_abv(const Eigen::VectorXd& x, const Eigen::VectorXd& d_abv_coeff,
-                   const Eigen::VectorXd& x_coeff,
-                   const Eigen::VectorXd& y_coeff) {
-
-  const casadi_real* arg[h_abv_SZ_ARG]{nullptr};
-  arg[0] = x.data();
-  arg[1] = d_abv_coeff.data();
-  arg[2] = x_coeff.data();
-  arg[3] = y_coeff.data();
-
-  casadi_real h_abv_val;
-  casadi_real* res[1];
-  res[0] = &h_abv_val;
-
-  // --- workspaces ---
-  casadi_int iw[h_abv_SZ_IW];
-  casadi_real w[h_abv_SZ_W];
-
-  std::cout << "got everything setup\n";
-
-  h_abv(arg, res, iw, w, 0);
-  std::cout << "val: " << h_abv_val << "\n";
-  std::cout << "done\n";
-
-  return h_abv_val;
-}
-
-double get_cbf_blw(const Eigen::VectorXd& x, const Eigen::VectorXd& d_blw_coeff,
-                   const Eigen::VectorXd& x_coeff,
-                   const Eigen::VectorXd& y_coeff) {
-
-  std::array<const casadi_real*, 4> arg;
-  arg[0] = x.data();
-  arg[1] = d_blw_coeff.data();
-  arg[2] = x_coeff.data();
-  arg[3] = y_coeff.data();
-
-  casadi_real** res;
-  casadi_int* iw;
-  casadi_real* w;
-  int mem = 0;
-
-  h_abv(arg.data(), res, iw, w, 0);
-
-  return *res[0];
-}
 
 namespace py = pybind11;
 PYBIND11_MAKE_OPAQUE(std::vector<Eigen::VectorXd>);
@@ -118,7 +61,5 @@ PYBIND11_MODULE(py_mpcc, m) {
   // tube generation
 #ifndef FOUND_CATKIN
   m.def("get_tubes", &tube_utils::get_tubes2);
-  m.def("get_cbf_abv", &get_cbf_abv);
-  m.def("get_cbf_blw", &get_cbf_blw);
 #endif
 }

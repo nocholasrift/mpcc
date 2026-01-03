@@ -7,7 +7,7 @@
 #include <map>
 #include <memory>
 
-enum class MPCType {kDoubleIntegrator, kUnicycle};
+enum class MPCType { kDoubleIntegrator, kUnicycle };
 
 class MPCCore {
  public:
@@ -70,7 +70,8 @@ class MPCCore {
                       const Eigen::VectorXd& y_pts, int degree,
                       const Eigen::VectorXd& knot_parameters);
 #endif
-  void set_trajectory(const std::array<Spline1D, 2>& ref, double ref_len, double true_ref_len);
+  void set_trajectory(const std::array<Spline1D, 2>& ref, double ref_len,
+                      double true_ref_len);
   void set_tubes(const std::array<Eigen::VectorXd, 2>& tubes);
   void set_dyna_obs(const Eigen::MatrixXd& dyna_obs);
   void set_alpha(const std::array<double, 2>& alphas);
