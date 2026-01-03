@@ -68,6 +68,56 @@ class mpcc_ode_model:
             self.gamma,
         )
 
+        self.compute_cbf_abv = Function(
+            "h_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [self.h_abv],
+        )
+
+        self.compute_lfh_abv = Function(
+            "lfh_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [self.Lfh_abv],
+        )
+
+        Lgh_abv = self.h_dot_abv @ self.g
+        self.compute_lgh_abv = Function(
+            "lgh_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [Lgh_abv],
+        )
+
+        self.compute_hdot_abv = Function(
+            "h_dot_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [self.h_dot_abv],
+        )
+
+        self.compute_p_abv = Function(
+            "p_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [self.p_abv],
+        )
+
+        self.compute_cbf_blw = Function(
+            "h_blw",
+            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
+            [self.h_blw],
+        )
+
+        self.compute_lfh_blw = Function(
+            "lfh_blw",
+            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
+            [self.Lfh_blw],
+        )
+
+        Lgh_blw = self.h_dot_blw @ self.g
+        self.compute_lgh_blw = Function(
+            "lgh_blw",
+            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
+            [Lgh_blw],
+        )
+
         self.model = AcadosModel()
 
         self.model.f_impl_expr = self.f_impl
@@ -237,18 +287,24 @@ class mpcc_ode_model:
             self.y1 - self.yr
         ) * self.obs_diry
 
-        # theta = atan2(self.vx1, self.vy1)
+        theta = atan2(self.vx1, self.vy1)
         vel = sqrt(self.vx1**2 + self.vy1**2)
 
+        # self.p_abv = (
+        #     self.obs_dirx * self.vx1 + self.obs_diry * self.vy1
+        # ) / vel + vel * 0.05
         self.p_abv = (
-            self.obs_dirx * self.vx1 + self.obs_diry * self.vy1
-        ) / vel + vel * 0.05
-        self.h_abv = (self.d_abv - self.signed_d - 0.1) * exp(-self.p_abv)
+            self.obs_dirx * cos(theta) + self.obs_diry * sin(theta)
+        ) + vel * 0.05
+        self.h_abv = (self.d_abv - self.signed_d) * exp(-self.p_abv)
 
+        # self.p_blw = (
+        #     -self.obs_dirx * self.vx1 - self.obs_diry * self.vy1
+        # ) / vel + vel * 0.05
         self.p_blw = (
-            -self.obs_dirx * self.vx1 - self.obs_diry * self.vy1
-        ) / vel + vel * 0.05
-        self.h_blw = (self.signed_d - self.d_blw - 0.1) * exp(-self.p_blw)
+            -self.obs_dirx * cos(theta) - self.obs_diry * sin(theta)
+        ) + vel * 0.05
+        self.h_blw = (self.signed_d - self.d_blw) * exp(-self.p_blw)
 
         self.h_dot_abv = jacobian(self.h_abv, self.x)
         self.Lfh_abv = self.h_dot_abv @ self.f
@@ -266,3 +322,41 @@ class mpcc_ode_model:
             + self.h_dot_blw @ self.g @ self.u
             + self.alpha_blw * self.h_blw
         )
+
+if __name__ == "__main__":
+    params = {"tube_poly_degree": 6}
+    model = mpcc_ode_model()
+    model.create_model(params)
+
+    f = model.compute_cbf_abv
+
+    print("n_in =", f.n_in())
+    for i in range(f.n_in()):
+        print(i,
+              f.name_in(i),
+              f.size_in(i),
+              f.sparsity_in(i))
+
+    print("n_out =", f.n_out())
+    for i in range(f.n_out()):
+        print(i,
+              f.name_out(i),
+              f.size_out(i))
+
+    x = [-2.25e+00, -2.50e+00,  0.05e+00,  1.00e-6,  0.00e+00,  0.00e+00]
+    xs = [-2.24999693, -2.11674265, -1.97900936, -1.84491102, -1.71762874, -1.58263046,
+ -1.4541721,  -1.32337543, -1.24702939, -1.24702939, -1.24702939]
+    ys = [-2.49999123, -2.11986464, -1.72696107, -1.34442668, -0.98133606, -0.59623445,
+ -0.22978891,  0.14332701,  0.36111483,  0.36111483,  0.36111483]
+    coeffs = [ 0.36863125, -0.14984056,  0.44477208, -0.53646524,  0.30815822, -0.0849333,
+  0.00906838]
+
+    # if np.linalg.norm(x[2:4]) < 1e-9:
+    #     x[3] = 1e-3
+
+    print("h", f(x, coeffs, xs, ys))
+    print("lfh", model.compute_lfh_abv(x, coeffs, xs, ys))
+    print("lgh", model.compute_lgh_abv(x, coeffs, xs, ys))
+    print("p_abv", model.compute_p_abv(x, coeffs, xs, ys))
+    print("h_dot", model.compute_hdot_abv(x, coeffs, xs, ys))
+    

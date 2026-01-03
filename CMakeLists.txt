@@ -123,7 +123,10 @@ foreach(model ${ACADOS_MODELS})
     ${CMAKE_SOURCE_DIR}/scripts/${model}/mpcc_model.py
     ${CMAKE_SOURCE_DIR}/scripts/${model}/mpcc_ocp.py
   )
-  list(APPEND ACADOS_OUTPUT_DIRS ${CMAKE_SOURCE_DIR}/scripts/${model}/c_generated_code)
+  list(APPEND ACADOS_OUTPUT_DIRS 
+    ${CMAKE_SOURCE_DIR}/scripts/${model}/c_generated_code 
+    ${CMAKE_SOURCE_DIR}/scripts/${model}/cpp_generated_code
+  )
 
   collect_acados_generated_code(${model})
   list(APPEND ACADOS_OUTPUT_SRC ${${model}_SRC})
@@ -170,6 +173,13 @@ if (pybind11_FOUND)
     src/mpcc/mpcc_acados.cpp
     src/mpcc/mpcc_di_acados.cpp
     src/mpcc/py_mpcc.cpp
+
+    ${CMAKE_SOURCE_DIR}/scripts/double_integrator_mpcc/cpp_generated_code/compute_cbf_abv.cpp
+    ${CMAKE_SOURCE_DIR}/scripts/double_integrator_mpcc/cpp_generated_code/compute_lgh_abv.cpp
+    ${CMAKE_SOURCE_DIR}/scripts/double_integrator_mpcc/cpp_generated_code/compute_lfh_abv.cpp
+    ${CMAKE_SOURCE_DIR}/scripts/double_integrator_mpcc/cpp_generated_code/compute_cbf_blw.cpp
+    ${CMAKE_SOURCE_DIR}/scripts/double_integrator_mpcc/cpp_generated_code/compute_lfh_blw.cpp
+    ${CMAKE_SOURCE_DIR}/scripts/double_integrator_mpcc/cpp_generated_code/compute_lgh_blw.cpp
   )
   add_dependencies(py_mpcc ${ACADOS_TARGETS})
 
