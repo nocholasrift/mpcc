@@ -280,8 +280,11 @@ class mpcc_ode_model:
         self.alpha_abv = MX.sym("alpha_abv")
         self.alpha_blw = MX.sym("alpha_blw")
 
-        self.obs_dirx = -self.yr_dot / sqrt(self.xr_dot**2 + self.yr_dot**2)
-        self.obs_diry = self.xr_dot / sqrt(self.xr_dot**2 + self.yr_dot**2)
+        # self.obs_dirx = -self.yr_dot / sqrt(self.xr_dot**2 + self.yr_dot**2)
+        # self.obs_diry = self.xr_dot / sqrt(self.xr_dot**2 + self.yr_dot**2)
+
+        self.obs_dirx = -sin(self.phi_r)
+        self.obs_diry = cos(self.phi_r)
 
         self.signed_d = (self.x1 - self.xr) * self.obs_dirx + (
             self.y1 - self.yr
