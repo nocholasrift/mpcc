@@ -149,6 +149,8 @@ def create_ocp(yaml_file):
     current_dir = os.getcwd()
     os.chdir(dir_name)
     mpcc_model.compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
+    mpcc_model.compute_yrdot.generate("compute_yrdot.cpp", opts)
+    mpcc_model.compute_xrdot.generate("compute_xrdot.cpp", opts)
     mpcc_model.compute_lfh_abv.generate("compute_lfh_abv.cpp", opts)
     mpcc_model.compute_lgh_abv.generate("compute_lgh_abv.cpp", opts)
     mpcc_model.compute_cbf_blw.generate("compute_cbf_blw.cpp", opts)

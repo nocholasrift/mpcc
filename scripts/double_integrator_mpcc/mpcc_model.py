@@ -87,16 +87,16 @@ class mpcc_ode_model:
             [Lgh_abv],
         )
 
-        self.compute_hdot_abv = Function(
-            "h_dot_abv",
-            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
-            [self.h_dot_abv],
+        self.compute_yrdot= Function(
+            "yr_dot",
+            [self.x, self.x_coeff, self.y_coeff],
+            [self.yr_dot],
         )
 
-        self.compute_p_abv = Function(
-            "p_abv",
-            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
-            [self.p_abv],
+        self.compute_xrdot= Function(
+            "xr_dot",
+            [self.x, self.x_coeff, self.y_coeff],
+            [self.xr_dot],
         )
 
         self.compute_cbf_blw = Function(
@@ -290,20 +290,20 @@ class mpcc_ode_model:
         theta = atan2(self.vx1, self.vy1)
         vel = sqrt(self.vx1**2 + self.vy1**2)
 
-        # self.p_abv = (
-        #     self.obs_dirx * self.vx1 + self.obs_diry * self.vy1
-        # ) / vel + vel * 0.05
         self.p_abv = (
-            self.obs_dirx * cos(theta) + self.obs_diry * sin(theta)
-        ) + vel * 0.05
+            self.obs_dirx * self.vx1 + self.obs_diry * self.vy1
+        ) / vel + vel * 0.05
+        # self.p_abv = (
+        #     self.obs_dirx * cos(theta) + self.obs_diry * sin(theta)
+        # ) + vel * 0.05
         self.h_abv = (self.d_abv - self.signed_d) * exp(-self.p_abv)
 
-        # self.p_blw = (
-        #     -self.obs_dirx * self.vx1 - self.obs_diry * self.vy1
-        # ) / vel + vel * 0.05
         self.p_blw = (
-            -self.obs_dirx * cos(theta) - self.obs_diry * sin(theta)
-        ) + vel * 0.05
+            -self.obs_dirx * self.vx1 - self.obs_diry * self.vy1
+        ) / vel + vel * 0.05
+        # self.p_blw = (
+        #     -self.obs_dirx * cos(theta) - self.obs_diry * sin(theta)
+        # ) + vel * 0.05
         self.h_blw = (self.signed_d - self.d_blw) * exp(-self.p_blw)
 
         self.h_dot_abv = jacobian(self.h_abv, self.x)
