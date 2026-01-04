@@ -359,14 +359,14 @@ inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
               << highs.modelStatusToString(model_status) << "\n";
   }
 
-  std::cout << "solution:\n";
+  // std::cout << "solution:\n";
   coeffs.resize(lp.num_col_);
   const HighsSolution& solution = highs.getSolution();
   for (int col = 0; col < lp.num_col_; ++col) {
     coeffs[col] = solution.col_value[col];
-    std::cout << solution.col_value[col] << ", ";
+    // std::cout << solution.col_value[col] << ", ";
   }
-  std::cout << "\n";
+  // std::cout << "\n";
   /*highs.resetGlobalScheduler(true);*/
 
   /*std::cout << "done getting coeffs\n";*/

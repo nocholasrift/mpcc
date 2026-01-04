@@ -252,6 +252,7 @@ def create_ocp_tube_cbf(yaml_file):
     # ocp.solver_options.qp_solver_iter_max = 100
     # ocp.solver_options.globalization_line_search_use_sufficient_descent = True
 
+
     return ocp
 
 
@@ -396,6 +397,7 @@ def create_ocp_dyna_obs(yaml_file):
     # ocp.solver_options.qp_solver_iter_max = 100
     # ocp.solver_options.globalization_line_search_use_sufficient_descent = True
 
+
     return ocp
 
 
@@ -408,7 +410,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # ocp = create_ocp_tube_cbf(args.yaml)
-    ocp = create_ocp_dyna_obs(args.yaml)
+    ocp = create_ocp_tube_cbf(args.yaml)
+    # ocp = create_ocp_dyna_obs(args.yaml)
     acados_ocp_solver = AcadosOcpSolver(ocp)
     acados_integrator = AcadosSimSolver(ocp)

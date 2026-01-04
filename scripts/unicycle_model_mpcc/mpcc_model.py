@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from acados_template import AcadosModel
 from casadi import (
@@ -321,6 +322,45 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
         gamma,
     )
 
+    compute_cbf_abv = Function(
+        "h_abv",
+        [x, d_abv_coeff, x_coeff, y_coeff],
+        [h_abv],
+    )
+
+    compute_lfh_abv = Function(
+        "lfh_abv",
+        [x, d_abv_coeff, x_coeff, y_coeff],
+        [Lfh_abv],
+    )
+
+    Lgh_abv = h_dot_abv @ g
+    compute_lgh_abv = Function(
+        "lgh_abv",
+        [x, d_abv_coeff, x_coeff, y_coeff],
+        [Lgh_abv],
+    )
+
+    compute_cbf_blw = Function(
+        "h_blw",
+        [x, d_blw_coeff, x_coeff, y_coeff],
+        [h_blw],
+    )
+
+    compute_lfh_blw = Function(
+        "lfh_blw",
+        [x, d_blw_coeff, x_coeff, y_coeff],
+        [Lfh_blw],
+    )
+
+    Lgh_blw = h_dot_blw @ g
+    compute_lgh_blw = Function(
+        "lgh_blw",
+        [x, d_blw_coeff, x_coeff, y_coeff],
+        [Lgh_blw],
+    )
+
+
     model = AcadosModel()
     model.f_impl_expr = f_impl
     model.f_expl_expr = f_expl
@@ -350,6 +390,22 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     ]
     model.u_labels = ["$a$", "$w$", "$sddot$"]
     model.t_label = "$t$ [s]"
+
+    opts = {"cpp": True, "with_header": True}
+
+    dir_name = "cpp_generated_code"
+    if not os.path.exists(dir_name):
+        os.mkdir(dir_name)
+
+    current_dir = os.getcwd()
+    os.chdir(dir_name)
+    compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
+    compute_lfh_abv.generate("compute_lfh_abv.cpp", opts)
+    compute_lgh_abv.generate("compute_lgh_abv.cpp", opts)
+    compute_cbf_blw.generate("compute_cbf_blw.cpp", opts)
+    compute_lfh_blw.generate("compute_lfh_blw.cpp", opts)
+    compute_lgh_blw.generate("compute_lgh_blw.cpp", opts)
+    os.chdir(current_dir)
 
     return model
 
