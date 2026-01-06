@@ -69,7 +69,6 @@ class mpcc_ode_model:
         )
 
         self.compute_spline_x = self.spline_x
-
         self.compute_spline_y = self.spline_y
 
         self.compute_xr= Function(
@@ -82,6 +81,18 @@ class mpcc_ode_model:
             "yr",
             [self.x, self.y_coeff],
             [self.yr],
+        )
+
+        self.compute_obs_dirx = Function(
+            "obs_dirx",
+            [self.x, self.x_coeff, self.y_coeff],
+            [self.obs_dirx],
+        )
+
+        self.compute_obs_diry = Function(
+            "obs_diry",
+            [self.x, self.x_coeff, self.y_coeff],
+            [self.obs_diry],
         )
 
         self.compute_hdot_abv  = Function(
@@ -263,7 +274,8 @@ class mpcc_ode_model:
         self.xr_dot = jacobian(self.xr, self.s1)
         self.yr_dot = jacobian(self.yr, self.s1)
 
-        self.phi_r = atan2(self.xr_dot, self.yr_dot)
+        # self.phi_r = atan2(self.xr_dot, self.yr_dot)
+        self.phi_r = atan2(self.yr_dot, self.xr_dot)
 
         self.e_c = sin(self.phi_r) * (self.x1 - self.xr) - cos(self.phi_r) * (
             self.y1 - self.yr
@@ -348,7 +360,8 @@ class mpcc_ode_model:
             self.y1 - self.yr
         ) * self.obs_diry
 
-        theta = atan2(self.vx1, self.vy1)
+        # theta = atan2(self.vx1, self.vy1)
+        theta = atan2(self.vy1, self.vx1)
         vel = sqrt(self.vx1**2 + self.vy1**2)
 
         # self.p_abv = (
