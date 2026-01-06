@@ -154,6 +154,9 @@ def create_ocp(yaml_file):
     mpcc_model.compute_spline_x.generate("compute_spline_x.cpp", opts)
     mpcc_model.compute_spline_y.generate("compute_spline_y.cpp", opts)
 
+    mpcc_model.compute_obs_dirx.generate("compute_obs_dirx.cpp", opts)
+    mpcc_model.compute_obs_diry.generate("compute_obs_diry.cpp", opts)
+
     mpcc_model.compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
     mpcc_model.compute_yrdot.generate("compute_yrdot.cpp", opts)
     mpcc_model.compute_xrdot.generate("compute_xrdot.cpp", opts)

@@ -69,7 +69,8 @@ def export_mpcc_ode_model_spline_param() -> AcadosModel:
     xr_dot = jacobian(xr, s1)
     yr_dot = jacobian(yr, s1)
 
-    phi_r = atan2(xr_dot, yr_dot)
+    # phi_r = atan2(xr_dot, yr_dot)
+    phi_r = atan2(yr_dot, xr_dot)
 
     e_c = sin(phi_r) * (x1 - xr) - cos(phi_r) * (y1 - yr)
     e_l = -cos(phi_r) * (x1 - xr) - sin(phi_r) * (y1 - yr)
@@ -192,7 +193,8 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     xr_dot = jacobian(xr, s1)
     yr_dot = jacobian(yr, s1)
 
-    phi_r = atan2(xr_dot, yr_dot)
+    # phi_r = atan2(xr_dot, yr_dot)
+    phi_r = atan2(yr_dot, xr_dot)
 
     e_c = sin(phi_r) * (x1 - xr) - cos(phi_r) * (y1 - yr)
     e_l = -cos(phi_r) * (x1 - xr) - sin(phi_r) * (y1 - yr)
