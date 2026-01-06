@@ -80,6 +80,7 @@ class MPCBase {
     xs.resize(_ref_samples);
     ys.resize(_ref_samples);
 
+    // get true end point of trajectory
     double px = _reference[0](_ref_length).coeff(0);
     double py = _reference[1](_ref_length).coeff(0);
 

@@ -14,8 +14,6 @@ from scipy import interpolate
 from mpcc_model import mpcc_ode_model
 from acados_template import AcadosOcp, AcadosOcpSolver, AcadosSimSolver
 
-max_s = 6
-
 
 def create_ocp(yaml_file):
     ocp = AcadosOcp()
@@ -34,6 +32,9 @@ def create_ocp(yaml_file):
             file=sys.stderr,
         )
         exit(1)
+
+    # add 1 to make sure MPC doesn't freakout near end of traj
+    max_s = params["ref_length_size"] + 1
 
     # set model
     # model = export_mpcc_ode_model(list(ss), list(xs), list(ys))
@@ -148,9 +149,23 @@ def create_ocp(yaml_file):
 
     current_dir = os.getcwd()
     os.chdir(dir_name)
+    mpcc_model.compute_xr.generate("compute_xr.cpp", opts)
+    mpcc_model.compute_yr.generate("compute_yr.cpp", opts)
+    mpcc_model.compute_spline_x.generate("compute_spline_x.cpp", opts)
+    mpcc_model.compute_spline_y.generate("compute_spline_y.cpp", opts)
+
     mpcc_model.compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
     mpcc_model.compute_yrdot.generate("compute_yrdot.cpp", opts)
     mpcc_model.compute_xrdot.generate("compute_xrdot.cpp", opts)
+    mpcc_model.compute_signed_d.generate("compute_signed_d.cpp", opts)
+    mpcc_model.compute_hdot_abv.generate("compute_hdot_abv.cpp", opts)
+    mpcc_model.compute_hdot_blw.generate("compute_hdot_blw.cpp", opts)
+    mpcc_model.compute_d_abv.generate("compute_d_abv.cpp", opts)
+    mpcc_model.compute_d_blw.generate("compute_d_blw.cpp", opts)
+
+    mpcc_model.compute_p_abv.generate("compute_p_abv.cpp", opts)
+    mpcc_model.compute_p_blw.generate("compute_p_blw.cpp", opts)
+
     mpcc_model.compute_lfh_abv.generate("compute_lfh_abv.cpp", opts)
     mpcc_model.compute_lgh_abv.generate("compute_lgh_abv.cpp", opts)
     mpcc_model.compute_cbf_blw.generate("compute_cbf_blw.cpp", opts)
