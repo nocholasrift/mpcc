@@ -26,6 +26,7 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def("get_params", &MPCCore::get_params)
       .def("set_odom", &MPCCore::set_odom)
       .def("set_tubes", &MPCCore::set_tubes)
+      .def("compute_adjusted_ref", &MPCCore::compute_adjusted_ref)
       .def("set_trajectory",
            (void (MPCCore::*)(const Eigen::VectorXd&, const Eigen::VectorXd&,
                               int,

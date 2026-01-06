@@ -657,6 +657,7 @@ const std::array<Eigen::VectorXd, 2> DIMPCC::get_state_limits() const {
   Eigen::VectorXd xmin(kNX), xmax(kNX);
   xmin << -1e3, -1e3, -_max_linvel, -_max_linvel, 0, -_max_linvel;
   xmax << 1e3, 1e3, _max_linvel, _max_linvel, _ref_length, _max_linvel;
+
   return {xmin, xmax};
 }
 

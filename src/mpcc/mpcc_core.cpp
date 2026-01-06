@@ -84,14 +84,19 @@ void MPCCore::set_odom(const Eigen::Vector3d& odom) {
   _mpc->set_odom(odom);
 }
 
-void MPCCore::set_trajectory(const std::array<Spline1D, 2>& ref, double ref_len,
-                             double true_ref_len) {
-  _ref             = ref;
-  _ref_length      = ref_len;
-  _true_ref_length = true_ref_len;
-  _is_set          = true;
-  _traj_reset      = true;
-  _mpc->set_reference(ref, ref_len);
+#ifdef FOUND_PYBIND11
+std::array<Eigen::VectorXd, 2> MPCCore::compute_adjusted_ref(double s) const{
+  std::array<Spline1D, 2> adjusted_ref = _mpc->compute_adjusted_ref(s);
+  auto ctrls_x = adjusted_ref[0].ctrls();
+  auto ctrls_y = adjusted_ref[1].ctrls();
+  
+  // Eigen::VectorXd xs(ctrls_x.size(0)), ys(ctrls_y.size());
+  // for(int i = 0; i < ctrls_x.size(); ++i){
+  //   xs[i] = ctrls_x[i];
+  //   ys[i] = ctrls_y[i];
+  // }
+
+  return {ctrls_x, ctrls_y};
 }
 
 void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
@@ -134,7 +139,7 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
       }
     }
 
-    true_ref_len = ss.tail(1)[0];
+    _ref_length = ss.tail(1)[0];
 
     const auto fitX = utils::Interp(xs, 3, ss);
     splineX         = Spline1D(fitX);
@@ -143,15 +148,26 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
     splineY         = Spline1D(fitY);
   }
 
-  std::cout << "received trajectory of length: " << true_ref_len << "\n";
+  std::cout << "received trajectory of length: " << _ref_length << "\n";
   std::cout << "trajectory has " << N << " knots\n";
 
   _ref[0]     = splineX;
   _ref[1]     = splineY;
-  _ref_length = true_ref_len;
   _is_set     = true;
-  _mpc->set_reference(_ref, true_ref_len);
+  _mpc->set_reference(_ref, _ref_length);
 }
+#endif
+
+void MPCCore::set_trajectory(const std::array<Spline1D, 2>& ref, double ref_len,
+                             double true_ref_len) {
+  _ref             = ref;
+  _ref_length      = ref_len;
+  _true_ref_length = true_ref_len;
+  _is_set          = true;
+  _traj_reset      = true;
+  _mpc->set_reference(ref, ref_len);
+}
+
 
 // void MPCCore::set_tubes(const std::vector<Spline1D>& tubes)
 void MPCCore::set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {

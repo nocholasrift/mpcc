@@ -66,6 +66,7 @@ class MPCCore {
   void set_odom(const Eigen::Vector3d& odom);
   void set_goal(const Eigen::Vector2d& goal);
 #ifdef FOUND_PYBIND11
+  std::array<Eigen::VectorXd, 2> compute_adjusted_ref(double s) const;
   void set_trajectory(const Eigen::VectorXd& x_pts,
                       const Eigen::VectorXd& y_pts, int degree,
                       const Eigen::VectorXd& knot_parameters);

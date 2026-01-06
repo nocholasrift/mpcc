@@ -24,7 +24,7 @@ class mpcc_ode_model:
     def create_model(self, params) -> AcadosModel:
         self.init_x_and_u()
 
-        self.setup_mpcc()
+        self.setup_mpcc(params)
 
         self.setup_x_dot()
 
@@ -68,6 +68,34 @@ class mpcc_ode_model:
             self.gamma,
         )
 
+        self.compute_spline_x = self.spline_x
+
+        self.compute_spline_y = self.spline_y
+
+        self.compute_xr= Function(
+            "xr",
+            [self.x, self.x_coeff],
+            [self.xr],
+        )
+
+        self.compute_yr= Function(
+            "yr",
+            [self.x, self.y_coeff],
+            [self.yr],
+        )
+
+        self.compute_hdot_abv  = Function(
+            "hdot_abv",
+            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
+            [self.h_dot_abv],
+        )
+
+        self.compute_hdot_blw = Function(
+            "hdot_blw",
+            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
+            [self.h_dot_blw],
+        )
+
         self.compute_cbf_abv = Function(
             "h_abv",
             [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
@@ -99,10 +127,40 @@ class mpcc_ode_model:
             [self.xr_dot],
         )
 
+        self.compute_signed_d = Function(
+            "signed_d",
+            [self.x, self.x_coeff, self.y_coeff],
+            [self.signed_d],
+        )
+
+        self.compute_p_abv = Function(
+            "p_abv",
+            [self.x, self.x_coeff, self.y_coeff],
+            [self.p_abv],
+        )
+
+        self.compute_p_blw = Function(
+            "p_blw",
+            [self.x, self.x_coeff, self.y_coeff],
+            [self.p_blw],
+        )
+
         self.compute_cbf_blw = Function(
             "h_blw",
             [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
             [self.h_blw],
+        )
+
+        self.compute_d_abv = Function(
+            "d_abv",
+            [self.x, self.d_abv_coeff], 
+            [self.d_abv],
+        )
+
+        self.compute_d_blw = Function(
+            "d_blw",
+            [self.x, self.d_blw_coeff],
+            [self.d_blw],
         )
 
         self.compute_lfh_blw = Function(
@@ -169,7 +227,7 @@ class mpcc_ode_model:
 
         self.u = vertcat(self.ax, self.ay, self.sddot)
 
-    def setup_mpcc(self):
+    def setup_mpcc(self, params):
 
         self.v = MX.sym("v")
         self.x_coeff = MX.sym("x_coeffs", 11)
@@ -177,7 +235,7 @@ class mpcc_ode_model:
         # arc_len_knots = DM([1.0] * 11)
         # arc_len_knots = MX.sym("knots", 11)
 
-        self.arc_len_knots = np.linspace(0, 4, 11)
+        self.arc_len_knots = np.linspace(0, params["ref_length_size"], 11)
         # arc_len_knots = np.linspace(0, 17.0385372, 11)
         self.arc_len_knots = np.concatenate(
             (
@@ -293,20 +351,20 @@ class mpcc_ode_model:
         theta = atan2(self.vx1, self.vy1)
         vel = sqrt(self.vx1**2 + self.vy1**2)
 
-        self.p_abv = (
-            self.obs_dirx * self.vx1 + self.obs_diry * self.vy1
-        ) / vel + vel * 0.05
         # self.p_abv = (
-        #     self.obs_dirx * cos(theta) + self.obs_diry * sin(theta)
-        # ) + vel * 0.05
+        #     self.obs_dirx * self.vx1 + self.obs_diry * self.vy1
+        # ) / vel + vel * 0.05
+        self.p_abv = (
+            self.obs_dirx * cos(theta) + self.obs_diry * sin(theta)
+        ) + vel * 0.05
         self.h_abv = (self.d_abv - self.signed_d) * exp(-self.p_abv)
 
-        self.p_blw = (
-            -self.obs_dirx * self.vx1 - self.obs_diry * self.vy1
-        ) / vel + vel * 0.05
         # self.p_blw = (
-        #     -self.obs_dirx * cos(theta) - self.obs_diry * sin(theta)
-        # ) + vel * 0.05
+        #     -self.obs_dirx * self.vx1 - self.obs_diry * self.vy1
+        # ) / vel + vel * 0.05
+        self.p_blw = (
+            -self.obs_dirx * cos(theta) - self.obs_diry * sin(theta)
+        ) + vel * 0.05
         self.h_blw = (self.signed_d - self.d_blw) * exp(-self.p_blw)
 
         self.h_dot_abv = jacobian(self.h_abv, self.x)
