@@ -2,12 +2,22 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
-#include <iostream>
 
 #include <mpcc/map_util.h>
 #include <mpcc/mpcc_core.h>
 
 #include <mpcc/tube_gen.h>
+#include "mpcc/types.h"
+
+using namespace mpcc;
+
+using Polynomial   = types::Polynomial;
+using Spline       = types::Spline;
+using StateHorizon = types::StateHorizon;
+using InputHorizon = types::InputHorizon;
+using MPCHorizon   = types::MPCHorizon;
+using Trajectory   = types::Trajectory;
+using View         = Trajectory::View;
 
 namespace py = pybind11;
 PYBIND11_MAKE_OPAQUE(std::vector<Eigen::VectorXd>);
@@ -19,6 +29,60 @@ PYBIND11_MODULE(py_mpcc, m) {
       .value("DOUBLE_INTEGRATOR", MPCType::kDoubleIntegrator)
       .value("UNICYCLE", MPCType::kUnicycle);
 
+  py::class_<Polynomial>(m, "Polynomial")
+      .def(py::init<>())
+      .def(py::init<const Eigen::VectorXd&>())
+      .def("derivative", &Polynomial::derivative)
+      .def("pos", &Polynomial::pos);
+
+  py::class_<Spline>(m, "Spline")
+      .def(py::init<>())
+      .def(py::init<const Eigen::RowVectorXd&, const Eigen::RowVectorXd&>())
+      .def("pos", &Spline::pos)
+      .def("derivative", &Spline::derivative)
+      .def("get_knots", &Spline::get_knots)
+      .def("get_ctrls", &Spline::get_ctrls);
+
+  py::class_<View>(m, "View")
+      .def_readwrite("knots", &View::knots)
+      .def_readwrite("xs", &View::xs)
+      .def_readwrite("ys", &View::ys);
+
+  py::class_<Trajectory>(m, "Trajectory")
+      .def(py::init<>())
+      .def(py::init<const Spline&, const Spline&>())
+      .def("get_extended_length", &Trajectory::get_extended_length)
+      .def("get_true_length", &Trajectory::get_true_length)
+      .def("get_adjusted_traj", &Trajectory::get_adjusted_traj)
+      .def("get_closest_s", &Trajectory::get_closest_s)
+      .def("get_ctrls_x", &Trajectory::get_ctrls_x)
+      .def("get_ctrls_y", &Trajectory::get_ctrls_y)
+      .def("view", &Trajectory::view)
+      .def("__call__",
+           static_cast<Trajectory::Point (Trajectory::*)(double) const>(
+               &Trajectory::operator()))
+      .def("__call__",
+           static_cast<Trajectory::Point (Trajectory::*)(double, unsigned int)
+                           const>(&Trajectory::operator()));
+
+  py::class_<StateHorizon>(m, "StateHorizon")
+      .def_readwrite("xs", &StateHorizon::xs)
+      .def_readwrite("ys", &StateHorizon::ys)
+      .def_readwrite("vs_x", &StateHorizon::vs_x)
+      .def_readwrite("vs_y", &StateHorizon::vs_y)
+      .def_readwrite("arclens", &StateHorizon::arclens)
+      .def_readwrite("arclens_dot", &StateHorizon::arclens_dot);
+
+  py::class_<InputHorizon>(m, "InputHorizon")
+      .def_readwrite("accs_x", &InputHorizon::accs_x)
+      .def_readwrite("accs_y", &InputHorizon::accs_y)
+      .def_readwrite("arclens_ddot", &InputHorizon::arclens_ddot);
+
+  py::class_<MPCHorizon>(m, "MPCHorizon")
+      .def_readwrite("states", &MPCHorizon::states)
+      .def_readwrite("inputs", &MPCHorizon::inputs)
+      .def_readwrite("length", &MPCHorizon::length);
+
   py::class_<MPCCore>(m, "MPCCore")
       .def(py::init<>())
       .def(py::init<const MPCType&>())
@@ -26,15 +90,13 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def("get_params", &MPCCore::get_params)
       .def("set_odom", &MPCCore::set_odom)
       .def("set_tubes", &MPCCore::set_tubes)
-      .def("compute_adjusted_ref", &MPCCore::compute_adjusted_ref)
       .def("set_trajectory",
            (void (MPCCore::*)(const Eigen::VectorXd&, const Eigen::VectorXd&,
-                              int,
                               const Eigen::VectorXd&))&MPCCore::set_trajectory)
-      .def("get_s_from_pose", &MPCCore::get_s_from_pose)
       .def("get_cbf_data", &MPCCore::get_cbf_data)
       .def("get_horizon", &MPCCore::get_horizon)
       .def("solve", &MPCCore::solve)
+      .def("get_trajectory", &MPCCore::get_trajectory)
       .def("get_mpc_command", &MPCCore::get_mpc_command)
       .def("get_solver_status", &MPCCore::get_solver_status)
       .def("get_cbf_data", &MPCCore::get_cbf_data)
@@ -60,7 +122,5 @@ PYBIND11_MODULE(py_mpcc, m) {
                          &map_util::OccupancyGrid::update));
 
   // tube generation
-#ifndef FOUND_CATKIN
-  m.def("get_tubes", &tube_utils::get_tubes2);
-#endif
+  m.def("construct_tubes", &tube::construct_tubes);
 }

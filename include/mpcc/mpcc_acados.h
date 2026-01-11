@@ -11,56 +11,8 @@
 #include "acados_sim_solver_unicycle_model_mpcc.h"
 #include "acados_solver_unicycle_model_mpcc.h"
 
-class UnicycleCommand : public Command {
- public:
-  UnicycleCommand() = default;
-
-  UnicycleCommand(CommandOrder order, double cmd1, double cmd2)
-      : Command(order) {
-    setCommand(cmd1, cmd2);
-  }
-
-  virtual void setCommand(double cmd1, double cmd2) override {
-    switch (_order) {
-      case CommandOrder::kPos:
-        throw std::invalid_argument(
-            "[Command] pos cmd not implemented for unicycle.");
-      case CommandOrder::kVel:
-        _v = cmd1;
-        _w = cmd2;
-      case CommandOrder::kAccel:
-        _a = cmd1;
-        _w = cmd2;
-        break;
-      default:
-        throw std::invalid_argument(
-            "[Command] invalid order for unicycle command.");
-    }
-  }
-
-  virtual std::array<double, 2> getCommand() const {
-
-    switch (_order) {
-      case CommandOrder::kPos:
-        throw std::invalid_argument(
-            "[Command] pos cmd not implemented for unicycle.");
-      case CommandOrder::kVel:
-        return {_v, _w};
-      case CommandOrder::kAccel:
-        return {_a, _w};
-      default:
-        throw std::invalid_argument(
-            "[Command] invalid order for unicycle command.");
-    }
-  }
-
- private:
-  double _v = 0;
-  double _a = 0;
-  double _w = 0;
-
-  CommandOrder _order = CommandOrder::kAccel;
-};
+namespace mpcc {
+using TrajectoryView = types::Trajectory::View;
 
 class MPCC : public MPCBase {
  public:
@@ -68,6 +20,7 @@ class MPCC : public MPCBase {
   virtual ~MPCC() override;
 
   virtual std::array<double, 2> solve(const Eigen::VectorXd& state,
+                                      const TrajectoryView& reference,
                                       bool is_reverse = false) override;
 
   virtual void load_params(
@@ -89,7 +42,6 @@ class MPCC : public MPCBase {
    * Setters and Getters
    ***********************/
   void reset_horizon() override;
-  void set_dyna_obs(const Eigen::MatrixXd& dyna_obs);
 
   Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
                                const Eigen::VectorXd& control,
@@ -100,6 +52,8 @@ class MPCC : public MPCBase {
       const override;
   virtual const std::array<Eigen::VectorXd, 2> get_input_limits()
       const override;
+
+  virtual MPCHorizon get_horizon() const override;
 
  public:
   // TOOD: make getter for these
@@ -124,29 +78,6 @@ class MPCC : public MPCBase {
   static constexpr uint16_t kNBX0 = UNICYCLE_MODEL_MPCC_NBX0;
 
  private:
-  /*std::array<Spline1D, 2> compute_adjusted_ref(double s) const;*/
-  /**********************************************************************
-   * Function: MPCC::get_ref_from_s()
-   * Description: Generates a reference trajectory from a given arc length
-   * Parameters:
-   * @param s: double
-   * Returns:
-   * a reparameterized trajectory starting at arc length s=0
-   * Notes:
-   * If the trajectory is shorter than required mpc size, then the
-   * last point is repeated for spline generation.
-   **********************************************************************/
-
-  double get_s_from_state(const Eigen::VectorXd& state);
-  /**********************************************************************
-   * Function: MPCC::get_s_from_state()
-   * Description: Get the arc length of closest point on reference trajectory
-   * Parameters:
-   * @param state: const Eigen::VectorXd&
-   * Returns:
-   * arc length value of closest point to state
-   **********************************************************************/
-
   Eigen::VectorXd next_state(const Eigen::VectorXd& current_state,
                              const Eigen::VectorXd& control);
   /**********************************************************************
@@ -189,7 +120,7 @@ class MPCC : public MPCBase {
    * real-time iteration, Gros et. al. for more details.
    **********************************************************************/
 
-  void process_solver_output(double s);
+  void process_solver_output();
   /**********************************************************************
    * Function: MPCC::process_solver_output()
    * Description: Processes the output of the MPC solver
@@ -199,7 +130,7 @@ class MPCC : public MPCBase {
    * N/A
    **********************************************************************/
 
-  bool set_solver_parameters(const std::array<Spline1D, 2>& adjusted_ref);
+  bool set_solver_parameters(const TrajectoryView& reference);
   /**********************************************************************
    * Function: MPCC::set_solver_parameters()
    * Description: Sets the parameters for the MPC solver
@@ -208,6 +139,14 @@ class MPCC : public MPCBase {
    * Returns:
    * bool - true if successful, false otherwise
    **********************************************************************/
+
+  // vs_x and vs_y must be _mpc_steps length prior
+  void compute_world_frame_velocities(Eigen::VectorXd& vs_x,
+                                      Eigen::VectorXd& vs_y) const;
+
+  // accs_x and accs_y must be _mpc_steps -1 length prior
+  void compute_world_frame_accelerations(Eigen::VectorXd& accs_x,
+                                         Eigen::VectorXd& accs_y) const;
 
  private:
   static constexpr uint8_t kIndX        = 0;
@@ -265,3 +204,4 @@ class MPCC : public MPCBase {
   unicycle_model_mpcc_sim_solver_capsule* _acados_sim_capsule;
   unicycle_model_mpcc_solver_capsule* _acados_ocp_capsule;
 };
+}  // namespace mpcc
