@@ -178,16 +178,13 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   ROS_INFO("done loading params!");
 
   _laserSub = nh.subscribe("/front/scan", 1, &MPCCROS::lidarcb, this);
-  /*_mapSub   = nh.subscribe("/map", 1, &MPCCROS::mapcb, this);*/
-  _mapSub  = nh.subscribe("/grid_map", 1, &MPCCROS::mapcb, this);
-  _odomSub = nh.subscribe("/odometry/filtered", 1, &MPCCROS::odomcb, this);
+  _mapSub   = nh.subscribe("/grid_map", 1, &MPCCROS::mapcb, this);
+  _odomSub  = nh.subscribe("/odometry/filtered", 1, &MPCCROS::odomcb, this);
   _trajSub =
       nh.subscribe("/reference_trajectory", 1, &MPCCROS::trajectorycb, this);
   _obsSub = nh.subscribe("/obs_odom", 1, &MPCCROS::dynaobscb, this);
 
   _timer = nh.createTimer(ros::Duration(_dt), &MPCCROS::mpcc_ctrl_loop, this);
-  // _velPubTimer = nh.createTimer(ros::Duration(1./_vel_pub_freq),
-  // &MPCCROS::publishVel, this);
 
   _startPub       = nh.advertise<std_msgs::Float64>("/progress", 10);
   _pathPub        = nh.advertise<nav_msgs::Path>("/spline_path", 10);
@@ -230,8 +227,8 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
     _logger =
         std::make_unique<logger::RLLogger>(nh, logger_params, _is_logging);
   } else if (!_use_cbf) {
-    _cbf_alpha_abv = 100.;
-    _cbf_alpha_blw = 100.;
+    _cbf_alpha_abv = kMAX_ALPHA;
+    _cbf_alpha_blw = kMAX_ALPHA;
   }
 
   // num coeffs is tube_W_ANGVELdegree + 1
@@ -500,15 +497,6 @@ void MPCCROS::odomcb(const nav_msgs::Odometry::ConstPtr& msg) {
   }
 }
 
-void MPCCROS::dynaobscb(const nav_msgs::Odometry::ConstPtr& msg) {
-  Eigen::MatrixXd dyna_obs(3, 2);
-  dyna_obs.col(0) << msg->pose.pose.position.x, msg->pose.pose.position.y,
-      msg->pose.pose.position.z;
-  dyna_obs.col(1) << msg->twist.twist.linear.x, msg->twist.twist.linear.y,
-      msg->pose.pose.position.z;
-
-  _mpc_core->set_dyna_obs(dyna_obs);
-}
 /**********************************************************************
  * Function: MPCCROS::trajectorycb(const
  *trajectory_msgs::JointTrajectory::ConstPtr& msg) Description: Callback for
@@ -702,9 +690,9 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
     /*                               _grid_map, _tubes);*/
 
     ros::Time start = ros::Time::now();
-    status          = tube_utils::get_tubes2(_tube_degree, _tube_samples,
-                                             _max_tube_width, _ref, _ref_len, len_start,
-                                             horizon, _grid_map, _tubes);
+    status          = mpcc::tube::construct_tubes(_tube_degree, _tube_samples,
+                                                  _max_tube_width, _ref, _ref_len,
+                                                  len_start, horizon, _grid_map, _tubes);
 
     ROS_INFO("runtime: %.3f", (ros::Time::now() - start).toSec());
     ROS_INFO("finished tube generation");

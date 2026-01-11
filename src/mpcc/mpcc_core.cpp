@@ -5,18 +5,10 @@
 
 #include "mpcc/termcolor.hpp"
 
+using namespace mpcc;
+
 MPCCore::MPCCore() {
-  _mpc            = std::make_unique<MPCC>();
-  _mpc_input_type = MPCType::kUnicycle;
-
-  _curr_vel    = 0;
-  _curr_angvel = 0;
-
-  _is_set     = false;
-  _has_run    = false;
-  _traj_reset = false;
-
-  _ref_length = 0;
+  _mpc = std::make_unique<MPCC>();
 }
 
 MPCCore::MPCCore(const MPCType& mpc_input_type) {
@@ -35,48 +27,29 @@ MPCCore::MPCCore(const MPCType& mpc_input_type) {
         "Invalid MPC input type: " +
         std::to_string(static_cast<unsigned int>(_mpc_input_type)));
   }
-
-  _curr_vel    = 0;
-  _curr_angvel = 0;
-
-  _is_set     = false;
-  _has_run    = false;
-  _traj_reset = false;
-
-  _ref_length = 0;
 }
 
 MPCCore::~MPCCore() {}
 
+void MPCCore::get_param(const std::map<std::string, double>& params,
+                        const std::string& key, double& value) {
+  if (auto it = params.find(key); it != params.end()) {
+    value = params.at(key);
+  }
+}
+
 void MPCCore::load_params(const std::map<std::string, double>& params) {
-  _dt         = params.find("DT") != params.end() ? params.at("DT") : _dt;
-  _max_anga   = params.find("MAX_ANGA") != params.end() ? params.at("MAX_ANGA")
-                                                        : _max_anga;
-  _max_linacc = params.find("MAX_LINACC") != params.end()
-                    ? params.at("MAX_LINACC")
-                    : _max_linacc;
-
-  _max_vel =
-      params.find("LINVEL") != params.end() ? params.at("LINVEL") : _max_vel;
-  _max_angvel =
-      params.find("ANGVEL") != params.end() ? params.at("ANGVEL") : _max_angvel;
-
-  _prop_gain         = params.find("ANGLE_GAIN") != params.end()
-                           ? params.at("ANGLE_GAIN")
-                           : _prop_gain;
-  _prop_angle_thresh = params.find("ANGLE_THRESH") != params.end()
-                           ? params.at("ANGLE_THRESH")
-                           : _prop_angle_thresh;
+  get_param(params, "DT", _dt);
+  get_param(params, "MAX_ANGA", _max_anga);
+  get_param(params, "MAX_LINACC", _max_linacc);
+  get_param(params, "LINVEL", _max_vel);
+  get_param(params, "ANGVEL", _max_angvel);
+  get_param(params, "ANGLE_GAIN", _prop_gain);
+  get_param(params, "ANGLE_THRESH", _prop_angle_thresh);
 
   _params = params;
 
   _mpc->load_params(params);
-}
-
-void MPCCore::set_alpha(const std::array<double, 2>& alphas) {}
-
-void MPCCore::set_dyna_obs(const Eigen::MatrixXd& dyna_obs) {
-  /*_mpc->set_dyna_obs(dyna_obs);*/
 }
 
 void MPCCore::set_odom(const Eigen::Vector3d& odom) {
@@ -84,90 +57,25 @@ void MPCCore::set_odom(const Eigen::Vector3d& odom) {
   _mpc->set_odom(odom);
 }
 
-#ifdef FOUND_PYBIND11
-std::array<Eigen::VectorXd, 2> MPCCore::compute_adjusted_ref(double s) const{
-  std::array<Spline1D, 2> adjusted_ref = _mpc->compute_adjusted_ref(s);
-  auto ctrls_x = adjusted_ref[0].ctrls();
-  auto ctrls_y = adjusted_ref[1].ctrls();
-  
-  // Eigen::VectorXd xs(ctrls_x.size(0)), ys(ctrls_y.size());
-  // for(int i = 0; i < ctrls_x.size(); ++i){
-  //   xs[i] = ctrls_x[i];
-  //   ys[i] = ctrls_y[i];
-  // }
-
-  return {ctrls_x, ctrls_y};
-}
-
 void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
-                             const Eigen::VectorXd& y_pts, int degree,
+                             const Eigen::VectorXd& y_pts,
                              const Eigen::VectorXd& knot_parameters) {
-  Spline1D splineX(utils::Interp(x_pts, degree, knot_parameters));
-  Spline1D splineY(utils::Interp(y_pts, degree, knot_parameters));
 
-  int N               = knot_parameters.size();
-  double true_ref_len = knot_parameters.tail(1)[0];
-  double ref_len      = _params["REF_LENGTH"];
+  // need to extend trajectory to REF_LENGTH because acados MPC can only
+  // handle a fixed length trajectory,which has been fixed at REF_LENGTH
+  int N                      = knot_parameters.size();
+  double required_mpc_length = _params["REF_LENGTH"];
+  _trajectory                = types::Trajectory(knot_parameters, x_pts, y_pts);
+  _trajectory.extend_to_length(required_mpc_length);
 
-  _true_ref_length = true_ref_len;
-  if (true_ref_len < ref_len) {
-    double end = true_ref_len - 1e-1;
-    double px  = splineX(end).coeff(0);
-    double py  = splineY(end).coeff(0);
-    double dx  = splineX.derivatives(end, 1).coeff(1);
-    double dy  = splineY.derivatives(end, 1).coeff(1);
-
-    /*ROS_WARN("(%.2f, %.2f)\t(%.2f, %.2f)", px, py, dx, dy);*/
-
-    double ds = ref_len / (N - 1);
-
-    Eigen::RowVectorXd ss, xs, ys;
-    ss.resize(N);
-    xs.resize(N);
-    ys.resize(N);
-
-    for (int i = 0; i < N; ++i) {
-      double s = ds * i;
-      ss(i)    = s;
-
-      if (s < true_ref_len) {
-        xs(i) = splineX(s).coeff(0);
-        ys(i) = splineY(s).coeff(0);
-      } else {
-        xs(i) = dx * (s - true_ref_len) + px;
-        ys(i) = dy * (s - true_ref_len) + py;
-      }
-    }
-
-    _ref_length = ss.tail(1)[0];
-
-    const auto fitX = utils::Interp(xs, 3, ss);
-    splineX         = Spline1D(fitX);
-
-    const auto fitY = utils::Interp(ys, 3, ss);
-    splineY         = Spline1D(fitY);
-  }
+  _ref_length      = _trajectory.get_extended_length();
+  _true_ref_length = _trajectory.get_true_length();
 
   std::cout << "received trajectory of length: " << _ref_length << "\n";
   std::cout << "trajectory has " << N << " knots\n";
 
-  _ref[0]     = splineX;
-  _ref[1]     = splineY;
-  _is_set     = true;
-  _mpc->set_reference(_ref, _ref_length);
+  _is_set = true;
 }
-#endif
-
-void MPCCore::set_trajectory(const std::array<Spline1D, 2>& ref, double ref_len,
-                             double true_ref_len) {
-  _ref             = ref;
-  _ref_length      = ref_len;
-  _true_ref_length = true_ref_len;
-  _is_set          = true;
-  _traj_reset      = true;
-  _mpc->set_reference(ref, ref_len);
-}
-
 
 // void MPCCore::set_tubes(const std::vector<Spline1D>& tubes)
 void MPCCore::set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {
@@ -182,19 +90,12 @@ bool MPCCore::orient_robot() {
   // calculate heading error between robot and trajectory start
   // use 1st point as most times first point has 0 velocity
 
-  double start = get_s_from_pose(_odom);
+  double start = _trajectory.get_closest_s(_odom.head(2));
   double eps_s = .05;
 
-  /*std::cout << "start is " << start + eps_s << std::endl;*/
-
-  double traj_heading = atan2(_ref[1].derivatives(start + eps_s, 1).coeff(1),
-                              _ref[0].derivatives(start + eps_s, 1).coeff(1));
-
-  /*std::cout << "dx " << _ref[0].derivatives(start + eps_s, 1).coeff(1) <<
-   * std::endl;*/
-  /*std::cout << "dy " << _ref[1].derivatives(start + eps_s, 1).coeff(1) <<
-   * std::endl;*/
-  /*std::cout << "traj_heading is " << traj_heading << std::endl;*/
+  Eigen::Vector2d point =
+      _trajectory(start + eps_s, mpcc::types::Trajectory::kFirstOrder);
+  double traj_heading = atan2(point[1], point[0]);
 
   // wrap between -pi and pi
   double e = atan2(sin(traj_heading - _odom(2)), cos(traj_heading - _odom(2)));
@@ -224,25 +125,6 @@ bool MPCCore::orient_robot() {
   return false;
 }
 
-double MPCCore::get_s_from_pose(const Eigen::VectorXd& pose) const {
-  // find the s which minimizes dist to robot
-  double s            = 0;
-  double min_dist     = 1e6;
-  Eigen::Vector2d pos = pose.head(2);
-  for (double i = 0.0; i < _ref_length; i += .01) {
-    Eigen::Vector2d p =
-        Eigen::Vector2d(_ref[0](i).coeff(0), _ref[1](i).coeff(0));
-
-    double d = (pos - p).squaredNorm();
-    if (d < min_dist) {
-      min_dist = d;
-      s        = i;
-    }
-  }
-
-  return s;
-}
-
 std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
                                      bool is_reverse) {
   if (!_is_set) {
@@ -261,63 +143,38 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   double new_vel;
   double time_to_solve = 0.;
 
-  // if (_has_run)
-  //   _prev_cmd = _mpc_command.getCommand();
+  double current_s = _trajectory.get_closest_s(state.head(2));
 
-  // if (is_reverse)
-  //   _curr_vel = -1 * state(3);
+  // Just like with trajectory length,acados MPC also has fixed number of knots
+  // that can be used for the trajectory due to a quirk with Casadi Splines.
+  unsigned int required_mpc_knots =
+      static_cast<unsigned int>(_params["REF_SAMPLES"]);
+  types::Trajectory adjusted_traj =
+      _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
+
+  for (double s = 0; s < adjusted_traj.get_extended_length(); s += 0.1) {
+    Eigen::Vector2d der = adjusted_traj(s, 1);
+    std::cout << s << ":\t" << der.transpose() << "\t" << der.norm() << "\n";
+  }
+
+  std::cout << "cpp xs " << adjusted_traj.get_ctrls_x() << "\n";
+  std::cout << "cpp ys " << adjusted_traj.get_ctrls_y() << "\n";
+
   auto start = std::chrono::high_resolution_clock::now();
-  // Eigen::VectorXd state(4);
-  // state << _odom(0), _odom(1), _odom(2), _curr_vel;
-  std::array<double, 2> mpc_command = _mpc->solve(state, is_reverse);
+  std::array<double, 2> mpc_command =
+      _mpc->solve(state, adjusted_traj.view(), is_reverse);
 
-  // _mpc_command = _mpc->Solve(_state, _reference);
   auto end = std::chrono::high_resolution_clock::now();
-
-  // if (is_reverse)
-  //   _mpc_command[1] *= -1;
 
   time_to_solve =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
-
-  /*std::cout << "[MPC Core] Solve time: " << time_to_solve << std::endl;*/
-
-  // std::array<double, 2> input = mpc_command.getCommand();
-
-  // if (time_to_solve > _dt * 1000) {
-  //
-  //   if (mpc_command.getType() == CommandType::kUnicycle) {
-  //     input[1] = _has_run ? _prev_cmd[1] : 0.;
-  //
-  //     if (mpc_command.getOrder == CommandOrder::kAccel)
-  //       input[0] = 0.;
-  //     else if (_mpc_command.getOrder == CommandOrder::kVel)
-  //       input[0] = _has_run ? prev_cmd[0] : 0;
-  //   }
-  //
-  //   _mpc_command.setCommand(input[0], input[1]);
-  // }
 
   _has_run     = true;
   _curr_vel    = mpc_command[0];
   _curr_angvel = mpc_command[1];
 
   return mpc_command;
-
-  // new_vel = _curr_vel + _mpc_command[1] * _dt;
-  //
-  // _curr_angvel = limit(_curr_angvel, _mpc_command[0], _max_anga);
-  // _curr_vel = limit(_curr_vel, new_vel, _max_linacc);
-  //
-  // // ensure vel is between -max and max and ang vel is between -max and max
-  // _curr_vel = std::max(-_max_vel, std::min(_max_vel, _curr_vel));
-  // _curr_angvel = std::max(-_max_angvel, std::min(_max_angvel, _curr_angvel));
-  //
-  // std::cerr << "[MPC Core] curr vel: " << _curr_vel
-  //           << ", curr ang vel: " << _curr_angvel << std::endl;
-  //
-  // return {_curr_vel, _curr_angvel};
 }
 
 Eigen::VectorXd MPCCore::get_cbf_data(const Eigen::VectorXd& state,
@@ -346,40 +203,44 @@ const std::array<Eigen::VectorXd, 2> MPCCore::get_input_limits() const {
   return _mpc->get_input_limits();
 }
 
-std::vector<Eigen::VectorXd> MPCCore::get_horizon() const {
-  std::vector<Eigen::VectorXd> ret;
-  if (_mpc_input_type == MPCType::kUnicycle) {
-    MPCC* _mpc_unicycle = dynamic_cast<MPCC*>(_mpc.get());
-    ret.reserve(_mpc_unicycle->mpc_x.size());
-    if (_mpc_unicycle->mpc_x.size() == 0)
-      return ret;
+MPCHorizon MPCCore::get_horizon() const {
 
-    double t = 0;
-    for (int i = 0; i < _mpc_unicycle->mpc_x.size() - 1; ++i) {
-      ret.emplace_back(7);
-      ret.back() << t, _mpc_unicycle->mpc_x[i], _mpc_unicycle->mpc_y[i],
-          _mpc_unicycle->mpc_theta[i], _mpc_unicycle->mpc_linvels[i],
-          _mpc_unicycle->mpc_linaccs[i], _mpc_unicycle->mpc_s[i];
-      t += _dt;
-    }
-  } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
-    DIMPCC* _mpc_double_integrator = dynamic_cast<DIMPCC*>(_mpc.get());
-    ret.reserve(_mpc_double_integrator->mpc_x.size());
-    if (_mpc_double_integrator->mpc_x.size() == 0)
-      return ret;
-    double t = 0;
-    for (int i = 0; i < _mpc_double_integrator->mpc_x.size() - 1; ++i) {
-      ret.emplace_back(9);
-      ret.back() << t, _mpc_double_integrator->mpc_x[i],
-          _mpc_double_integrator->mpc_y[i], _mpc_double_integrator->mpc_vx[i],
-          _mpc_double_integrator->mpc_vy[i], _mpc_double_integrator->mpc_s[i],
-          _mpc_double_integrator->mpc_s_dot[i],
-          _mpc_double_integrator->mpc_ax[i], _mpc_double_integrator->mpc_ay[i];
-      t += _dt;
-    }
-  }
+  return _mpc->get_horizon();
 
-  return ret;
+  // TODO: This horizon situation is a disaster and needs to be refactored
+  // std::vector<Eigen::VectorXd> ret;
+  // if (_mpc_input_type == MPCType::kUnicycle) {
+  //   MPCC* _mpc_unicycle = dynamic_cast<MPCC*>(_mpc.get());
+  //   ret.reserve(_mpc_unicycle->mpc_x.size());
+  //   if (_mpc_unicycle->mpc_x.size() == 0)
+  //     return ret;
+  //
+  //   double t = 0;
+  //   for (int i = 0; i < _mpc_unicycle->mpc_x.size() - 1; ++i) {
+  //     ret.emplace_back(7);
+  //     ret.back() << t, _mpc_unicycle->mpc_x[i], _mpc_unicycle->mpc_y[i],
+  //         _mpc_unicycle->mpc_theta[i], _mpc_unicycle->mpc_linvels[i],
+  //         _mpc_unicycle->mpc_linaccs[i], _mpc_unicycle->mpc_s[i];
+  //     t += _dt;
+  //   }
+  // } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
+  //   DIMPCC* _mpc_double_integrator = dynamic_cast<DIMPCC*>(_mpc.get());
+  //   ret.reserve(_mpc_double_integrator->mpc_x.size());
+  //   if (_mpc_double_integrator->mpc_x.size() == 0)
+  //     return ret;
+  //   double t = 0;
+  //   for (int i = 0; i < _mpc_double_integrator->mpc_x.size() - 1; ++i) {
+  //     ret.emplace_back(9);
+  //     ret.back() << t, _mpc_double_integrator->mpc_x[i],
+  //         _mpc_double_integrator->mpc_y[i], _mpc_double_integrator->mpc_vx[i],
+  //         _mpc_double_integrator->mpc_vy[i], _mpc_double_integrator->mpc_s[i],
+  //         _mpc_double_integrator->mpc_s_dot[i],
+  //         _mpc_double_integrator->mpc_ax[i], _mpc_double_integrator->mpc_ay[i];
+  //     t += _dt;
+  //   }
+  // }
+  //
+  // return ret;
 }
 
 const std::map<std::string, double>& MPCCore::get_params() const {

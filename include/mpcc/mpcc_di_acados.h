@@ -11,12 +11,16 @@
 #include "acados_sim_solver_double_integrator_mpcc.h"
 #include "acados_solver_double_integrator_mpcc.h"
 
+namespace mpcc {
+using TrajectoryView = types::Trajectory::View;
+
 class DIMPCC : public MPCBase {
  public:
   DIMPCC();
   virtual ~DIMPCC() override;
 
   virtual std::array<double, 2> solve(const Eigen::VectorXd& state,
+                                      const TrajectoryView& reference,
                                       bool is_reverse = false) override;
 
   virtual void load_params(
@@ -33,6 +37,8 @@ class DIMPCC : public MPCBase {
       const override;
   virtual const std::array<Eigen::VectorXd, 2> get_input_limits()
       const override;
+
+  virtual MPCHorizon get_horizon() const override;
 
   // TOOD: make getter for these
   // Use one vector which stores a state struct...
@@ -56,15 +62,13 @@ class DIMPCC : public MPCBase {
   static constexpr uint16_t kNBX0 = DOUBLE_INTEGRATOR_MPCC_NBX0;
 
  private:
-  double get_s_from_state(const Eigen::VectorXd& state);
-
   Eigen::VectorXd next_state(const Eigen::VectorXd& current_state,
                              const Eigen::VectorXd& control);
 
-  void process_solver_output(double s);
+  void process_solver_output();
   void warm_start_no_u(double* x_init);
   void warm_start_shifted_u(bool correct_perturb, const Eigen::VectorXd& state);
-  bool set_solver_parameters(const std::array<Spline1D, 2>& adjusted_ref);
+  bool set_solver_parameters(const TrajectoryView& reference);
 
   int initialize_acados();
 
@@ -108,3 +112,4 @@ class DIMPCC : public MPCBase {
   double_integrator_mpcc_sim_solver_capsule* _acados_sim_capsule = nullptr;
   double_integrator_mpcc_solver_capsule* _acados_ocp_capsule     = nullptr;
 };
+}  // namespace mpcc

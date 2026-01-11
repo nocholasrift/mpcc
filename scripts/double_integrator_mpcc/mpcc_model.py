@@ -128,13 +128,13 @@ class mpcc_ode_model:
 
         self.compute_yrdot= Function(
             "yr_dot",
-            [self.x, self.x_coeff, self.y_coeff],
+            [self.x, self.y_coeff],
             [self.yr_dot],
         )
 
         self.compute_xrdot= Function(
             "xr_dot",
-            [self.x, self.x_coeff, self.y_coeff],
+            [self.x, self.x_coeff],
             [self.xr_dot],
         )
 
@@ -240,13 +240,15 @@ class mpcc_ode_model:
 
     def setup_mpcc(self, params):
 
+        degree = 3
+        n_knots = 11
         self.v = MX.sym("v")
-        self.x_coeff = MX.sym("x_coeffs", 11)
-        self.y_coeff = MX.sym("y_coeffs", 11)
+        self.x_coeff = MX.sym("x_coeffs", n_knots)
+        self.y_coeff = MX.sym("y_coeffs", n_knots)
         # arc_len_knots = DM([1.0] * 11)
         # arc_len_knots = MX.sym("knots", 11)
 
-        self.arc_len_knots = np.linspace(0, params["ref_length_size"], 11)
+        self.arc_len_knots = np.linspace(0, params["ref_length_size"], n_knots)
         # arc_len_knots = np.linspace(0, 17.0385372, 11)
         self.arc_len_knots = np.concatenate(
             (
@@ -256,13 +258,23 @@ class mpcc_ode_model:
             )
         )
 
+
+        # n_interior = n_knots - 2 * (degree + 1) # 15 - 8 = 7
+        # inner_knots = np.linspace(0, params["ref_length_size"], n_interior + 2)
+
+        # self.arc_len_knots = np.concatenate([
+        #     [inner_knots[0]] * degree,
+        #     inner_knots,
+        #     [inner_knots[-1]] * degree
+        # ])
+
         # 1 denotes the multiplicity of the knots at the ends
         # don't need clamped so leave as 1
         self.x_spline_mx = bspline(
-            self.v, self.x_coeff, [list(self.arc_len_knots)], [3], 1, {}
+            self.v, self.x_coeff, [list(self.arc_len_knots)], [degree], 1, {}
         )
         self.y_spline_mx = bspline(
-            self.v, self.y_coeff, [list(self.arc_len_knots)], [3], 1, {}
+            self.v, self.y_coeff, [list(self.arc_len_knots)], [degree], 1, {}
         )
 
         self.spline_x = Function("xr", [self.v, self.x_coeff], [self.x_spline_mx], {})

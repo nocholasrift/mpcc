@@ -79,7 +79,6 @@ class MPCCROS {
      * currently), odometry, and trajectory
      **********************************************************************/
   void odomcb(const nav_msgs::Odometry::ConstPtr& msg);
-  void dynaobscb(const nav_msgs::Odometry::ConstPtr& msg);
   /*void mapcb(const nav_msgs::OccupancyGrid::ConstPtr& msg);*/
   void mapcb(const grid_map_msgs::GridMap::ConstPtr& msg);
   void lidarcb(const sensor_msgs::LaserScan::ConstPtr& msg);
@@ -244,4 +243,6 @@ class MPCCROS {
   MPCType _mpc_input_type;
 
   std::thread timer_thread;
+
+  static constexpr double kMAX_ALPHA = 100.f;
 };

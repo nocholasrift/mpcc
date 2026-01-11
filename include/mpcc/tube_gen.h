@@ -1,19 +1,16 @@
 #include <mpcc/types.h>
 #include <mpcc/utils.h>
 
-#include <Eigen/Core>
-#ifdef FOUND_CATKIN
-#include <grid_map_core/grid_map_core.hpp>
-#include <grid_map_cv/grid_map_cv.hpp>
-#else
 #include <mpcc/map_util.h>
-#endif
+#include <Eigen/Core>
 
 #include <iostream>
 
 #include "Highs.h"
 
-namespace tube_utils {
+namespace mpcc::tube {
+
+using Trajectory = mpcc::types::Trajectory;
 
 struct Distances {
   Eigen::VectorXd d_parallel_p;
@@ -73,7 +70,6 @@ inline bool raycast_grid(const Eigen::Vector2d& start,
         if (!grid_map.getPosition(*iterator, ray_end))
           return false;
 
-
         break;
       }
     }
@@ -89,22 +85,12 @@ inline bool raycast_grid(const Eigen::Vector2d& start,
 }
 #endif
 
-#ifdef FOUND_CATKIN
-inline bool get_distances(const std::array<Spline1D, 2>& traj, int N,
-                          double max_dist, double len_start, double horizon,
-                          const grid_map::GridMap& grid_map,
-                          double& min_dist_abv, double& min_dist_blw,
-                          std::vector<double>& ds_above,
-                          std::vector<double>& ds_below) {
-#else
-inline bool get_distances(const std::array<Spline1D, 2>& traj, int N,
-                          double max_dist, double len_start, double horizon,
+inline bool get_distances(const Trajectory& traj, int N, double max_dist,
+                          double len_start, double horizon,
                           const map_util::OccupancyGrid& grid_map,
                           double& min_dist_abv, double& min_dist_blw,
                           std::vector<double>& ds_above,
                           std::vector<double>& ds_below) {
-
-#endif
 
   ds_above.resize(N);
   ds_below.resize(N);
@@ -114,19 +100,25 @@ inline bool get_distances(const std::array<Spline1D, 2>& traj, int N,
   min_dist_blw = 1e6;
 
   for (int i = 0; i < N; ++i) {
-    double s  = len_start + i * ds;
-    double px = traj[0](s).coeff(0);
-    double py = traj[1](s).coeff(0);
+    double s = len_start + i * ds;
 
-    double tx = traj[0].derivatives(s, 1).coeff(1);
-    double ty = traj[1].derivatives(s, 1).coeff(1);
+    Eigen::VectorXd point = traj(s);
+    double px             = point(0);
+    double py             = point(1);
+
+    Eigen::VectorXd tangent = traj(s, Trajectory::kFirstOrder);
+    double tx               = tangent(0);
+    double ty               = tangent(1);
 
     // normals are not stable in Eigen, calculate manually
     double curvature, nx, ny;
     if (i < N - 1) {
-      double sp     = s + 1e-1;
-      double txp    = traj[0].derivatives(sp, 1).coeff(1);
-      double typ    = traj[1].derivatives(sp, 1).coeff(1);
+      double sp = s + 1e-1;
+
+      Eigen::VectorXd tangent_plus_eps = traj(sp, Trajectory::kFirstOrder);
+      double txp                       = tangent_plus_eps(0);
+      double typ                       = tangent_plus_eps(1);
+
       double theta1 = atan2(ty, tx);
       double theta2 = atan2(typ, txp);
       curvature     = (theta2 - theta1) / 1e-1;
@@ -139,9 +131,12 @@ inline bool get_distances(const std::array<Spline1D, 2>& traj, int N,
         ny = -tx;
       }
     } else {
-      double sp     = s - 1e-1;
-      double txp    = traj[0].derivatives(sp, 1).coeff(1);
-      double typ    = traj[1].derivatives(sp, 1).coeff(1);
+      double sp = s - 1e-1;
+
+      Eigen::VectorXd tangent_plus_eps = traj(sp, Trajectory::kFirstOrder);
+      double txp                       = tangent_plus_eps(0);
+      double typ                       = tangent_plus_eps(1);
+
       double theta1 = atan2(ty, tx);
       double theta2 = atan2(typ, txp);
       curvature     = (theta1 - theta2) / 1e-1;
@@ -158,79 +153,31 @@ inline bool get_distances(const std::array<Spline1D, 2>& traj, int N,
     // double nx = traj[0].derivatives(s, 2).coeff(2);
     // double ny = traj[1].derivatives(s, 2).coeff(2);
 
-    Eigen::Vector2d point(px, py);
     Eigen::Vector2d normal(-ty, tx);
     normal.normalize();
 
-    // if (Eigen::Vector2d(-ty, tx).dot(normal) < 0) normal *= -1;
-    // Eigen::Vector2d normal(-ty, tx);
-    // normal.normalize();
-
-    // double den       = tx * tx + ty * ty;
-    // double curvature = fabs(tx * ny - ty * nx) / (den * sqrt(den));  // normal.norm();
-
-    // raycast in direction of normal to find obs dist
     double dist_above;
-#ifdef FOUND_CATKIN
-    if (!raycast_grid(point, normal, grid_map, max_dist, dist_above))
-      return false;
-#else
     {
       Eigen::Vector2d end;
       Eigen::Vector2d max_end = point + normal * max_dist;
       grid_map.raycast(point, max_end, end, "inflated");
       dist_above = std::min((point - end).norm(), max_dist);
     }
-#endif
 
     // std::cout << "RAYCASTING BELOW!" << std::endl;
     double dist_below;
-#ifdef FOUND_CATKIN
-    if (!raycast_grid(point, -1 * normal, grid_map, max_dist, dist_below))
-      return false;
-#else
     {
       Eigen::Vector2d end;
       Eigen::Vector2d max_end = point - normal * max_dist;
       grid_map.raycast(point, max_end, end, "inflated");
       dist_below = std::min((point - end).norm(), max_dist);
     }
-#endif
-
-    /*if (curvature > 1e-1 && curvature > 1 / (2 * max_dist)) {*/
-    /*  Eigen::Vector2d n_vec(nx, ny);*/
-    /*  Eigen::Vector2d abv_n_vec(-ty, tx);*/
-    /**/
-    /*  if (n_vec.dot(abv_n_vec) > 0)*/
-    /*    dist_above = std::min(dist_above, 1 / (2 * curvature));*/
-    /*  else*/
-    /*    dist_below = std::min(dist_below, 1 / (2 * curvature));*/
-    /*}*/
 
     if (dist_above < min_dist_abv)
       min_dist_abv = dist_above;
 
     if (dist_below < min_dist_blw)
       min_dist_blw = dist_below;
-
-    // check if odom above or below traj, ensure odom
-    // is within tube
-    /*if (i == 0) {*/
-    /*  Eigen::Vector2d pos = odom.head(2);*/
-    /*  Eigen::Vector2d dp  = pos - point;*/
-    /*  double dot_prod     = dp.dot(normal);*/
-    /*  double odom_dist    = dp.norm();*/
-    /**/
-    /*  if (dot_prod > 0 && dist_above < odom_dist) {*/
-    /*    std::cout << "forcefully setting dist_above to be " << dp.norm()*/
-    /*              << std::endl;*/
-    /*    dist_above = dp.norm();*/
-    /*  } else if (dot_prod < 0 && dist_below < odom_dist) {*/
-    /*    std::cout << "forcefully setting dist_below to be " << dp.norm()*/
-    /*              << std::endl;*/
-    /*    dist_below = dp.norm();*/
-    /*  }*/
-    /*}*/
 
     ds_above[i] = dist_above;
     ds_below[i] = dist_below;
@@ -323,7 +270,6 @@ inline void setup_highs_model(HighsModel& model, int d, int N,
   }
 }
 
-
 inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
                        double min_dist, double max_dist,
                        const std::vector<double>& dists,
@@ -374,27 +320,13 @@ inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
   return true;
 }
 
-#ifdef FOUND_CATKIN
-inline bool get_tubes2(int d, int N, double max_dist,
-                       const std::array<Spline1D, 2>& traj, double traj_arc_len,
-                       double len_start, double horizon,
-                       const grid_map::GridMap& grid_map,
-                       std::array<Eigen::VectorXd, 2>& tubes) {
-#else
-inline bool get_tubes2(int d, int N, double max_dist,
-                       const Eigen::VectorXd& x_pts,
-                       const Eigen::VectorXd& y_pts, int degree,
-                       const Eigen::VectorXd& knot_parameters,
-                       double traj_arc_len, double len_start, double horizon,
-                       const map_util::OccupancyGrid& grid_map,
-                       std::vector<Eigen::VectorXd>& tubes) {
-
-  Spline1D splineX(utils::Interp(x_pts, degree, knot_parameters));
-  Spline1D splineY(utils::Interp(y_pts, degree, knot_parameters));
+inline bool construct_tubes(int d, int N, double max_dist,
+                            const Trajectory& traj, double traj_arc_len,
+                            double len_start, double horizon,
+                            const map_util::OccupancyGrid& grid_map,
+                            std::vector<Eigen::VectorXd>& tubes) {
 
   tubes.resize(2);
-  std::array<Spline1D, 2> traj{splineX, splineY};
-#endif
 
   // get distances
   double min_dist_abv;
@@ -422,4 +354,4 @@ inline bool get_tubes2(int d, int N, double max_dist,
   return true;
 }
 
-}  // namespace tube_utils
+}  // namespace mpcc::tube

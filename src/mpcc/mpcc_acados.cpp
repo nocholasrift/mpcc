@@ -7,6 +7,8 @@
 #include <mpcc/termcolor.hpp>
 #include <stdexcept>
 
+using namespace mpcc;
+
 #ifdef FOUND_PYBIND11
 // the declarations in the header cannot be referenced by pybind...
 // need to define them
@@ -43,9 +45,8 @@ MPCC::MPCC() {
   _use_eigen   = false;
   _ref_samples = 10;
   _ref_len_sz  = 4.0;
-  _ref_length  = 0;
 
-  _has_run = false;
+  _has_run   = false;
   _odom_init = false;
 
   _acados_ocp_capsule = nullptr;
@@ -204,31 +205,6 @@ void MPCC::load_params(const std::map<std::string, double>& params) {
   std::cout << "!! ACADOS model instantiated !! " << std::endl;
 }
 
-double MPCC::get_s_from_state(const Eigen::VectorXd& state) {
-  // find the s which minimizes dist to robot
-  double s        = 0;
-  double min_dist = 1e6;
-  Eigen::Vector2d pos(state(0), state(1));
-  for (double i = 0.0; i < _ref_length; i += .05) {
-    Eigen::Vector2d p =
-        Eigen::Vector2d(_reference[0](i).coeff(0), _reference[1](i).coeff(0));
-
-    double d = (pos - p).squaredNorm();
-    if (d < min_dist) {
-      min_dist = d;
-      s        = i;
-    }
-  }
-
-  return s;
-}
-
-void MPCC::set_dyna_obs(const Eigen::MatrixXd& dyna_obs) {
-  _use_dyna_obs = true;
-  _dyna_obs     = dyna_obs;
-}
-
-
 Eigen::VectorXd MPCC::next_state(const Eigen::VectorXd& current_state,
                                  const Eigen::VectorXd& control) {
   Eigen::VectorXd ret(kNX);
@@ -331,10 +307,11 @@ void MPCC::warm_start_shifted_u(bool correct_perturb,
   }
 }
 
-bool MPCC::set_solver_parameters(const std::array<Spline1D, 2>& adjusted_ref) {
+bool MPCC::set_solver_parameters(
+    const mpcc::types::Trajectory::View& reference) {
   double params[kNP];
-  auto ctrls_x = adjusted_ref[0].ctrls();
-  auto ctrls_y = adjusted_ref[1].ctrls();
+  auto& ctrls_x = reference.xs;
+  auto& ctrls_y = reference.ys;
 
   int num_params = ctrls_x.size() + ctrls_y.size() + _tubes[0].size() +
                    _tubes[1].size() + 10;
@@ -365,29 +342,15 @@ bool MPCC::set_solver_parameters(const std::array<Spline1D, 2>& adjusted_ref) {
     params[i + 2 * ctrls_x.size() + _tubes[0].size()] = _tubes[1](i);
   }
 
-  Eigen::VectorXd obs_pos, obs_vel;
-  if (_use_dyna_obs) {
-    obs_pos = _dyna_obs.col(0);
-    obs_vel = _dyna_obs.col(1);
-  }
-
   for (int i = 0; i < _mpc_steps + 1; ++i) {
-    if (_use_dyna_obs) {
-      params[kNP - 2] = obs_pos(0);
-      params[kNP - 1] = obs_pos(1);
-      std::cout << termcolor::red << "[MPCC] obs_pos: " << obs_pos.transpose()
-                << termcolor::reset << std::endl;
-    }
     unicycle_model_mpcc_acados_update_params(_acados_ocp_capsule, i, params,
                                              kNP);
-
-    obs_pos += obs_vel * _dt;
   }
 
   return true;
 }
 
-void MPCC::process_solver_output(double s) {
+void MPCC::process_solver_output() {
   // stored as x0, y0,..., x1, y1, ..., xN, yN, ...
   Eigen::VectorXd xtraj((_mpc_steps + 1) * kNX);
   Eigen::VectorXd utraj(_mpc_steps * kNU);
@@ -415,7 +378,7 @@ void MPCC::process_solver_output(double s) {
     mpc_y[i]       = xtraj[kIndY + i * kIndStateInc];
     mpc_theta[i]   = xtraj[kIndTheta + i * kIndStateInc];
     mpc_linvels[i] = xtraj[kIndV + i * kIndStateInc];
-    mpc_s[i]       = xtraj[kIndS + i * kIndStateInc] + s;
+    mpc_s[i]       = xtraj[kIndS + i * kIndStateInc];
     mpc_s_dot[i]   = xtraj[kIndSDot + i * kIndStateInc];
   }
 
@@ -443,8 +406,9 @@ void MPCC::reset_horizon() {
   }
 }
 
-std::array<double, 2> MPCC::solve(const Eigen::VectorXd& state,
-                                  bool is_reverse) {
+std::array<double, 2> MPCC::solve(
+    const Eigen::VectorXd& state,
+    const mpcc::types::Trajectory::View& reference, bool is_reverse) {
   _solve_success = false;
 
   if (_tubes.size() == 0) {
@@ -500,28 +464,10 @@ std::array<double, 2> MPCC::solve(const Eigen::VectorXd& state,
   u_init[kIndLinAcc] = 0.0;
   u_init[kIndSDDot]  = 0.0;
 
-  // generate params from reference trajectory starting at current s
-  double s                             = get_s_from_state(state);
-  std::array<Spline1D, 2> adjusted_ref = compute_adjusted_ref(s);
-
-  std::cout << "[MPCC] starting s is " << s << std::endl;
-  std::cout << "[MPCC] adjusted ref is " << adjusted_ref[0](0).coeff(0) << ", "
-            << adjusted_ref[1](0).coeff(0) << std::endl;
-
   // Eigen::Vector2d prev_pos = _prev_x0.head(2);
   Eigen::Vector2d prev_pos = _prev_x0.segment(kNX, 2);
   Eigen::Vector2d curr_pos = state.head(2);
 
-  double dist = (prev_pos - curr_pos).norm();
-  if (_is_shift_warm && dist > 1e-1) {
-    std::cout << termcolor::red << "[MPCC] Pos too far (" << dist
-              << "), turning off shifted warm start" << std::endl;
-    std::cout << "[MPCC] x0: " << x0.transpose() << termcolor::reset
-              << std::endl;
-    // _is_shift_warm = false;
-  }
-
-  double starting_s = _prev_x0[1 * kNX + 4];
   if (!_is_shift_warm)
     warm_start_no_u(x_init);
   else {
@@ -533,7 +479,7 @@ std::array<double, 2> MPCC::solve(const Eigen::VectorXd& state,
   ********* SET REFERENCE PARAMS *******
   **************************************/
 
-  if (!set_solver_parameters(adjusted_ref))
+  if (!set_solver_parameters(reference))
     return {0, 0};
 
   /*************************************
@@ -578,33 +524,16 @@ std::array<double, 2> MPCC::solve(const Eigen::VectorXd& state,
   **************************************/
 
   double prev_angvel = _prev_u0[kIndAngVel];
-  process_solver_output(s);
+  process_solver_output();
   std::cout << "mpc x[0] is " << _prev_x0.head(kNX).transpose() << std::endl;
   std::cout << "true x[0] is " << x0.transpose() << std::endl;
   std::cout << "mpc x[1] is " << _prev_x0.segment(kNX, kNX).transpose()
             << std::endl;
 
-  // unicycle_model_mpcc_acados_print_stats(_acados_ocp_capsule);
-  for (int i = 0; i < mpc_x.size(); ++i) {
-    double si     = mpc_s[i];
-    double x      = mpc_x[i];
-    double y      = mpc_y[i];
-    double xr     = adjusted_ref[0](si).coeff(0);
-    double yr     = adjusted_ref[1](si).coeff(0);
-    double xr_dot = adjusted_ref[0].derivatives(si, 1).coeff(1);
-    double yr_dot = adjusted_ref[1].derivatives(si, 1).coeff(1);
-
-    double den      = xr_dot * xr_dot + yr_dot * yr_dot;
-    double obs_dirx = -yr_dot / den;
-    double obs_diry = xr_dot / den;
-
-    double signed_d = (x - xr) * obs_dirx + (y - yr) * obs_diry;
-  }
-
   _has_run = true;
 
   _state << _prev_x0[kIndX], _prev_x0[kIndY], _prev_x0[kIndTheta],
-      _prev_x0[kIndV], s, _prev_x0[kIndSDot];
+      _prev_x0[kIndV], 0, _prev_x0[kIndSDot];
 
   // std::array<double, 2> input = _cmd.getCommand();
 
@@ -620,13 +549,17 @@ std::array<double, 2> MPCC::solve(const Eigen::VectorXd& state,
 
   std::cout << "[MPCC] commanded accel is: " << _prev_u0[kIndLinAcc] << "\n";
 
+  if (!_solve_success) {
+    std::cout << "[MPCC] SOLVER STATUS WAS INFEASIBLE!\n";
+  }
+
   return _cmd;
 }
 
 const std::array<Eigen::VectorXd, 2> MPCC::get_state_limits() const {
   Eigen::VectorXd xmin(kNX), xmax(kNX);
   xmin << -_bound_value, -_bound_value, -M_PI, -_max_linvel, 0, -_max_linvel;
-  xmax << _bound_value, _bound_value, M_PI, _max_linvel, _ref_length,
+  xmax << _bound_value, _bound_value, M_PI, _max_linvel, _ref_len_sz,
       _max_linvel;
 
   return {xmin, xmax};
@@ -643,59 +576,62 @@ const std::array<Eigen::VectorXd, 2> MPCC::get_input_limits() const {
 Eigen::VectorXd MPCC::get_cbf_data(const Eigen::VectorXd& state,
                                    const Eigen::VectorXd& control,
                                    bool is_abv) const {
-  Eigen::VectorXd ret_data(3);
-  double s = 0;  // state(4);
+  return Eigen::Vector3d(0., 0., 0.);
+}
 
-  Eigen::VectorXd coeffs;
-  if (is_abv)
-    coeffs = _tubes[0];
-  else
-    coeffs = _tubes[1];
+void MPCC::compute_world_frame_velocities(Eigen::VectorXd& vs_x,
+                                          Eigen::VectorXd& vs_y) const {
+  assert(vs_x.size() == _mpc_steps);
+  assert(vs_y.size() == _mpc_steps);
 
-  double tube_dist = 0;
-  double x_pow     = 1;
-
-  for (int i = 0; i < coeffs.size(); ++i) {
-    tube_dist += coeffs[i] * x_pow;
-    x_pow *= s;
+  for (int i = 0; i < _mpc_steps; ++i) {
+    vs_x[i] = mpc_linvels[i] * cos(mpc_theta[i]);
+    vs_y[i] = mpc_linvels[i] * sin(mpc_theta[i]);
   }
+}
 
-  std::array<Spline1D, 2> adjusted_ref = compute_adjusted_ref(s);
-  double xr                            = adjusted_ref[0](s).coeff(0);
-  double yr                            = adjusted_ref[1](s).coeff(0);
+void MPCC::compute_world_frame_accelerations(Eigen::VectorXd& accs_x,
+                                             Eigen::VectorXd& accs_y) const {
+  assert(accs_x.size() == _mpc_steps - 1);
+  assert(accs_y.size() == _mpc_steps - 1);
 
-  double xr_dot = adjusted_ref[0].derivatives(s, 1).coeff(1);
-  double yr_dot = adjusted_ref[1].derivatives(s, 1).coeff(1);
-
-  double den      = sqrt(xr_dot * xr_dot + yr_dot * yr_dot);
-  double obs_dirx = -yr_dot / den;
-  double obs_diry = xr_dot / den;
-
-  double signed_d = (_odom(0) - xr) * obs_dirx + (_odom(1) - yr) * obs_diry;
-  double p =
-      obs_dirx * cos(_odom(2)) + obs_diry * sin(_odom(2)) + state(3) * .05;
-
-  double h_val;
-  double dist;
-  if (is_abv) {
-    dist  = tube_dist - signed_d - .1;
-    h_val = dist * exp(-p);
-  } else {
-    dist  = signed_d - tube_dist - .1;
-    h_val = dist * exp(-p);
+  for (int i = 0; i < _mpc_steps - 1; ++i) {
+    accs_x[i] = mpc_linaccs[i] * cos(mpc_theta[i]);
+    accs_y[i] = mpc_linaccs[i] * sin(mpc_theta[i]);
   }
+}
 
-  /*std::cout << "[MPCC] dist is: " << dist << "\n";*/
+MPCHorizon MPCC::get_horizon() const {
 
-  if (h_val > 100) {
-    std::cout << termcolor::yellow << "ref length is " << _ref_length
-              << std::endl;
-    std::cout << "s: " << s << " h_val: " << h_val << " is abv: " << is_abv
-              << termcolor::reset << std::endl;
-    std::cout << "tube dist: " << tube_dist << " signed_d: " << signed_d
-              << std::endl;
-    exit(-1);
-  }
+  MPCHorizon horizon;
+  horizon.states.vs_x = Eigen::VectorXd(_mpc_steps);
+  horizon.states.vs_y = Eigen::VectorXd(_mpc_steps);
+  compute_world_frame_velocities(horizon.states.vs_x, horizon.states.vs_y);
 
-  return Eigen::Vector3d(h_val, dist, atan2(obs_diry, obs_dirx));
+  // ax ,ay have -1 size because they are inputs
+  horizon.inputs.accs_x = Eigen::VectorXd(_mpc_steps - 1);
+  horizon.inputs.accs_y = Eigen::VectorXd(_mpc_steps - 1);
+  compute_world_frame_accelerations(horizon.inputs.accs_x,
+                                    horizon.inputs.accs_y);
+
+  horizon.states.xs          = utils::vector_to_eigen(mpc_x);
+  horizon.states.ys          = utils::vector_to_eigen(mpc_y);
+  horizon.states.arclens     = utils::vector_to_eigen(mpc_s);
+  horizon.states.arclens_dot = utils::vector_to_eigen(mpc_s_dot);
+
+  horizon.inputs.arclens_ddot = utils::vector_to_eigen(mpc_s_ddots);
+  horizon.length              = _mpc_steps;
+
+  const auto N = _mpc_steps;
+  assert(horizon.states.ys.size() == N);
+  assert(horizon.states.vs_x.size() == N);
+  assert(horizon.states.vs_y.size() == N);
+  assert(horizon.states.arclens.size() == N);
+  assert(horizon.states.arclens_dot.size() == N);
+
+  assert(horizon.inputs.accs_x.size() == N - 1);
+  assert(horizon.inputs.accs_y.size() == N - 1);
+  assert(horizon.inputs.arclens_ddot.size() == N - 1);
+
+  return horizon;
 }

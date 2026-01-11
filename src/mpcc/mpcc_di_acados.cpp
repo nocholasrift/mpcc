@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cmath>
 
+using namespace mpcc;
+
 #ifdef FOUND_PYBIND11
 // the declarations in the header cannot be referenced by pybind...
 // need to define them
@@ -36,12 +38,11 @@ DIMPCC::DIMPCC() {
   _s_dot       = 0;
   _ref_samples = 10;
   _ref_len_sz  = 4.0;
-  _ref_length  = 0;
 
   _has_run       = false;
   _solve_success = false;
   _is_shift_warm = false;
-  _odom_init = false;
+  _odom_init     = false;
 
   _new_time_steps = nullptr;
 
@@ -218,85 +219,10 @@ void DIMPCC::reset_horizon() {
   }
 }
 
-
 Eigen::VectorXd DIMPCC::get_cbf_data(const Eigen::VectorXd& state,
                                      const Eigen::VectorXd& control,
                                      bool is_abv) const {
-  Eigen::VectorXd ret_data(3);
-  double s = 0;  // state(4);
-
-  Eigen::VectorXd coeffs;
-  if (is_abv)
-    coeffs = _tubes[0];
-  else
-    coeffs = _tubes[1];
-
-  double tube_dist = 0;
-  double x_pow     = 1;
-
-  for (int i = 0; i < coeffs.size(); ++i) {
-    tube_dist += coeffs[i] * x_pow;
-    x_pow *= s;
-  }
-
-  std::array<Spline1D, 2> adjusted_ref = compute_adjusted_ref(s);
-  double xr                            = adjusted_ref[0](s).coeff(0);
-  double yr                            = adjusted_ref[1](s).coeff(0);
-
-  double xr_dot = adjusted_ref[0].derivatives(s, 1).coeff(1);
-  double yr_dot = adjusted_ref[1].derivatives(s, 1).coeff(1);
-
-  double den      = sqrt(xr_dot * xr_dot + yr_dot * yr_dot);
-  double obs_dirx = -yr_dot / den;
-  double obs_diry = xr_dot / den;
-
-  double vx = state(2);
-  double vy = state(3);
-  if (fabs(vx) < 1e-3 && fabs(vy) < 1e-3)
-    vx = 1e-3;
-
-  double vel = sqrt(vx * vx + vy * vy);
-
-  double signed_d = (state(0) - xr) * obs_dirx + (state(1) - yr) * obs_diry;
-  double p        = (obs_dirx * vx + obs_diry * vy) / vel + vel * .05;
-
-  double h_val;
-  if (is_abv)
-    h_val = (tube_dist - signed_d - .1) * exp(-p);
-  else
-    h_val = (signed_d - tube_dist - .1) * exp(-p);
-
-  signed_d = is_abv ? signed_d : -signed_d;
-  /*if (h_val > 100) {*/
-  /*  std::cout << termcolor::yellow << "ref length is " << _ref_length*/
-  /*            << std::endl;*/
-  /*  std::cout << "s: " << s << " h_val: " << h_val << " is abv: " << is_abv*/
-  /*            << termcolor::reset << std::endl;*/
-  /*  std::cout << "tube dist: " << tube_dist << " signed_d: " << signed_d*/
-  /*            << std::endl;*/
-  /*  exit(-1);*/
-  /*}*/
-
-  return Eigen::Vector3d(h_val, signed_d, atan2(obs_diry, obs_dirx));
-}
-
-double DIMPCC::get_s_from_state(const Eigen::VectorXd& state) {
-  // find the s which minimizes dist to robot
-  double s        = 0;
-  double min_dist = 1e6;
-  Eigen::Vector2d pos(state(0), state(1));
-  for (double i = 0.0; i < _ref_length; i += .01) {
-    Eigen::Vector2d p =
-        Eigen::Vector2d(_reference[0](i).coeff(0), _reference[1](i).coeff(0));
-
-    double d = (pos - p).squaredNorm();
-    if (d < min_dist) {
-      min_dist = d;
-      s        = i;
-    }
-  }
-
-  return s;
+  return Eigen::Vector3d(0., 0., 0.);
 }
 
 Eigen::VectorXd DIMPCC::next_state(const Eigen::VectorXd& current_state,
@@ -344,8 +270,8 @@ void DIMPCC::warm_start_shifted_u(bool correct_perturb,
                                   const Eigen::VectorXd& state) {
   double starting_s = _prev_x0[1 * kNX + 4];
   if (correct_perturb) {
-    /*std::cout << termcolor::red << "[MPCC] Guess pos. too far, correcting"*/
-    /*          << termcolor::reset << std::endl;*/
+    // std::cout << termcolor::red << "[MPCC] Guess pos. too far, correcting"
+    //           << termcolor::reset << std::endl;
 
     Eigen::VectorXd curr = state;
 
@@ -396,11 +322,10 @@ void DIMPCC::warm_start_shifted_u(bool correct_perturb,
   }
 }
 
-bool DIMPCC::set_solver_parameters(
-    const std::array<Spline1D, 2>& adjusted_ref) {
+bool DIMPCC::set_solver_parameters(const types::Trajectory::View& reference) {
   double params[kNP];
-  auto ctrls_x = adjusted_ref[0].ctrls();
-  auto ctrls_y = adjusted_ref[1].ctrls();
+  auto& ctrls_x = reference.xs;
+  auto& ctrls_y = reference.ys;
 
   int num_params =
       ctrls_x.size() + ctrls_y.size() + _tubes[0].size() + _tubes[1].size() + 8;
@@ -439,6 +364,7 @@ bool DIMPCC::set_solver_parameters(
 }
 
 std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
+                                    const types::Trajectory::View& reference,
                                     bool is_reverse) {
   _solve_success = false;
 
@@ -468,11 +394,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   double lbx0[kNBX0];
   double ubx0[kNBX0];
 
-  // Eigen::VectorXd x0(kNBX0);
-  // x0 << state(0), state(1), state(2), state(3), 0, _s_dot;
   Eigen::VectorXd x0 = state;
+  x0(kIndS)          = 0.;
   if (x0.segment(2, 2).norm() < 1e-6) {
-    x0(2) = 1e-6;
+    x0(kIndVx) = 1e-6;
   }
 
   memcpy(lbx0, &x0[0], kNBX0 * sizeof(double));
@@ -496,27 +421,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   u_init[kIndAy]    = 0.0;
   u_init[kIndSDDot] = 0.0;
 
-  // generate params from reference trajectory starting at current s
-  double s                             = get_s_from_state(x0);
-  std::array<Spline1D, 2> adjusted_ref = compute_adjusted_ref(s);
-
-  /*std::cout << "[MPCC] starting s is " << s << std::endl;*/
-  /*std::cout << "[MPCC] adjusted ref is " << adjusted_ref[0](0).coeff(0) << ", "*/
-  /*          << adjusted_ref[1](0).coeff(0) << std::endl;*/
-
   // Eigen::Vector2d prev_pos = _prev_x0.head(2);
   Eigen::Vector2d prev_pos = _prev_x0.segment(kNX, 2);
   Eigen::Vector2d curr_pos = x0.head(2);
 
-  double dist = (prev_pos - curr_pos).norm();
-  if (_is_shift_warm && dist > 1e-1) {
-    /*std::cout << termcolor::red << "[MPCC] Pos too far (" << dist*/
-    /*          << "), turning off shifted warm start" << std::endl;*/
-    /*std::cout << "[MPCC] x0: " << x0.transpose() << termcolor::reset*/
-    /*          << std::endl;*/
-  }
-
-  double starting_s = _prev_x0[1 * kNX + kIndS];
   if (!_is_shift_warm)
     warm_start_no_u(x_init);
   else {
@@ -528,7 +436,7 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   ********* SET REFERENCE PARAMS *******
   **************************************/
 
-  if (!set_solver_parameters(adjusted_ref)){
+  if (!set_solver_parameters(reference)) {
     std::cout << "setting solver params failed\n";
     return {0, 0};
   }
@@ -579,7 +487,7 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   **************************************/
 
   double prev_angvel = _prev_u0[kIndS];
-  process_solver_output(s);
+  process_solver_output();
   // std::cout << "mpc x[0] is " << _prev_x0.head(kNX).transpose() << std::endl;
   // std::cout << "true x[0] is " << x0.transpose() << std::endl;
   // std::cout << "mpc x[1] is " << _prev_x0.segment(kNX, kNX).transpose()
@@ -588,7 +496,7 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
   _has_run = true;
 
   _state << _prev_x0[kIndX], _prev_x0[kIndY], _prev_x0[kIndVx],
-      _prev_x0[kIndVy], s, _prev_x0[kIndSDot];
+      _prev_x0[kIndVy], 0, _prev_x0[kIndSDot];
 
   double new_velx =
       limit(_state[kIndVx], _state[kIndVx] + _prev_u0[kIndAx] * _dt,
@@ -607,14 +515,14 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
 
   _cmd = {_prev_u0[0], _prev_u0[1]};
 
-  if (!_solve_success){
-    std::cout << "[MPCC] SOLVER STATUS WAS INFEASIBLE AHHH!!!\n";
+  if (!_solve_success) {
+    std::cout << "[MPCC] SOLVER STATUS WAS INFEASIBLE!\n";
   }
 
   return {new_velx, new_vely};
 }
 
-void DIMPCC::process_solver_output(double s) {
+void DIMPCC::process_solver_output() {
   // stored as x0, y0,..., x1, y1, ..., xN, yN, ...
   Eigen::VectorXd xtraj((_mpc_steps + 1) * kNX);
   Eigen::VectorXd utraj(_mpc_steps * kNU);
@@ -642,7 +550,7 @@ void DIMPCC::process_solver_output(double s) {
     mpc_y[i]     = xtraj[kIndY + i * kIndStateInc];
     mpc_vx[i]    = xtraj[kIndVx + i * kIndStateInc];
     mpc_vy[i]    = xtraj[kIndVy + i * kIndStateInc];
-    mpc_s[i]     = xtraj[kIndS + i * kIndStateInc] + s;
+    mpc_s[i]     = xtraj[kIndS + i * kIndStateInc];
     mpc_s_dot[i] = xtraj[kIndSDot + i * kIndStateInc];
   }
 
@@ -656,7 +564,7 @@ void DIMPCC::process_solver_output(double s) {
 const std::array<Eigen::VectorXd, 2> DIMPCC::get_state_limits() const {
   Eigen::VectorXd xmin(kNX), xmax(kNX);
   xmin << -1e3, -1e3, -_max_linvel, -_max_linvel, 0, -_max_linvel;
-  xmax << 1e3, 1e3, _max_linvel, _max_linvel, _ref_length, _max_linvel;
+  xmax << 1e3, 1e3, _max_linvel, _max_linvel, _ref_len_sz, _max_linvel;
 
   return {xmin, xmax};
 }
@@ -667,4 +575,37 @@ const std::array<Eigen::VectorXd, 2> DIMPCC::get_input_limits() const {
   umax << _max_linacc, _max_linacc, _max_linacc;
 
   return {umin, umax};
+}
+
+mpcc::types::MPCHorizon DIMPCC::get_horizon() const {
+
+  // sadly c++17 does not support designated initializers 😭
+  mpcc::MPCHorizon horizon;
+  horizon.states.xs          = utils::vector_to_eigen(mpc_x);
+  horizon.states.ys          = utils::vector_to_eigen(mpc_y);
+  horizon.states.vs_x        = utils::vector_to_eigen(mpc_vx);
+  horizon.states.vs_y        = utils::vector_to_eigen(mpc_vy);
+  horizon.states.arclens     = utils::vector_to_eigen(mpc_s);
+  horizon.states.arclens_dot = utils::vector_to_eigen(mpc_s_dot);
+
+  horizon.inputs.accs_x       = utils::vector_to_eigen(mpc_ax);
+  horizon.inputs.accs_y       = utils::vector_to_eigen(mpc_ay);
+  horizon.inputs.arclens_ddot = utils::vector_to_eigen(mpc_s_ddots);
+  horizon.length              = _mpc_steps;
+
+  const auto N = _mpc_steps;
+
+  // these should all hold true by construction, mostly here for
+  // future refactoring in case I screw something up down the line
+  assert(horizon.states.ys.size() == N);
+  assert(horizon.states.vs_x.size() == N);
+  assert(horizon.states.vs_y.size() == N);
+  assert(horizon.states.arclens.size() == N);
+  assert(horizon.states.arclens_dot.size() == N);
+
+  assert(horizon.inputs.accs_x.size() == N - 1);
+  assert(horizon.inputs.accs_y.size() == N - 1);
+  assert(horizon.inputs.arclens_ddot.size() == N - 1);
+
+  return horizon;
 }

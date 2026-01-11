@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 
+namespace mpcc {
 enum class MPCType { kDoubleIntegrator, kUnicycle };
 
 class MPCCore {
@@ -62,69 +63,61 @@ class MPCCore {
   /***********************
    * Setters and Getters
    ***********************/
-  void set_state(const Eigen::Vector3d& state);
   void set_odom(const Eigen::Vector3d& odom);
   void set_goal(const Eigen::Vector2d& goal);
-#ifdef FOUND_PYBIND11
-  std::array<Eigen::VectorXd, 2> compute_adjusted_ref(double s) const;
   void set_trajectory(const Eigen::VectorXd& x_pts,
-                      const Eigen::VectorXd& y_pts, int degree,
+                      const Eigen::VectorXd& y_pts,
                       const Eigen::VectorXd& knot_parameters);
-#endif
-  void set_trajectory(const std::array<Spline1D, 2>& ref, double ref_len,
-                      double true_ref_len);
   void set_tubes(const std::array<Eigen::VectorXd, 2>& tubes);
-  void set_dyna_obs(const Eigen::MatrixXd& dyna_obs);
-  void set_alpha(const std::array<double, 2>& alphas);
 
   const bool get_solver_status() const;
   const double get_true_ref_len() const;
   const Eigen::VectorXd& get_state() const;
   const std::array<Eigen::VectorXd, 2>& get_tubes() const;
-  double get_s_from_pose(const Eigen::VectorXd& pose) const;
   const std::array<Eigen::VectorXd, 2> get_state_limits() const;
   const std::array<Eigen::VectorXd, 2> get_input_limits() const;
-  std::vector<Eigen::VectorXd> get_horizon() const;
+  MPCHorizon get_horizon() const;
   const std::array<double, 2> get_mpc_command() const;
   const std::map<std::string, double>& get_params() const;
   Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
                                const Eigen::VectorXd& control,
                                bool is_abv) const;
+  const types::Trajectory& get_trajectory() { return _trajectory; }
 
  private:
-  double _dt;
-  double _max_anga;
-  double _max_linacc;
-  double _curr_vel;
-  double _curr_angvel;
-  double _max_vel;
-  double _max_angvel;
-  double _ref_length;
-  double _true_ref_length;
+  void get_param(const std::map<std::string, double>& params,
+                 const std::string& key, double& value);
 
-  double _prop_gain;
-  double _prop_angle_thresh;
+ private:
+  double _dt{0.1};
+  double _max_anga{2 * M_PI};
+  double _max_linacc{2.0};
+  double _curr_vel{0.};
+  double _curr_angvel{0.};
+  double _max_vel{2.0};
+  double _max_angvel{M_PI / 2.};
+  double _ref_length{0.};
+  double _true_ref_length{0.};
 
-  bool _is_set;
-  bool _use_cbf;
-  bool _traj_reset;
-  bool _has_run;
+  double _prop_gain{1.0};
+  double _prop_angle_thresh{0.5};
 
-  std::vector<traj_point_t> _trajectory;
+  bool _is_set{false};
+  bool _use_cbf{false};
+  bool _traj_reset{false};
+  bool _has_run{false};
+
+  types::Trajectory _trajectory;
 
   std::array<double, 2> _prev_cmd;
-  std::array<Spline1D, 2> _ref;
 
-  Eigen::Vector3d _odom;
-  Eigen::Vector2d _goal;
-
-  // learning states
-  Eigen::VectorXd _prev_rl_state;
-  Eigen::VectorXd _curr_rl_state;
+  Eigen::Vector3d _odom{0., 0., 0.};
+  Eigen::Vector2d _goal{0., 0.};
 
   std::map<std::string, double> _params;
 
   std::unique_ptr<MPCBase> _mpc;
 
-  MPCType _mpc_input_type;
+  MPCType _mpc_input_type = MPCType::kUnicycle;
 };
+}  // namespace mpcc
