@@ -152,13 +152,13 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   types::Trajectory adjusted_traj =
       _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
 
-  for (double s = 0; s < adjusted_traj.get_extended_length(); s += 0.1) {
-    Eigen::Vector2d der = adjusted_traj(s, 1);
-    std::cout << s << ":\t" << der.transpose() << "\t" << der.norm() << "\n";
-  }
+  // for (double s = 0; s < adjusted_traj.get_extended_length(); s += 0.1) {
+  //   Eigen::Vector2d der = adjusted_traj(s, 1);
+  //   std::cout << s << ":\t" << der.transpose() << "\t" << der.norm() << "\n";
+  // }
 
-  std::cout << "cpp xs " << adjusted_traj.get_ctrls_x() << "\n";
-  std::cout << "cpp ys " << adjusted_traj.get_ctrls_y() << "\n";
+  // std::cout << "cpp xs " << adjusted_traj.get_ctrls_x() << "\n";
+  // std::cout << "cpp ys " << adjusted_traj.get_ctrls_y() << "\n";
 
   auto start = std::chrono::high_resolution_clock::now();
   std::array<double, 2> mpc_command =

@@ -473,10 +473,10 @@ std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
       //           << "[MPCC] unicycle_model_mpcc_acados_solve() failed with "
       //              "status "
       //           << status << termcolor::reset << std::endl;
-      /*std::cout << "[MPCC] using simple warm start procedure" << std::endl;*/
-      /*std::cout << "[MPCC] xinit is: " << x0.transpose() << std::endl;*/
-      /*double h_val = get_cbf_data(x0, Eigen::Vector2d(), true)[0];*/
-      /*std::cout << "[MPCC] cbf value: " << h_val << std::endl;*/
+      // std::cout << "[MPCC] using simple warm start procedure" << std::endl;
+      // std::cout << "[MPCC] xinit is: " << x0.transpose() << std::endl;
+      // double h_val = get_cbf_data(x0, Eigen::Vector2d(), true)[0];
+      // std::cout << "[MPCC] cbf value: " << h_val << std::endl;
 
       warm_start_no_u(x_init);
     }

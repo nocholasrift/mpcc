@@ -313,24 +313,22 @@ bool MPCC::set_solver_parameters(
   auto& ctrls_x = reference.xs;
   auto& ctrls_y = reference.ys;
 
-  int num_params = ctrls_x.size() + ctrls_y.size() + _tubes[0].size() +
-                   _tubes[1].size() + 10;
+  int num_params =
+      ctrls_x.size() + ctrls_y.size() + _tubes[0].size() + _tubes[1].size() + 8;
   if (num_params != kNP) {
     std::cout << "[MPCC] reference size " << num_params
               << " does not match acados parameter size " << kNP << std::endl;
     return false;
   }
 
-  params[kNP - 10] = _w_qc;
-  params[kNP - 9]  = _w_ql;
-  params[kNP - 8]  = _w_q_speed;
-  params[kNP - 7]  = _alpha_abv;
-  params[kNP - 6]  = _alpha_blw;
-  params[kNP - 5]  = _w_qc_lyap;
-  params[kNP - 4]  = _w_ql_lyap;
-  params[kNP - 3]  = _gamma;
-  params[kNP - 2]  = 1e3;
-  params[kNP - 1]  = 1e3;
+  params[kNP - 8] = _w_qc;
+  params[kNP - 7] = _w_ql;
+  params[kNP - 6] = _w_q_speed;
+  params[kNP - 5] = _alpha_abv;
+  params[kNP - 4] = _alpha_blw;
+  params[kNP - 3] = _w_qc_lyap;
+  params[kNP - 2] = _w_ql_lyap;
+  params[kNP - 1] = _gamma;
 
   for (int i = 0; i < ctrls_x.size(); ++i) {
     params[i]                  = ctrls_x[i];

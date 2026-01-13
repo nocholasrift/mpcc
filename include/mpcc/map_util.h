@@ -390,6 +390,7 @@ class OccupancyGrid {
     bool ray_hit     = false;
     unsigned int end = std::min(max_range, abs_da);
     unsigned int mx, my;
+    unsigned int last_free_offset = offset;
     for (unsigned int i = 0; i < end; ++i) {
       offset += offset_a;
       error_b += abs_db;
@@ -403,6 +404,8 @@ class OccupancyGrid {
         ray_hit = true;
         break;
       }
+
+      last_free_offset = offset;
 
       if ((unsigned int)error_b >= abs_da) {
         offset += offset_b;
@@ -418,9 +421,13 @@ class OccupancyGrid {
         ray_hit = true;
         break;
       }
+
+      last_free_offset = offset;
     }
 
-    term = offset;
+    // if ray hit something, we need to give the previous (free) offset, rather than
+    // this occupied offset!
+    term = ray_hit ? last_free_offset : offset;
     return ray_hit;
   }
 

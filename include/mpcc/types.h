@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include <regex>
+#include <stdexcept>
 #include <unsupported/Eigen/Splines>
 
 namespace mpcc {
@@ -326,8 +327,8 @@ class Trajectory {
   View view() {
     // x and y are forced to have same knots
     return {.knots  = spline_x_.get_knots(),
-            .xs     = spline_x_.get_ctrls(),
-            .ys     = spline_y_.get_ctrls(),
+            .xs     = evaluate_axis_at_knots(kX),
+            .ys     = evaluate_axis_at_knots(kY),
             .arclen = extended_arc_len_};
   }
 
@@ -345,6 +346,29 @@ class Trajectory {
   double extended_arc_len_{0};
   Spline spline_x_;
   Spline spline_y_;
+
+ private:
+  // axis 0 == x, axis 1 == y
+  // use kX and kY...
+  Row evaluate_axis_at_knots(unsigned int axis) {
+    // spline x and y by construction have the same knots...
+    Row knots = spline_x_.get_knots();
+    Spline spl;
+    if (axis != kX && axis != kY) {
+      throw std::runtime_error(
+          "[Trajectory] Invalid axis: " + std::to_string(axis) +
+          " passed to get_axis_at_knots");
+    }
+
+    Row vals(knots.size());
+    for (int i = 0; i < knots.size(); ++i) {
+      double s = knots(i);
+      vals[i]  = axis == 0 ? spline_x_(s) : spline_y_(s);
+    }
+
+    return vals;
+  }
 };
+
 }  // namespace types
 }  // namespace mpcc
