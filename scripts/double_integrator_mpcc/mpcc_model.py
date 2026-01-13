@@ -1,4 +1,6 @@
+import os
 import numpy as np
+
 from acados_template import AcadosModel
 from casadi import (
     MX,
@@ -13,8 +15,30 @@ from casadi import (
     interpolant,
     bspline,
     Function,
+    CodeGenerator,
     DM,
 )
+
+class DebugRegistry:
+    def __init__(self):
+        self.exprs = {}
+
+    def add(self, name, expr):
+        self.exprs[name] = expr
+
+    def build_functions(self, inputs):
+        funcs = {}
+        for name, expr in self.exprs.items():
+            funcs[name] = Function(name, inputs, [expr])
+        return funcs
+
+    def generate_c(self, filename, inputs):
+        opts = {"cpp": True, "with_header": True}
+        C = CodeGenerator(filename, opts)
+        for name, expr in self.exprs.items():
+            f = Function(name, inputs, [expr])
+            C.add(f)
+        C.generate()
 
 
 class mpcc_ode_model:
@@ -68,125 +92,6 @@ class mpcc_ode_model:
             self.gamma,
         )
 
-        self.compute_spline_x = self.spline_x
-        self.compute_spline_y = self.spline_y
-
-        self.compute_xr= Function(
-            "xr",
-            [self.x, self.x_coeff],
-            [self.xr],
-        )
-
-        self.compute_yr= Function(
-            "yr",
-            [self.x, self.y_coeff],
-            [self.yr],
-        )
-
-        self.compute_obs_dirx = Function(
-            "obs_dirx",
-            [self.x, self.x_coeff, self.y_coeff],
-            [self.obs_dirx],
-        )
-
-        self.compute_obs_diry = Function(
-            "obs_diry",
-            [self.x, self.x_coeff, self.y_coeff],
-            [self.obs_diry],
-        )
-
-        self.compute_hdot_abv  = Function(
-            "hdot_abv",
-            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
-            [self.h_dot_abv],
-        )
-
-        self.compute_hdot_blw = Function(
-            "hdot_blw",
-            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
-            [self.h_dot_blw],
-        )
-
-        self.compute_cbf_abv = Function(
-            "h_abv",
-            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
-            [self.h_abv],
-        )
-
-        self.compute_lfh_abv = Function(
-            "lfh_abv",
-            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
-            [self.Lfh_abv],
-        )
-
-        Lgh_abv = self.h_dot_abv @ self.g
-        self.compute_lgh_abv = Function(
-            "lgh_abv",
-            [self.x, self.d_abv_coeff, self.x_coeff, self.y_coeff],
-            [Lgh_abv],
-        )
-
-        self.compute_yrdot= Function(
-            "yr_dot",
-            [self.x, self.y_coeff],
-            [self.yr_dot],
-        )
-
-        self.compute_xrdot= Function(
-            "xr_dot",
-            [self.x, self.x_coeff],
-            [self.xr_dot],
-        )
-
-        self.compute_signed_d = Function(
-            "signed_d",
-            [self.x, self.x_coeff, self.y_coeff],
-            [self.signed_d],
-        )
-
-        self.compute_p_abv = Function(
-            "p_abv",
-            [self.x, self.x_coeff, self.y_coeff],
-            [self.p_abv],
-        )
-
-        self.compute_p_blw = Function(
-            "p_blw",
-            [self.x, self.x_coeff, self.y_coeff],
-            [self.p_blw],
-        )
-
-        self.compute_cbf_blw = Function(
-            "h_blw",
-            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
-            [self.h_blw],
-        )
-
-        self.compute_d_abv = Function(
-            "d_abv",
-            [self.x, self.d_abv_coeff], 
-            [self.d_abv],
-        )
-
-        self.compute_d_blw = Function(
-            "d_blw",
-            [self.x, self.d_blw_coeff],
-            [self.d_blw],
-        )
-
-        self.compute_lfh_blw = Function(
-            "lfh_blw",
-            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
-            [self.Lfh_blw],
-        )
-
-        Lgh_blw = self.h_dot_blw @ self.g
-        self.compute_lgh_blw = Function(
-            "lgh_blw",
-            [self.x, self.d_blw_coeff, self.x_coeff, self.y_coeff],
-            [Lgh_blw],
-        )
-
         self.model = AcadosModel()
 
         self.model.f_impl_expr = self.f_impl
@@ -200,12 +105,15 @@ class mpcc_ode_model:
         self.model.cost_expr_ext_cost = self.cost_expr
         self.model.cost_expr_ext_cost_e = self.cost_expr_e
 
-        self.model.con_h_expr_0 = vertcat(
-            self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
-        )
-        self.model.con_h_expr = vertcat(
-            self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
-        )
+        self.model.con_h_expr_0 = vertcat(self.cbf_con_abv, self.cbf_con_blw)
+        self.model.con_h_expr = vertcat(self.cbf_con_abv, self.cbf_con_blw)
+
+        # self.model.con_h_expr_0 = vertcat(
+        #     self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
+        # )
+        # self.model.con_h_expr = vertcat(
+        #     self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
+        # )
 
         # store meta information
         self.model.x_labels = [
@@ -218,6 +126,8 @@ class mpcc_ode_model:
         ]
         self.model.u_labels = ["$ax$", "$ay$", "$sddot$"]
         self.model.t_label = "$t$ [s]"
+
+        self.add_debugs()
 
         return self.model
 
@@ -241,8 +151,8 @@ class mpcc_ode_model:
     def setup_mpcc(self, params):
 
         degree = 3
-        n_knots = 11
-        self.v = MX.sym("v")
+        n_knots = params["mpc_ref_samples"]
+        v = MX.sym("v")
         self.x_coeff = MX.sym("x_coeffs", n_knots)
         self.y_coeff = MX.sym("y_coeffs", n_knots)
         # arc_len_knots = DM([1.0] * 11)
@@ -250,38 +160,44 @@ class mpcc_ode_model:
 
         self.arc_len_knots = np.linspace(0, params["ref_length_size"], n_knots)
         # arc_len_knots = np.linspace(0, 17.0385372, 11)
-        self.arc_len_knots = np.concatenate(
-            (
-                np.ones((4,)) * self.arc_len_knots[0],
-                self.arc_len_knots[2:-2],
-                np.ones((4,)) * self.arc_len_knots[-1],
-            )
-        )
 
-
-        # n_interior = n_knots - 2 * (degree + 1) # 15 - 8 = 7
-        # inner_knots = np.linspace(0, params["ref_length_size"], n_interior + 2)
-
-        # self.arc_len_knots = np.concatenate([
-        #     [inner_knots[0]] * degree,
-        #     inner_knots,
-        #     [inner_knots[-1]] * degree
-        # ])
+        # self.arc_len_knots = np.concatenate(
+        #     (
+        #         np.ones((4,)) * self.arc_len_knots[0],
+        #         self.arc_len_knots[2:-2],
+        #         np.ones((4,)) * self.arc_len_knots[-1],
+        #     )
+        # )
 
         # 1 denotes the multiplicity of the knots at the ends
         # don't need clamped so leave as 1
-        self.x_spline_mx = bspline(
-            self.v, self.x_coeff, [list(self.arc_len_knots)], [degree], 1, {}
-        )
-        self.y_spline_mx = bspline(
-            self.v, self.y_coeff, [list(self.arc_len_knots)], [degree], 1, {}
-        )
+        # self.x_spline_mx = bspline(
+        #     v, self.x_coeff, [list(self.arc_len_knots)], [degree], 1, {}
+        # )
+        # self.y_spline_mx = bspline(
+        #     v, self.y_coeff, [list(self.arc_len_knots)], [degree], 1, {}
+        # )
 
-        self.spline_x = Function("xr", [self.v, self.x_coeff], [self.x_spline_mx], {})
-        self.spline_y = Function("yr", [self.v, self.y_coeff], [self.y_spline_mx], {})
 
-        self.xr = self.spline_x(self.s1, self.x_coeff)
-        self.yr = self.spline_y(self.s1, self.y_coeff)
+        # self.spline_x = Function("xr", [v, self.x_coeff], [self.x_spline_mx], {})
+        # self.spline_y = Function("yr", [v, self.y_coeff], [self.y_spline_mx], {})
+
+        # self.xr = self.spline_x(self.s1, self.x_coeff)
+        # self.yr = self.spline_y(self.s1, self.y_coeff)
+
+        x = MX.sym('x', 1, 1)
+        y = MX.sym('y', 1, 1)
+
+        self.interp_x = interpolant("interp_x", "bspline", [self.arc_len_knots.tolist()])
+        self.interp_exp_x = self.interp_x(x, self.x_coeff)
+        self.xr_func = Function('xr', [x, self.x_coeff], [self.interp_exp_x])
+        
+        self.interp_y = interpolant("interp_y", "bspline", [self.arc_len_knots.tolist()])
+        self.interp_exp_y = self.interp_y(y, self.y_coeff)
+        self.yr_func = Function('yr', [y, self.y_coeff], [self.interp_exp_y])
+
+        self.xr = self.xr_func(self.s1, self.x_coeff)
+        self.yr = self.yr_func(self.s1, self.y_coeff)
 
         self.xr_dot = jacobian(self.xr, self.s1)
         self.yr_dot = jacobian(self.yr, self.s1)
@@ -342,12 +258,21 @@ class mpcc_ode_model:
         )
 
         self.v = self.Ql_c * self.e_c**2 + self.Ql_l * self.e_l**2
-        self.v_dot = (
-            jacobian(self.v, self.x) @ self.f
-            + jacobian(self.v, self.x) @ self.g @ self.u
-        )
+        self.lfv = jacobian(self.v, self.x) @ self.f
+        self.lfv2 = jacobian(self.lfv, self.x) @ self.f
+        self.lglfv = jacobian(self.lfv, self.x) @ self.g[:, :-1]
 
-        self.lyap_con = self.v_dot + self.gamma * self.v
+        # self.lfv = jacobian(self.v, self.x) @ self.f
+        # self.v_dot = self.lfv + self.lgvu
+
+        lambda1 = 2.0
+        lambda2 = 2.0
+        # self.psi1 = self.lfv + lambda1 * self.v
+        # self.psi2 = self.lfv2 + self.lglfv @ self.u + lambda1 * self.lfv + lambda2 * self.psi1
+        self.psi2 = self.lfv2 + self.lglfv @ self.u[:-1] + (lambda1 + lambda2) * self.lfv + lambda1*lambda2*self.v
+        self.lgvu = self.lglfv @ self.u[:-1]
+        self.lgv = self.lglfv
+        self.lyap_con = self.psi2
 
     def cbf(self, params):
         self.d_abv_coeff = MX.sym("d_above_coeffs", params["tube_poly_degree"] + 1)
@@ -408,6 +333,65 @@ class mpcc_ode_model:
             + self.h_dot_blw @ self.g @ self.u
             + self.alpha_blw * self.h_blw
         )
+
+    def add_debugs(self):
+        self.debug = DebugRegistry()
+
+        self.debug.add("xr", self.xr)
+        self.debug.add("yr", self.yr)
+        self.debug.add("xr_dot", self.xr_dot)
+        self.debug.add("yr_dot", self.yr_dot)
+        self.debug.add("phi_r", self.phi_r)
+
+        self.debug.add("e_c", self.e_c)
+        self.debug.add("e_l", self.e_l)
+
+        self.debug.add("signed_d", self.signed_d)
+        self.debug.add("p_abv", self.p_abv)
+        self.debug.add("p_blw", self.p_blw)
+
+        self.debug.add("d_abv", self.d_abv)
+        self.debug.add("d_blw", self.d_blw)
+
+        self.debug.add("h_abv", self.h_abv)
+        self.debug.add("h_blw", self.h_blw)
+        self.debug.add("Lfh_abv", self.Lfh_abv)
+        self.debug.add("Lfh_blw", self.Lfh_blw)
+
+        self.debug.add("Lghu_abv", self.h_dot_abv @ self.g @ self.u)
+        self.debug.add("Lghu_blw", self.h_dot_blw @ self.g @ self.u)
+
+        self.debug.add("Lfv", self.lfv)
+        self.debug.add("Lgv", self.lgv)
+        self.debug.add("Lgvu", self.lgvu)
+        # self.debug.add("lyap_dot", self.v_dot)
+        self.debug.add("lyap_const", self.lyap_con)
+
+        debug_inputs = [
+            self.x,
+            self.u,
+            self.x_coeff,
+            self.y_coeff,
+            self.d_abv_coeff,
+            self.d_blw_coeff,
+            self.Ql_c,
+            self.Ql_l,
+            self.gamma,
+        ]
+
+        folder = "cpp_generated_code"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        dir_name = os.path.join(script_dir, folder)
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+
+        current_dir = os.getcwd()
+        os.chdir(dir_name)
+
+        self.debug.generate_c("mpcc_casadi_double_integrator_internals.cpp", debug_inputs)
+
+        os.chdir(current_dir)
+
 
 if __name__ == "__main__":
     params = {"tube_poly_degree": 6}

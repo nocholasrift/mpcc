@@ -59,8 +59,10 @@ def create_ocp(yaml_file):
     ocp.model.cost_expr_ext_cost = model.cost_expr_ext_cost
     ocp.model.cost_expr_ext_cost_e = model.cost_expr_ext_cost_e
 
-    con_upper_bounds = np.array([0, 1e6, 1e6])
-    con_lower_bounds = np.array([-1e6, 0, 0])
+    con_upper_bounds = np.array([1e6, 1e6])
+    con_lower_bounds = np.array([0, 0])
+    # con_upper_bounds = np.array([0, 1e6, 1e6])
+    # con_lower_bounds = np.array([-1e6, 0, 0])
 
     # constraint bounds
     ocp.constraints.uh_0 = con_upper_bounds
@@ -69,26 +71,26 @@ def create_ocp(yaml_file):
     ocp.constraints.lh = con_lower_bounds
 
     # set clf soft constraint
-    ocp.constraints.lsh_0 = np.zeros((1,))
-    ocp.constraints.ush_0 = np.zeros((1,))
-    ocp.constraints.idxsh_0 = np.array([0])
+    # ocp.constraints.lsh_0 = np.zeros((1,))
+    # ocp.constraints.ush_0 = np.zeros((1,))
+    # ocp.constraints.idxsh_0 = np.array([0])
+    #
+    # ocp.constraints.lsh = np.zeros((1,))
+    # ocp.constraints.ush = np.zeros((1,))
+    # ocp.constraints.idxsh = np.array([0])
 
-    ocp.constraints.lsh = np.zeros((1,))
-    ocp.constraints.ush = np.zeros((1,))
-    ocp.constraints.idxsh = np.array([0])
-
-    grad_cost = 100
-    hess_cost = 1
-
-    ocp.cost.Zl_0 = hess_cost * np.ones((1,))
-    ocp.cost.Zu_0 = hess_cost * np.ones((1,))
-    ocp.cost.zl_0 = grad_cost * np.ones((1,))
-    ocp.cost.zu_0 = grad_cost * np.ones((1,))
-
-    ocp.cost.Zl = hess_cost * np.ones((1,))
-    ocp.cost.Zu = hess_cost * np.ones((1,))
-    ocp.cost.zl = grad_cost * np.ones((1,))
-    ocp.cost.zu = grad_cost * np.ones((1,))
+    # grad_cost = 100
+    # hess_cost = 1
+    #
+    # ocp.cost.Zl_0 = hess_cost * np.ones((1,))
+    # ocp.cost.Zu_0 = hess_cost * np.ones((1,))
+    # ocp.cost.zl_0 = grad_cost * np.ones((1,))
+    # ocp.cost.zu_0 = grad_cost * np.ones((1,))
+    #
+    # ocp.cost.Zl = hess_cost * np.ones((1,))
+    # ocp.cost.Zu = hess_cost * np.ones((1,))
+    # ocp.cost.zl = grad_cost * np.ones((1,))
+    # ocp.cost.zu = grad_cost * np.ones((1,))
 
     max_acc = 3.0
     ocp.constraints.lbu = np.array([-max_acc, -max_acc, -max_acc])
@@ -141,40 +143,32 @@ def create_ocp(yaml_file):
     # ocp.solver_options.qp_solver_iter_max = 100
     # ocp.solver_options.globalization_line_search_use_sufficient_descent = True
 
-    opts = {"cpp": True, "with_header": True}
 
-    dir_name = "cpp_generated_code"
-    if not os.path.exists(dir_name):
-        os.mkdir(dir_name)
-
-    current_dir = os.getcwd()
-    os.chdir(dir_name)
-    mpcc_model.compute_xr.generate("compute_xr.cpp", opts)
-    mpcc_model.compute_yr.generate("compute_yr.cpp", opts)
-    mpcc_model.compute_spline_x.generate("compute_spline_x.cpp", opts)
-    mpcc_model.compute_spline_y.generate("compute_spline_y.cpp", opts)
-
-    mpcc_model.compute_obs_dirx.generate("compute_obs_dirx.cpp", opts)
-    mpcc_model.compute_obs_diry.generate("compute_obs_diry.cpp", opts)
-
-    mpcc_model.compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
-    mpcc_model.compute_yrdot.generate("compute_yrdot.cpp", opts)
-    mpcc_model.compute_xrdot.generate("compute_xrdot.cpp", opts)
-    mpcc_model.compute_signed_d.generate("compute_signed_d.cpp", opts)
-    mpcc_model.compute_hdot_abv.generate("compute_hdot_abv.cpp", opts)
-    mpcc_model.compute_hdot_blw.generate("compute_hdot_blw.cpp", opts)
-    mpcc_model.compute_d_abv.generate("compute_d_abv.cpp", opts)
-    mpcc_model.compute_d_blw.generate("compute_d_blw.cpp", opts)
-
-    mpcc_model.compute_p_abv.generate("compute_p_abv.cpp", opts)
-    mpcc_model.compute_p_blw.generate("compute_p_blw.cpp", opts)
-
-    mpcc_model.compute_lfh_abv.generate("compute_lfh_abv.cpp", opts)
-    mpcc_model.compute_lgh_abv.generate("compute_lgh_abv.cpp", opts)
-    mpcc_model.compute_cbf_blw.generate("compute_cbf_blw.cpp", opts)
-    mpcc_model.compute_lfh_blw.generate("compute_lfh_blw.cpp", opts)
-    mpcc_model.compute_lgh_blw.generate("compute_lgh_blw.cpp", opts)
-    os.chdir(current_dir)
+    # mpcc_model.compute_xr.generate("compute_xr.cpp", opts)
+    # mpcc_model.compute_yr.generate("compute_yr.cpp", opts)
+    # mpcc_model.compute_spline_x.generate("compute_spline_x.cpp", opts)
+    # mpcc_model.compute_spline_y.generate("compute_spline_y.cpp", opts)
+    #
+    # mpcc_model.compute_obs_dirx.generate("compute_obs_dirx.cpp", opts)
+    # mpcc_model.compute_obs_diry.generate("compute_obs_diry.cpp", opts)
+    #
+    # mpcc_model.compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
+    # mpcc_model.compute_yrdot.generate("compute_yrdot.cpp", opts)
+    # mpcc_model.compute_xrdot.generate("compute_xrdot.cpp", opts)
+    # mpcc_model.compute_signed_d.generate("compute_signed_d.cpp", opts)
+    # mpcc_model.compute_hdot_abv.generate("compute_hdot_abv.cpp", opts)
+    # mpcc_model.compute_hdot_blw.generate("compute_hdot_blw.cpp", opts)
+    # mpcc_model.compute_d_abv.generate("compute_d_abv.cpp", opts)
+    # mpcc_model.compute_d_blw.generate("compute_d_blw.cpp", opts)
+    #
+    # mpcc_model.compute_p_abv.generate("compute_p_abv.cpp", opts)
+    # mpcc_model.compute_p_blw.generate("compute_p_blw.cpp", opts)
+    #
+    # mpcc_model.compute_lfh_abv.generate("compute_lfh_abv.cpp", opts)
+    # mpcc_model.compute_lgh_abv.generate("compute_lgh_abv.cpp", opts)
+    # mpcc_model.compute_cbf_blw.generate("compute_cbf_blw.cpp", opts)
+    # mpcc_model.compute_lfh_blw.generate("compute_lfh_blw.cpp", opts)
+    # mpcc_model.compute_lgh_blw.generate("compute_lgh_blw.cpp", opts)
 
     return ocp
 

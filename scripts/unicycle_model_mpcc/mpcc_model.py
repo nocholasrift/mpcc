@@ -15,7 +15,29 @@ from casadi import (
     bspline,
     Function,
     DM,
+    CodeGenerator
 )
+
+class DebugRegistry:
+    def __init__(self):
+        self.exprs = {}
+
+    def add(self, name, expr):
+        self.exprs[name] = expr
+
+    def build_functions(self, inputs):
+        funcs = {}
+        for name, expr in self.exprs.items():
+            funcs[name] = Function(name, inputs, [expr])
+        return funcs
+
+    def generate_c(self, filename, inputs):
+        opts = {"cpp": True, "with_header": True}
+        C = CodeGenerator(filename, opts)
+        for name, expr in self.exprs.items():
+            f = Function(name, inputs, [expr])
+            C.add(f)
+        C.generate()
 
 
 def export_mpcc_ode_model_spline_param() -> AcadosModel:
@@ -165,18 +187,44 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
 
     arc_len_knots = np.linspace(0, params["ref_length_size"], params["mpc_ref_samples"])
     # arc_len_knots = np.linspace(0, 17.0385372, 11)
-    arc_len_knots = np.concatenate(
-        (
-            np.ones((4,)) * arc_len_knots[0],
-            arc_len_knots[2:-2],
-            np.ones((4,)) * arc_len_knots[-1],
-        )
-    )
+    # arc_len_knots = np.concatenate(
+    #     (
+    #         np.ones((4,)) * arc_len_knots[0],
+    #         arc_len_knots[2:-2],
+    #         np.ones((4,)) * arc_len_knots[-1],
+    #     )
+    # )
 
     # 1 denotes the multiplicity of the knots at the ends
     # don't need clamped so leave as 1
-    x_spline_mx = bspline(v, x_coeff, [list(arc_len_knots)], [3], 1, {})
-    y_spline_mx = bspline(v, y_coeff, [list(arc_len_knots)], [3], 1, {})
+    # x_spline_mx = bspline(v, x_coeff, [list(arc_len_knots)], [3], 1, {})
+    # y_spline_mx = bspline(v, y_coeff, [list(arc_len_knots)], [3], 1, {})
+
+    # spline_x = Function("xr", [v, x_coeff], [x_spline_mx], {})
+    # spline_y = Function("yr", [v, y_coeff], [y_spline_mx], {})
+    #
+    # xr = spline_x(s1, x_coeff)
+    # yr = spline_y(s1, y_coeff)
+    #
+    # xr_dot = jacobian(xr, s1)
+    # yr_dot = jacobian(yr, s1)
+
+    xspl = MX.sym('x', 1, 1)
+    yspl = MX.sym('y', 1, 1)
+
+    interp_x = interpolant("interp_x", "bspline", [arc_len_knots.tolist()])
+    interp_exp_x = interp_x(xspl, x_coeff)
+    xr_func = Function('xr', [xspl, x_coeff], [interp_exp_x])
+    
+    interp_y = interpolant("interp_y", "bspline", [arc_len_knots.tolist()])
+    interp_exp_y = interp_y(yspl, y_coeff)
+    yr_func = Function('yr', [yspl, y_coeff], [interp_exp_y])
+
+    xr = xr_func(s1, x_coeff)
+    yr = yr_func(s1, y_coeff)
+
+    xr_dot = jacobian(xr, s1)
+    yr_dot = jacobian(yr, s1)
 
     d_abv = 0
     d_blw = 0
@@ -184,14 +232,6 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
         d_abv = d_abv + (d_abv_coeff[i] * s1**i)
         d_blw = d_blw + (d_blw_coeff[i] * s1**i)
 
-    spline_x = Function("xr", [v, x_coeff], [x_spline_mx], {})
-    spline_y = Function("yr", [v, y_coeff], [y_spline_mx], {})
-
-    xr = spline_x(s1, x_coeff)
-    yr = spline_y(s1, y_coeff)
-
-    xr_dot = jacobian(xr, s1)
-    yr_dot = jacobian(yr, s1)
 
     # phi_r = atan2(xr_dot, yr_dot)
     phi_r = atan2(yr_dot, xr_dot)
@@ -305,7 +345,11 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     gamma = MX.sym("gamma")
 
     v = Ql_c * e_c**2 + Ql_l * e_l**2  # + Q_s * (sdot1 - v1) ** 2
-    v_dot = jacobian(v, x) @ f + jacobian(v, x) @ g @ u
+    lfv = jacobian(v, x) @ f
+    lgv = jacobian(v, x) @ g
+    lgvu = jacobian(v, x) @ g @ u
+    # v_dot = jacobian(v, x) @ f + jacobian(v, x) @ g @ u
+    v_dot = lfv + lgvu
 
     lyap_con = v_dot + gamma * v
 
@@ -324,45 +368,6 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
         gamma,
     )
 
-    compute_cbf_abv = Function(
-        "h_abv",
-        [x, d_abv_coeff, x_coeff, y_coeff],
-        [h_abv],
-    )
-
-    compute_lfh_abv = Function(
-        "lfh_abv",
-        [x, d_abv_coeff, x_coeff, y_coeff],
-        [Lfh_abv],
-    )
-
-    Lgh_abv = h_dot_abv @ g
-    compute_lgh_abv = Function(
-        "lgh_abv",
-        [x, d_abv_coeff, x_coeff, y_coeff],
-        [Lgh_abv],
-    )
-
-    compute_cbf_blw = Function(
-        "h_blw",
-        [x, d_blw_coeff, x_coeff, y_coeff],
-        [h_blw],
-    )
-
-    compute_lfh_blw = Function(
-        "lfh_blw",
-        [x, d_blw_coeff, x_coeff, y_coeff],
-        [Lfh_blw],
-    )
-
-    Lgh_blw = h_dot_blw @ g
-    compute_lgh_blw = Function(
-        "lgh_blw",
-        [x, d_blw_coeff, x_coeff, y_coeff],
-        [Lgh_blw],
-    )
-
-
     model = AcadosModel()
     model.f_impl_expr = f_impl
     model.f_expl_expr = f_expl
@@ -375,11 +380,11 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     model.name = model_name
 
     # no setting cbf for con_h_expr_e since no u in final step
-    # model.con_h_expr_0 = vertcat(con_abv, con_blw, lyap_con)
-    # model.con_h_expr = vertcat(con_abv, con_blw, lyap_con)
+    model.con_h_expr_0 = vertcat(con_abv, con_blw)
+    model.con_h_expr = vertcat(con_abv, con_blw)
 
-    model.con_h_expr_0 = vertcat(lyap_con)
-    model.con_h_expr = vertcat(lyap_con)
+    # model.con_h_expr_0 = vertcat(lyap_con)
+    # model.con_h_expr = vertcat(lyap_con)
 
     # store meta information
     model.x_labels = [
@@ -393,20 +398,60 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     model.u_labels = ["$a$", "$w$", "$sddot$"]
     model.t_label = "$t$ [s]"
 
-    opts = {"cpp": True, "with_header": True}
+    debug = DebugRegistry()
 
-    dir_name = "cpp_generated_code"
+    debug.add("xr", xr)
+    debug.add("yr", yr)
+    debug.add("xr_dot", xr_dot)
+    debug.add("yr_dot", yr_dot)
+    debug.add("phi_r", phi_r)
+
+    debug.add("e_c", e_c)
+    debug.add("e_l", e_l)
+
+    debug.add("signed_d", signed_d)
+    debug.add("p_abv", p_abv)
+    debug.add("p_blw", p_blw)
+
+    debug.add("d_abv", d_abv)
+    debug.add("d_blw", d_blw)
+
+    debug.add("h_abv", h_abv)
+    debug.add("h_blw", h_blw)
+    debug.add("Lfh_abv", Lfh_abv)
+    debug.add("Lfh_blw", Lfh_blw)
+
+    debug.add("Lghu_abv", h_dot_abv @ g @ u)
+    debug.add("Lghu_blw", h_dot_blw @ g @ u)
+
+    debug.add("Lfv", lfv)
+    debug.add("Lgv", lgv)
+    debug.add("Lgvu", lgvu)
+    debug.add("lyap_const", lyap_con)
+
+    debug_inputs = [
+        x,
+        u,
+        x_coeff,
+        y_coeff,
+        d_abv_coeff,
+        d_blw_coeff,
+        Ql_c,
+        Ql_l,
+        gamma,
+    ]
+
+    folder = "cpp_generated_code"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    dir_name = os.path.join(script_dir, folder)
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
 
     current_dir = os.getcwd()
     os.chdir(dir_name)
-    compute_cbf_abv.generate("compute_cbf_abv.cpp", opts)
-    compute_lfh_abv.generate("compute_lfh_abv.cpp", opts)
-    compute_lgh_abv.generate("compute_lgh_abv.cpp", opts)
-    compute_cbf_blw.generate("compute_cbf_blw.cpp", opts)
-    compute_lfh_blw.generate("compute_lfh_blw.cpp", opts)
-    compute_lgh_blw.generate("compute_lgh_blw.cpp", opts)
+
+    debug.generate_c("mpcc_casadi_unicycle_internals.cpp", debug_inputs)
+
     os.chdir(current_dir)
 
     return model
