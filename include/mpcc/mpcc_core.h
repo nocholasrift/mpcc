@@ -5,13 +5,14 @@
 #include <mpcc/types.h>
 
 #include <map>
-#include <memory>
+#include <variant>
 
 namespace mpcc {
 enum class MPCType { kDoubleIntegrator, kUnicycle };
 
 class MPCCore {
  public:
+  using AnyHorizon = std::variant<UnicycleMPCC::MPCHorizon, DIMPCC::MPCHorizon>;
   MPCCore();
 
   MPCCore(const MPCType& mpc_input_type);
@@ -76,8 +77,7 @@ class MPCCore {
   const std::array<Eigen::VectorXd, 2>& get_tubes() const;
   const std::array<Eigen::VectorXd, 2> get_state_limits() const;
   const std::array<Eigen::VectorXd, 2> get_input_limits() const;
-  MPCHorizon get_horizon() const;
-  const std::array<double, 2> get_mpc_command() const;
+  AnyHorizon get_horizon() const;
   const std::map<std::string, double>& get_params() const;
   Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
                                const Eigen::VectorXd& control,
@@ -87,6 +87,22 @@ class MPCCore {
  private:
   void get_param(const std::map<std::string, double>& params,
                  const std::string& key, double& value);
+
+  // wizardry to wrap varient visit lambda function for mpc
+  // using decltype(auto) to ensure constness is not stripped away
+  // thanks to template argument deduction, don't need to use <> syntax
+  // when calling call_mpc
+  template <typename Callable>
+  decltype(auto) call_mpc(Callable&& func) {
+    return std::visit([&](auto& impl) -> decltype(auto) { return func(impl); },
+                      _mpc);
+  }
+
+  template <typename Callable>
+  decltype(auto) call_mpc(Callable&& func) const {
+    return std::visit(
+        [&](const auto& impl) -> decltype(auto) { return func(impl); }, _mpc);
+  }
 
  private:
   double _dt{0.1};
@@ -116,7 +132,8 @@ class MPCCore {
 
   std::map<std::string, double> _params;
 
-  std::unique_ptr<MPCBase> _mpc;
+  // std::unique_ptr<MPCBase> _mpc;
+  std::variant<UnicycleMPCC, DIMPCC> _mpc;
 
   MPCType _mpc_input_type = MPCType::kUnicycle;
 };

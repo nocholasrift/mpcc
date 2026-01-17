@@ -15,9 +15,9 @@ using Polynomial   = types::Polynomial;
 using Spline       = types::Spline;
 using StateHorizon = types::StateHorizon;
 using InputHorizon = types::InputHorizon;
-using MPCHorizon   = types::MPCHorizon;
-using Trajectory   = types::Trajectory;
-using View         = Trajectory::View;
+// using MPCHorizon   = types::MPCHorizon;
+using Trajectory = types::Trajectory;
+using View       = Trajectory::View;
 
 namespace py = pybind11;
 PYBIND11_MAKE_OPAQUE(std::vector<Eigen::VectorXd>);
@@ -68,20 +68,45 @@ PYBIND11_MODULE(py_mpcc, m) {
   py::class_<StateHorizon>(m, "StateHorizon")
       .def_readwrite("xs", &StateHorizon::xs)
       .def_readwrite("ys", &StateHorizon::ys)
-      .def_readwrite("vs_x", &StateHorizon::vs_x)
-      .def_readwrite("vs_y", &StateHorizon::vs_y)
       .def_readwrite("arclens", &StateHorizon::arclens)
       .def_readwrite("arclens_dot", &StateHorizon::arclens_dot);
 
   py::class_<InputHorizon>(m, "InputHorizon")
-      .def_readwrite("accs_x", &InputHorizon::accs_x)
-      .def_readwrite("accs_y", &InputHorizon::accs_y)
       .def_readwrite("arclens_ddot", &InputHorizon::arclens_ddot);
 
-  py::class_<MPCHorizon>(m, "MPCHorizon")
-      .def_readwrite("states", &MPCHorizon::states)
-      .def_readwrite("inputs", &MPCHorizon::inputs)
-      .def_readwrite("length", &MPCHorizon::length);
+  // Unicycle specific horizons
+  py::class_<UnicycleMPCC::StateHorizon, StateHorizon>(m,
+                                                       "UnicycleStateHorizon")
+      .def_readwrite("thetas", &UnicycleMPCC::StateHorizon::thetas)
+      .def_readwrite("vs", &UnicycleMPCC::StateHorizon::vs);
+
+  py::class_<UnicycleMPCC::InputHorizon, InputHorizon>(m,
+                                                       "UnicycleInputHorizon")
+      .def_readwrite("angvels", &UnicycleMPCC::InputHorizon::angvels)
+      .def_readwrite("linaccs", &UnicycleMPCC::InputHorizon::linaccs);
+
+  py::class_<UnicycleMPCC::MPCHorizon>(m, "UnicycleHorizon")
+      .def_readwrite("states", &UnicycleMPCC::MPCHorizon::states)
+      .def_readwrite("inputs", &UnicycleMPCC::MPCHorizon::inputs)
+      .def_readwrite("length", &UnicycleMPCC::MPCHorizon::length)
+      .def("get_state_at_step", &UnicycleMPCC::MPCHorizon::get_state_at_step)
+      .def("get_input_at_step", &UnicycleMPCC::MPCHorizon::get_input_at_step);
+
+  // Double Integrator specific horizons
+  py::class_<DIMPCC::StateHorizon, StateHorizon>(m, "DIStateHorizon")
+      .def_readwrite("vs_x", &DIMPCC::StateHorizon::vs_x)
+      .def_readwrite("vs_y", &DIMPCC::StateHorizon::vs_y);
+
+  py::class_<DIMPCC::InputHorizon, InputHorizon>(m, "DIInputHorizon")
+      .def_readwrite("accs_x", &DIMPCC::InputHorizon::accs_x)
+      .def_readwrite("accs_y", &DIMPCC::InputHorizon::accs_y);
+
+  py::class_<DIMPCC::MPCHorizon>(m, "DIHorizon")
+      .def_readwrite("states", &DIMPCC::MPCHorizon::states)
+      .def_readwrite("inputs", &DIMPCC::MPCHorizon::inputs)
+      .def_readwrite("length", &DIMPCC::MPCHorizon::length)
+      .def("get_state_at_step", &DIMPCC::MPCHorizon::get_state_at_step)
+      .def("get_input_at_step", &DIMPCC::MPCHorizon::get_input_at_step);
 
   py::class_<MPCCore>(m, "MPCCore")
       .def(py::init<>())
@@ -97,7 +122,6 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def("get_horizon", &MPCCore::get_horizon)
       .def("solve", &MPCCore::solve)
       .def("get_trajectory", &MPCCore::get_trajectory)
-      .def("get_mpc_command", &MPCCore::get_mpc_command)
       .def("get_solver_status", &MPCCore::get_solver_status)
       .def("get_cbf_data", &MPCCore::get_cbf_data)
       .def("get_input_limits", &MPCCore::get_input_limits)

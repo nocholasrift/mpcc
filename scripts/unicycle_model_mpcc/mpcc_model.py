@@ -291,8 +291,10 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     # vector pointing towards the obstacle from the robot
     # roughly equal to norm of trajectory derivative since
     # lag error is nearly 0
-    obs_dirx = -yr_dot / sqrt(xr_dot**2 + yr_dot**2)
-    obs_diry = xr_dot / sqrt(xr_dot**2 + yr_dot**2)
+    obs_dirx = -sin(phi_r)
+    obs_diry = cos(phi_r)
+    # obs_dirx = -yr_dot / sqrt(xr_dot**2 + yr_dot**2)
+    # obs_diry = xr_dot / sqrt(xr_dot**2 + yr_dot**2)
 
     signed_d = (x1 - xr) * obs_dirx + (y1 - yr) * obs_diry
 
@@ -300,10 +302,10 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     # h_blw = signed_d - d_blw
 
     p_abv = obs_dirx * cos_theta + obs_diry * sin_theta + v1 * 0.05
-    h_abv = (d_abv - signed_d - 0.1) * exp(-p_abv)
+    h_abv = (d_abv - signed_d) * exp(-p_abv)
 
     p_blw = -obs_dirx * cos_theta - obs_diry * sin_theta + v1 * 0.05
-    h_blw = (signed_d - d_blw - 0.1) * exp(-p_blw)
+    h_blw = (signed_d - d_blw) * exp(-p_blw)
 
     f = vertcat(v1 * cos_theta, v1 * sin_theta, 0, 0, sdot1, 0)
     g = vertcat(
@@ -380,8 +382,11 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     model.name = model_name
 
     # no setting cbf for con_h_expr_e since no u in final step
-    model.con_h_expr_0 = vertcat(con_abv, con_blw)
-    model.con_h_expr = vertcat(con_abv, con_blw)
+    # model.con_h_expr_0 = vertcat(con_abv, con_blw)
+    # model.con_h_expr = vertcat(con_abv, con_blw)
+
+    model.con_h_expr_0 = vertcat(con_abv, con_blw, lyap_con)
+    model.con_h_expr = vertcat(con_abv, con_blw, lyap_con)
 
     # model.con_h_expr_0 = vertcat(lyap_con)
     # model.con_h_expr = vertcat(lyap_con)

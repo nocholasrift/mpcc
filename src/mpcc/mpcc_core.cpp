@@ -8,7 +8,7 @@
 using namespace mpcc;
 
 MPCCore::MPCCore() {
-  _mpc = std::make_unique<MPCC>();
+  _mpc = UnicycleMPCC();
 }
 
 MPCCore::MPCCore(const MPCType& mpc_input_type) {
@@ -17,11 +17,11 @@ MPCCore::MPCCore(const MPCType& mpc_input_type) {
   if (_mpc_input_type == MPCType::kUnicycle) {
     std::cout << termcolor::green << "[MPC Core] Using unicycle model"
               << termcolor::reset << std::endl;
-    _mpc = std::make_unique<MPCC>();
+    _mpc = UnicycleMPCC();
   } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
     std::cout << termcolor::green << "[MPC Core] Using double integrator model"
               << termcolor::reset << std::endl;
-    _mpc = std::make_unique<DIMPCC>();
+    _mpc = DIMPCC();
   } else {
     throw std::runtime_error(
         "Invalid MPC input type: " +
@@ -49,12 +49,14 @@ void MPCCore::load_params(const std::map<std::string, double>& params) {
 
   _params = params;
 
-  _mpc->load_params(params);
+  // _mpc->load_params(params);
+  call_mpc([&](auto& mpc) { mpc.load_params(params); });
 }
 
 void MPCCore::set_odom(const Eigen::Vector3d& odom) {
   _odom = odom;
-  _mpc->set_odom(odom);
+  // _mpc->set_odom(odom);
+  call_mpc([&](auto& mpc) { mpc.set_odom(odom); });
 }
 
 void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
@@ -79,11 +81,13 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
 
 // void MPCCore::set_tubes(const std::vector<Spline1D>& tubes)
 void MPCCore::set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {
-  _mpc->set_tubes(tubes);
+  // _mpc->set_tubes(tubes);
+  call_mpc([&](auto& mpc) { mpc.set_tubes(tubes); });
 }
 
 const std::array<Eigen::VectorXd, 2>& MPCCore::get_tubes() const {
-  return _mpc->get_tubes();
+  // return _mpc->get_tubes();
+  return call_mpc([&](auto& mpc) -> decltype(auto) { return mpc.get_tubes(); });
 }
 
 bool MPCCore::orient_robot() {
@@ -114,7 +118,8 @@ bool MPCCore::orient_robot() {
   // if error is larger than _prop_angle_thresh use proportional controller to
   // align
   if (fabs(e) > _prop_angle_thresh) {
-    _mpc->reset_horizon();
+    // _mpc->reset_horizon();
+    call_mpc([&](auto& mpc) { mpc.reset_horizon(); });
     _curr_vel = 0;
     _curr_angvel =
         std::max(-_max_angvel, std::min(_max_angvel, _prop_gain * e));
@@ -152,17 +157,10 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   types::Trajectory adjusted_traj =
       _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
 
-  // for (double s = 0; s < adjusted_traj.get_extended_length(); s += 0.1) {
-  //   Eigen::Vector2d der = adjusted_traj(s, 1);
-  //   std::cout << s << ":\t" << der.transpose() << "\t" << der.norm() << "\n";
-  // }
-
-  // std::cout << "cpp xs " << adjusted_traj.get_ctrls_x() << "\n";
-  // std::cout << "cpp ys " << adjusted_traj.get_ctrls_y() << "\n";
-
-  auto start = std::chrono::high_resolution_clock::now();
-  std::array<double, 2> mpc_command =
-      _mpc->solve(state, adjusted_traj.view(), is_reverse);
+  auto start                        = std::chrono::high_resolution_clock::now();
+  std::array<double, 2> mpc_command = call_mpc([&](auto& mpc) {
+    return mpc.solve(state, adjusted_traj.view(), is_reverse);
+  });
 
   auto end = std::chrono::high_resolution_clock::now();
 
@@ -180,11 +178,14 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
 Eigen::VectorXd MPCCore::get_cbf_data(const Eigen::VectorXd& state,
                                       const Eigen::VectorXd& control,
                                       bool is_abv) const {
-  return _mpc->get_cbf_data(state, control, is_abv);
+  // return _mpc->get_cbf_data(state, control, is_abv);
+  return call_mpc(
+      [&](auto& mpc) { return mpc.get_cbf_data(state, control, is_abv); });
 }
 
 const bool MPCCore::get_solver_status() const {
-  return _mpc->get_solver_status();
+  // return _mpc->get_solver_status();
+  return call_mpc([&](auto& mpc) { return mpc.get_solver_status(); });
 }
 
 const double MPCCore::get_true_ref_len() const {
@@ -192,61 +193,25 @@ const double MPCCore::get_true_ref_len() const {
 }
 
 const Eigen::VectorXd& MPCCore::get_state() const {
-  return _mpc->get_state();
+  // return _mpc->get_state();
+  return call_mpc([&](auto& mpc) -> decltype(auto) { return mpc.get_state(); });
 }
 
 const std::array<Eigen::VectorXd, 2> MPCCore::get_state_limits() const {
-  return _mpc->get_state_limits();
+  // return _mpc->get_state_limits();
+  return call_mpc([&](auto& mpc) { return mpc.get_state_limits(); });
 }
 
 const std::array<Eigen::VectorXd, 2> MPCCore::get_input_limits() const {
-  return _mpc->get_input_limits();
+  return call_mpc([&](auto& mpc) { return mpc.get_input_limits(); });
 }
 
-MPCHorizon MPCCore::get_horizon() const {
+MPCCore::AnyHorizon MPCCore::get_horizon() const {
 
-  return _mpc->get_horizon();
-
-  // TODO: This horizon situation is a disaster and needs to be refactored
-  // std::vector<Eigen::VectorXd> ret;
-  // if (_mpc_input_type == MPCType::kUnicycle) {
-  //   MPCC* _mpc_unicycle = dynamic_cast<MPCC*>(_mpc.get());
-  //   ret.reserve(_mpc_unicycle->mpc_x.size());
-  //   if (_mpc_unicycle->mpc_x.size() == 0)
-  //     return ret;
-  //
-  //   double t = 0;
-  //   for (int i = 0; i < _mpc_unicycle->mpc_x.size() - 1; ++i) {
-  //     ret.emplace_back(7);
-  //     ret.back() << t, _mpc_unicycle->mpc_x[i], _mpc_unicycle->mpc_y[i],
-  //         _mpc_unicycle->mpc_theta[i], _mpc_unicycle->mpc_linvels[i],
-  //         _mpc_unicycle->mpc_linaccs[i], _mpc_unicycle->mpc_s[i];
-  //     t += _dt;
-  //   }
-  // } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
-  //   DIMPCC* _mpc_double_integrator = dynamic_cast<DIMPCC*>(_mpc.get());
-  //   ret.reserve(_mpc_double_integrator->mpc_x.size());
-  //   if (_mpc_double_integrator->mpc_x.size() == 0)
-  //     return ret;
-  //   double t = 0;
-  //   for (int i = 0; i < _mpc_double_integrator->mpc_x.size() - 1; ++i) {
-  //     ret.emplace_back(9);
-  //     ret.back() << t, _mpc_double_integrator->mpc_x[i],
-  //         _mpc_double_integrator->mpc_y[i], _mpc_double_integrator->mpc_vx[i],
-  //         _mpc_double_integrator->mpc_vy[i], _mpc_double_integrator->mpc_s[i],
-  //         _mpc_double_integrator->mpc_s_dot[i],
-  //         _mpc_double_integrator->mpc_ax[i], _mpc_double_integrator->mpc_ay[i];
-  //     t += _dt;
-  //   }
-  // }
-  //
-  // return ret;
+  // return _mpc->get_horizon();
+  return call_mpc([&](auto& mpc) -> AnyHorizon { return mpc.get_horizon(); });
 }
 
 const std::map<std::string, double>& MPCCore::get_params() const {
   return _params;
-}
-
-const std::array<double, 2> MPCCore::get_mpc_command() const {
-  return _mpc->get_command();
 }
