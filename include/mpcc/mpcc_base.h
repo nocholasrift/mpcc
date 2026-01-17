@@ -136,7 +136,6 @@ class MPCBase {
     /*************************************
   ********* INITIALIZE SOLUTION ********
   **************************************/
-    std::cout << "init state is: " << x0.transpose() << "\n";
     warm_start_mpc(x0);
 
     /*************************************
@@ -146,10 +145,13 @@ class MPCBase {
       return {0, 0};
     }
 
+    std::cout << "done setting solver params\n";
+
     /*************************************
   ************* RUN SOLVER *************
   **************************************/
     _solve_success = impl.run_acados_solver(x0);
+    std::cout << "done solving\n";
 
     /*************************************
   *********** PROCESS OUTPUT ***********
@@ -330,17 +332,17 @@ class MPCBase {
     ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x",
                     &xtraj[_mpc_steps * MPCImpl::kNX]);
 
-    std::cout << "xtraj is:\n";
-    for (int i = 0; i < xtraj.size(); i += MPCImpl::kNX) {
-      std::cout << i << " " << xtraj.segment(i, MPCImpl::kNX).transpose()
-                << "\n";
-    }
-
-    std::cout << "utraj is:\n";
-    for (int i = 0; i < utraj.size(); i += MPCImpl::kNU) {
-      std::cout << i << " " << utraj.segment(i, MPCImpl::kNU).transpose()
-                << "\n";
-    }
+    // std::cout << "xtraj is:\n";
+    // for (int i = 0; i < xtraj.size(); i += MPCImpl::kNX) {
+    //   std::cout << i << " " << xtraj.segment(i, MPCImpl::kNX).transpose()
+    //             << "\n";
+    // }
+    //
+    // std::cout << "utraj is:\n";
+    // for (int i = 0; i < utraj.size(); i += MPCImpl::kNU) {
+    //   std::cout << i << " " << utraj.segment(i, MPCImpl::kNU).transpose()
+    //             << "\n";
+    // }
 
     // _prev_x0 = xtraj;
     // _prev_u0 = utraj;
