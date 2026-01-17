@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mpcc/mpcc_base.h>
+#include <mpcc/types.h>
 #include <cstdlib>
 
 #include <Eigen/Dense>
@@ -14,19 +15,74 @@
 namespace mpcc {
 using TrajectoryView = types::Trajectory::View;
 
-class MPCC : public MPCBase {
+class UnicycleMPCC : public MPCBase<UnicycleMPCC> {
+  friend class MPCBase<UnicycleMPCC>;
+
  public:
-  MPCC();
-  virtual ~MPCC() override;
+  static constexpr uint16_t kNX = UNICYCLE_MODEL_MPCC_NX;
+#ifdef UNICYCLE_MODEL_UnicycleMPCC_NS
+  static constexpr uint16_t kNS = UNICYCLE_MODEL_MPCC_NS;
+#endif
+  static constexpr uint16_t kNP   = UNICYCLE_MODEL_MPCC_NP;
+  static constexpr uint16_t kNU   = UNICYCLE_MODEL_MPCC_NU;
+  static constexpr uint16_t kNBX0 = UNICYCLE_MODEL_MPCC_NBX0;
 
-  virtual std::array<double, 2> solve(const Eigen::VectorXd& state,
-                                      const TrajectoryView& reference,
-                                      bool is_reverse = false) override;
+  static constexpr uint8_t kIndX        = 0;
+  static constexpr uint8_t kIndY        = 1;
+  static constexpr uint8_t kIndTheta    = 2;
+  static constexpr uint8_t kIndV        = 3;
+  static constexpr uint8_t kIndS        = 4;
+  static constexpr uint8_t kIndSDot     = 5;
+  static constexpr uint8_t kIndStateInc = 6;
 
-  virtual void load_params(
-      const std::map<std::string, double>& params) override;
+  static constexpr uint8_t kIndLinAcc   = 0;
+  static constexpr uint8_t kIndAngVel   = 1;
+  static constexpr uint8_t kIndSDDot    = 2;
+  static constexpr uint8_t kIndInputInc = 3;
+
+ public:
+  struct StateHorizon : public types::StateHorizon {
+   public:
+    Eigen::VectorXd thetas;
+    Eigen::VectorXd vs;
+
+    Eigen::Matrix<double, kNX, 1> get_state_at_step(unsigned int step) const {
+      if (step >= xs.size()) {
+        throw std::runtime_error(
+            "[MPCHorizon] requested state at step " + std::to_string(step) +
+            " for horizon of size " + std::to_string(xs.size()));
+      }
+      return {xs[step], ys[step],      thetas[step],
+              vs[step], arclens[step], arclens_dot[step]};
+    }
+  };
+
+  struct InputHorizon : public types::InputHorizon {
+   public:
+    Eigen::VectorXd angvels;
+    Eigen::VectorXd linaccs;
+
+    Eigen::Matrix<double, kNU, 1> get_input_at_step(unsigned int step) const {
+      if (step >= arclens_ddot.size()) {
+        throw std::runtime_error(
+            "[MPCHorizon] requested input at step " + std::to_string(step) +
+            " for horizon of size " + std::to_string(arclens_ddot.size()));
+      }
+      // return {angvels[step], linaccs[step], arclens_ddot[step]};
+      return {linaccs[step], angvels[step], arclens_ddot[step]};
+    }
+  };
+
+  using MPCHorizon = types::MPCHorizon<UnicycleMPCC>;
+
+  UnicycleMPCC();
+  virtual ~UnicycleMPCC();
+
+  void load_params(const std::map<std::string, double>& params);
+  // virtual void load_params(
+  //     const std::map<std::string, double>& params) override;
   /**********************************************************************
-   * Function: MPCC::load_params()
+   * Function: UnicycleMPCC::load_params()
    * Description: Loads parameters for the MPC controller
    * Parameters:
    * @param params: const std::map<std::string, double>&
@@ -41,7 +97,7 @@ class MPCC : public MPCBase {
   /***********************
    * Setters and Getters
    ***********************/
-  void reset_horizon() override;
+  virtual void reset_horizon() override;
 
   Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
                                const Eigen::VectorXd& control,
@@ -53,7 +109,7 @@ class MPCC : public MPCBase {
   virtual const std::array<Eigen::VectorXd, 2> get_input_limits()
       const override;
 
-  virtual MPCHorizon get_horizon() const override;
+  MPCHorizon get_horizon() const;
 
  public:
   // TOOD: make getter for these
@@ -69,19 +125,11 @@ class MPCC : public MPCBase {
   std::vector<double> mpc_linaccs;
   std::vector<double> mpc_s_ddots;
 
-  static constexpr uint16_t kNX = UNICYCLE_MODEL_MPCC_NX;
-#ifdef UNICYCLE_MODEL_MPCC_NS
-  static constexpr uint16_t kNS = UNICYCLE_MODEL_MPCC_NS;
-#endif
-  static constexpr uint16_t kNP   = UNICYCLE_MODEL_MPCC_NP;
-  static constexpr uint16_t kNU   = UNICYCLE_MODEL_MPCC_NU;
-  static constexpr uint16_t kNBX0 = UNICYCLE_MODEL_MPCC_NBX0;
-
  private:
   Eigen::VectorXd next_state(const Eigen::VectorXd& current_state,
                              const Eigen::VectorXd& control);
   /**********************************************************************
-   * Function: MPCC::next_state()
+   * Function: UnicycleMPCC::next_state()
    * Description: Calculates the next state of the robot given current
    * state and control input
    * Parameters:
@@ -91,9 +139,9 @@ class MPCC : public MPCBase {
    * Next state of the robot
    **********************************************************************/
 
-  void warm_start_no_u(double* x_init);
+  // void warm_start_no_u(double* x_init);
   /**********************************************************************
-   * Function: MPCC::warm_start_no_u()
+   * Function: UnicycleMPCC::warm_start_no_u()
    * Description: Warm starts the MPC solver with no control inputs
    * Parameters:
    * @param x_init: double*
@@ -104,9 +152,9 @@ class MPCC : public MPCBase {
    * a 0 control input
    **********************************************************************/
 
-  void warm_start_shifted_u(bool correct_perturb, const Eigen::VectorXd& state);
+  // void warm_start_shifted_u(bool correct_perturb, const Eigen::VectorXd& state);
   /**********************************************************************
-   * Function: MPCC::warm_start_shifted_u()
+   * Function: UnicycleMPCC::warm_start_shifted_u()
    * Description: Warm starts the MPC solver with shifted control inputs
    * Parameters:
    * @param correct_perturb: bool
@@ -120,9 +168,9 @@ class MPCC : public MPCBase {
    * real-time iteration, Gros et. al. for more details.
    **********************************************************************/
 
-  void process_solver_output();
+  // void process_solver_output();
   /**********************************************************************
-   * Function: MPCC::process_solver_output()
+   * Function: UnicycleMPCC::process_solver_output()
    * Description: Processes the output of the MPC solver
    * Parameters:
    * @param s: double
@@ -130,15 +178,12 @@ class MPCC : public MPCBase {
    * N/A
    **********************************************************************/
 
-  bool set_solver_parameters(const TrajectoryView& reference);
-  /**********************************************************************
-   * Function: MPCC::set_solver_parameters()
-   * Description: Sets the parameters for the MPC solver
-   * Parameters:
-   * @param ref: const std::vector<Spline1D>&
-   * Returns:
-   * bool - true if successful, false otherwise
-   **********************************************************************/
+  Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state);
+
+  bool run_acados_solver(const Eigen::VectorXd& initial_state);
+
+  std::array<double, 2> compute_mpc_vel_command(const Eigen::VectorXd& state,
+                                                const Eigen::VectorXd& u);
 
   // vs_x and vs_y must be _mpc_steps length prior
   void compute_world_frame_velocities(Eigen::VectorXd& vs_x,
@@ -148,20 +193,15 @@ class MPCC : public MPCBase {
   void compute_world_frame_accelerations(Eigen::VectorXd& accs_x,
                                          Eigen::VectorXd& accs_y) const;
 
+  void acados_capsule_update_params(const std::vector<double>& params,
+                                    unsigned int step);
+
+  void map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
+                                 const Eigen::VectorXd& utraj);
+
+  bool is_acados_ready() { return _acados_ocp_capsule != nullptr; }
+
  private:
-  static constexpr uint8_t kIndX        = 0;
-  static constexpr uint8_t kIndY        = 1;
-  static constexpr uint8_t kIndTheta    = 2;
-  static constexpr uint8_t kIndV        = 3;
-  static constexpr uint8_t kIndS        = 4;
-  static constexpr uint8_t kIndSDot     = 5;
-  static constexpr uint8_t kIndStateInc = 6;
-
-  static constexpr uint8_t kIndLinAcc   = 0;
-  static constexpr uint8_t kIndAngVel   = 1;
-  static constexpr uint8_t kIndSDDot    = 2;
-  static constexpr uint8_t kIndInputInc = 3;
-
   Eigen::VectorXd _prev_x0;
   Eigen::VectorXd _prev_u0;
 
@@ -175,31 +215,19 @@ class MPCC : public MPCBase {
   double _max_linacc;
   double _max_anga;
 
-  double _alpha_abv;
-  double _alpha_blw;
-  double _colinear;
-  double _padding;
+  // double _alpha_abv;
+  // double _alpha_blw;
+  // double _colinear;
+  // double _padding;
 
   double _s_dot;
 
-  double _gamma;
-  double _w_ql_lyap;
-  double _w_qc_lyap;
-
-  double _w_angvel;
-  double _w_angvel_d;
-  double _w_linvel_d;
-  double _w_ql;
-  double _w_qc;
-  double _w_q_speed;
-
   unsigned int iterations;
 
-  bool _use_cbf;
   bool _use_eigen;
-  bool _is_shift_warm;
+  // bool _is_shift_warm;
   bool _use_dyna_obs;
-  bool _has_run;
+  // bool _has_run;
 
   unicycle_model_mpcc_sim_solver_capsule* _acados_sim_capsule;
   unicycle_model_mpcc_solver_capsule* _acados_ocp_capsule;

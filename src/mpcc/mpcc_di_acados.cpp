@@ -1,8 +1,7 @@
 #include <mpcc/mpcc_di_acados.h>
-#include <mpcc/termcolor.hpp>
 
-#include <chrono>
 #include <cmath>
+#include <stdexcept>
 
 using namespace mpcc;
 
@@ -51,16 +50,16 @@ DIMPCC::DIMPCC() {
   _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
   _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
 
-  mpc_x.resize(_mpc_steps);
-  mpc_y.resize(_mpc_steps);
-  mpc_vx.resize(_mpc_steps);
-  mpc_vy.resize(_mpc_steps);
-  mpc_s.resize(_mpc_steps);
-  mpc_s_dot.resize(_mpc_steps);
+  mpc_x.resize(_mpc_steps + 1);
+  mpc_y.resize(_mpc_steps + 1);
+  mpc_vx.resize(_mpc_steps + 1);
+  mpc_vy.resize(_mpc_steps + 1);
+  mpc_s.resize(_mpc_steps + 1);
+  mpc_s_dot.resize(_mpc_steps + 1);
 
-  mpc_ax.resize(_mpc_steps - 1);
-  mpc_ay.resize(_mpc_steps - 1);
-  mpc_s_ddots.resize(_mpc_steps - 1);
+  mpc_ax.resize(_mpc_steps);
+  mpc_ay.resize(_mpc_steps);
+  mpc_s_ddots.resize(_mpc_steps);
 }
 
 DIMPCC::~DIMPCC() {
@@ -135,16 +134,16 @@ void DIMPCC::load_params(const std::map<std::string, double>& params) {
           std::to_string(status) + ". Exiting.");
     }
 
-    mpc_x.resize(_mpc_steps);
-    mpc_y.resize(_mpc_steps);
-    mpc_vx.resize(_mpc_steps);
-    mpc_vy.resize(_mpc_steps);
-    mpc_s.resize(_mpc_steps);
-    mpc_s_dot.resize(_mpc_steps);
+    mpc_x.resize(_mpc_steps + 1);
+    mpc_y.resize(_mpc_steps + 1);
+    mpc_vx.resize(_mpc_steps + 1);
+    mpc_vy.resize(_mpc_steps + 1);
+    mpc_s.resize(_mpc_steps + 1);
+    mpc_s_dot.resize(_mpc_steps + 1);
 
-    mpc_ax.resize(_mpc_steps - 1);
-    mpc_ay.resize(_mpc_steps - 1);
-    mpc_s_ddots.resize(_mpc_steps - 1);
+    mpc_ax.resize(_mpc_steps);
+    mpc_ay.resize(_mpc_steps);
+    mpc_s_ddots.resize(_mpc_steps);
 
     _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
     _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
@@ -156,25 +155,6 @@ int DIMPCC::initialize_acados() {
     double_integrator_mpcc_acados_free(_acados_ocp_capsule);
   }
 
-  // if (_acados_sim_capsule) {
-  //   double_integrator_mpcc_acados_free(_acados_ocp_capsule);
-  // }
-
-  // _acados_sim_capsule =
-  //     double_integrator_mpcc_acados_sim_solver_create_capsule();
-
-  // int status = double_integrator_mpcc_acados_sim_create(_acados_sim_capsule);
-  // if (status) {
-  //   return status;
-  // }
-  //
-  // // acados sim
-  // _sim_in   = double_integrator_mpcc_acados_get_sim_in(_acados_sim_capsule);
-  // _sim_out  = double_integrator_mpcc_acados_get_sim_out(_acados_sim_capsule);
-  // _sim_dims = double_integrator_mpcc_acados_get_sim_dims(_acados_sim_capsule);
-  // _sim_config =
-  //     double_integrator_mpcc_acados_get_sim_config(_acados_sim_capsule);
-  //
   _acados_ocp_capsule = double_integrator_mpcc_acados_create_capsule();
 
   if (_new_time_steps) {
@@ -229,322 +209,90 @@ Eigen::VectorXd DIMPCC::next_state(const Eigen::VectorXd& current_state,
                                    const Eigen::VectorXd& control) {
   Eigen::VectorXd ret(kNX);
 
-  double x1    = current_state(0);
-  double y1    = current_state(1);
-  double vx1   = current_state(2);
-  double vy1   = current_state(3);
-  double s1    = current_state(4);
-  double sdot1 = current_state(5);
+  double x1    = current_state(kIndX);
+  double y1    = current_state(kIndY);
+  double vx1   = current_state(kIndVx);
+  double vy1   = current_state(kIndVy);
+  double s1    = current_state(kIndS);
+  double sdot1 = current_state(kIndSDot);
 
-  double ax    = control(0);
-  double ay    = control(1);
-  double sddot = control(2);
+  double ax    = control(kIndAx);
+  double ay    = control(kIndAy);
+  double sddot = control(kIndSDDot);
 
-  ret(0) = x1 + vx1 * _dt;
-  ret(1) = y1 + vy1 * _dt;
-  ret(2) = std::max(std::min(vx1 + ax * _dt, _max_linvel), -_max_linvel);
-  ret(3) = std::max(std::min(vy1 + ay * _dt, _max_linvel), -_max_linvel);
-  ret(4) = s1 + sdot1 * _dt;
-  ret(5) = std::max(std::min(sdot1 + sddot * _dt, _max_linvel), -_max_linvel);
+  ret(kIndX)  = x1 + vx1 * _dt;
+  ret(kIndY)  = y1 + vy1 * _dt;
+  ret(kIndVx) = std::max(std::min(vx1 + ax * _dt, _max_linvel), -_max_linvel);
+  ret(kIndVy) = std::max(std::min(vy1 + ay * _dt, _max_linvel), -_max_linvel);
+  ret(kIndS)  = s1 + sdot1 * _dt;
+  ret(kIndSDot) =
+      std::max(std::min(sdot1 + sddot * _dt, _max_linvel), -_max_linvel);
 
   return ret;
 }
 
-void DIMPCC::warm_start_no_u(double* x_init) {
-  double u_init[kNU];
-  u_init[0] = 0.0;
-  u_init[1] = 0.0;
-  u_init[2] = 0.0;
-
-  x_init[5] = x_init[3];
-
-  for (int i = 0; i < _mpc_steps; ++i) {
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i, "x", x_init);
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i, "u", u_init);
-  }
-
-  ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x", x_init);
+void DIMPCC::acados_capsule_update_params(const std::vector<double>& params,
+                                          unsigned int step) {
+  assert(params.size() == kNP);
+  // pretty sure this function doesn't actually change the parameter data
+  // so the cast shouldn't cause any changes in params
+  double_integrator_mpcc_acados_update_params(
+      _acados_ocp_capsule, step, const_cast<double*>(params.data()),
+      params.size());
 }
 
-void DIMPCC::warm_start_shifted_u(bool correct_perturb,
-                                  const Eigen::VectorXd& state) {
-  double starting_s = _prev_x0[1 * kNX + 4];
-  if (correct_perturb) {
-    // std::cout << termcolor::red << "[MPCC] Guess pos. too far, correcting"
-    //           << termcolor::reset << std::endl;
-
-    Eigen::VectorXd curr = state;
-
-    // project forward previous control inputs, starting from true current
-    // state
-    for (int i = 0; i < _mpc_steps - 1; ++i) {
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i, "x", &curr[0]);
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i, "u",
-                      &_prev_u0[(i + 1) * kNU]);
-      curr = next_state(curr, _prev_u0.segment((i + 1) * kNU, kNU));
-      // std::cout << curr.transpose() << std::endl;
-    }
-
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps - 1, "x",
-                    &curr[0]);
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps - 1, "u",
-                    &_prev_u0[(_mpc_steps - 1) * kNU]);
-
-    curr = next_state(curr, _prev_u0.tail(kNU));
-    // std::cout << curr.transpose() << std::endl;
-
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x",
-                    &curr[0]);
-    // exit(0);
-  } else {
-    for (int i = 1; i < _mpc_steps; ++i) {
-      Eigen::VectorXd warm_state = _prev_x0.segment(i * kNX, kNX);
-      warm_state(4) -= starting_s;
-
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i - 1, "x",
-                      &warm_state[0]);
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i - 1, "u",
-                      &_prev_u0[i * kNU]);
-    }
-
-    Eigen::VectorXd xN_prev = _prev_x0.tail(kNX);
-    xN_prev(4) -= starting_s;
-
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps - 1, "x",
-                    &xN_prev[0]);
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps - 1, "u",
-                    &_prev_u0[(_mpc_steps - 1) * kNU]);
-
-    Eigen::VectorXd uN_prev = _prev_u0.tail(kNU);
-    Eigen::VectorXd xN      = next_state(xN_prev, uN_prev);
-
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x", &xN[0]);
-  }
-}
-
-bool DIMPCC::set_solver_parameters(const types::Trajectory::View& reference) {
-  double params[kNP];
-  auto& ctrls_x = reference.xs;
-  auto& ctrls_y = reference.ys;
-
-  int num_params =
-      ctrls_x.size() + ctrls_y.size() + _tubes[0].size() + _tubes[1].size() + 8;
-  if (num_params != kNP) {
-    std::cerr << termcolor::yellow << "[MPCC] reference size " << num_params
-              << " does not match acados parameter size " << kNP
-              << termcolor::reset << std::endl;
-
-    return false;
-  }
-
-  params[kNP - 8] = _w_qc;
-  params[kNP - 7] = _w_ql;
-  params[kNP - 6] = _w_q_speed;
-  params[kNP - 5] = _alpha_abv;
-  params[kNP - 4] = _alpha_blw;
-  params[kNP - 3] = _w_qc_lyap;
-  params[kNP - 2] = _w_ql_lyap;
-  params[kNP - 1] = _gamma;
-
-  for (int i = 0; i < ctrls_x.size(); ++i) {
-    params[i]                  = ctrls_x[i];
-    params[i + ctrls_x.size()] = ctrls_y[i];
-  }
-
-  for (int i = 0; i < _tubes[0].size(); ++i) {
-    params[i + 2 * ctrls_x.size()]                    = _tubes[0](i);
-    params[i + 2 * ctrls_x.size() + _tubes[0].size()] = _tubes[1](i);
-  }
-
-  for (int i = 0; i < _mpc_steps + 1; ++i)
-    double_integrator_mpcc_acados_update_params(_acados_ocp_capsule, i, params,
-                                                kNP);
-
-  return true;
-}
-
-std::array<double, 2> DIMPCC::solve(const Eigen::VectorXd& state,
-                                    const types::Trajectory::View& reference,
-                                    bool is_reverse) {
-  _solve_success = false;
-
-  if (!_acados_ocp_capsule) {
-    std::cerr << termcolor::yellow << "[MPCC] Parameters not yet loaded!"
-              << termcolor::reset << std::endl;
-  }
-
-  if (_tubes.size() == 0) {
-    std::cerr << "[MPCC] tubes are not set yet, mpc cannot run" << std::endl;
-    return {0, 0};
-  }
-
-  /*************************************
-  ********** INITIAL CONDITION *********
-  **************************************/
-  /*std::cout << termcolor::yellow << "RUNNING IN DIMPCC SOLVE!\n"*/
-  /*          << termcolor::reset;*/
-
-  if (state.size() != kNBX0) {
-    std::cerr << termcolor::yellow << "[MPCC] state size passed has size "
-              << state.size() << " but should be " << kNBX0 << termcolor::reset
-              << std::endl;
-    return {0, 0};
-  }
-
-  double lbx0[kNBX0];
-  double ubx0[kNBX0];
-
+Eigen::VectorXd DIMPCC::prepare_initial_state(const Eigen::VectorXd& state) {
   Eigen::VectorXd x0 = state;
-  x0(kIndS)          = 0.;
+  // x0(kIndS)          = 0.;
   if (x0.segment(2, 2).norm() < 1e-6) {
     x0(kIndVx) = 1e-6;
   }
 
-  memcpy(lbx0, &x0[0], kNBX0 * sizeof(double));
-  memcpy(ubx0, &x0[0], kNBX0 * sizeof(double));
+  return x0;
+}
 
-  ocp_nlp_constraints_model_set(_nlp_config, _nlp_dims, _nlp_in, 0, "lbx",
-                                lbx0);
-  ocp_nlp_constraints_model_set(_nlp_config, _nlp_dims, _nlp_in, 0, "ubx",
-                                ubx0);
-
-  /*************************************
-  ********* INITIALIZE SOLUTION ********
-  **************************************/
-
-  // in our case kNX = kNBX0
-  double x_init[kNX];
-  memcpy(x_init, lbx0, kNX * sizeof(double));
-
-  double u_init[kNU];
-  u_init[kIndAx]    = 0.0;
-  u_init[kIndAy]    = 0.0;
-  u_init[kIndSDDot] = 0.0;
-
-  // Eigen::Vector2d prev_pos = _prev_x0.head(2);
-  Eigen::Vector2d prev_pos = _prev_x0.segment(kNX, 2);
-  Eigen::Vector2d curr_pos = x0.head(2);
-
-  if (!_is_shift_warm)
-    warm_start_no_u(x_init);
-  else {
-    // warm_start_shifted_u(false, x0);
-    warm_start_shifted_u((prev_pos - curr_pos).norm() > 5e-2, x0);
-  }
-
-  /*************************************
-  ********* SET REFERENCE PARAMS *******
-  **************************************/
-
-  if (!set_solver_parameters(reference)) {
-    std::cout << "setting solver params failed\n";
-    return {0, 0};
-  }
-
-  /*************************************
-  ************* RUN SOLVER *************
-  **************************************/
-
-  // double elapsed_time = 0.0;
-  double timer;
-
+bool DIMPCC::run_acados_solver(const Eigen::VectorXd& initial_state) {
   // run at most 2 times, if first fails, try with simple initialization
-  for (int i = 0; i < 2; ++i) {
-    // timer for acados using chrono
-    auto start = std::chrono::high_resolution_clock::now();
-    int status = double_integrator_mpcc_acados_solve(_acados_ocp_capsule);
-    auto end   = std::chrono::high_resolution_clock::now();
+  int status               = 0;
+  unsigned int num_retries = 2;
+  for (int i = 0; i < num_retries; ++i) {
+    status = double_integrator_mpcc_acados_solve(_acados_ocp_capsule);
     // for some reason this causes problems in docker container, commenting
     // out for now
     // ocp_nlp_get(_nlp_config, _nlp_solver, "time_tot", &timer);
     // elapsed_time += timer;
 
     if (status == ACADOS_SUCCESS) {
-      // std::cout << "[MPCC] unicycle_model_mpcc_acados_solve(): SUCCESS! "
-      //           << std::chrono::duration<double>(end - start).count() << "s"
-      //           << std::endl;
 
       _is_shift_warm = true;
       _solve_success = true;
       break;
     } else {
       _is_shift_warm = false;
-      // std::cout << termcolor::red
-      //           << "[MPCC] unicycle_model_mpcc_acados_solve() failed with "
-      //              "status "
-      //           << status << termcolor::reset << std::endl;
-      // std::cout << "[MPCC] using simple warm start procedure" << std::endl;
-      // std::cout << "[MPCC] xinit is: " << x0.transpose() << std::endl;
-      // double h_val = get_cbf_data(x0, Eigen::Vector2d(), true)[0];
-      // std::cout << "[MPCC] cbf value: " << h_val << std::endl;
-
-      warm_start_no_u(x_init);
+      warm_start_no_u(initial_state);
     }
   }
 
-  /*************************************
-  *********** PROCESS OUTPUT ***********
-  **************************************/
+  return status == ACADOS_SUCCESS;
+}
 
-  double prev_angvel = _prev_u0[kIndS];
-  process_solver_output();
-  // std::cout << "mpc x[0] is " << _prev_x0.head(kNX).transpose() << std::endl;
-  // std::cout << "true x[0] is " << x0.transpose() << std::endl;
-  // std::cout << "mpc x[1] is " << _prev_x0.segment(kNX, kNX).transpose()
-  //           << std::endl;
-
-  _has_run = true;
-
-  _state << _prev_x0[kIndX], _prev_x0[kIndY], _prev_x0[kIndVx],
-      _prev_x0[kIndVy], 0, _prev_x0[kIndSDot];
+std::array<double, 2> DIMPCC::compute_mpc_vel_command(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& u) {
 
   double new_velx =
-      limit(_state[kIndVx], _state[kIndVx] + _prev_u0[kIndAx] * _dt,
-            _max_linacc, _dt);
+      limit(state[kIndVx], state[kIndVx] + u[kIndAx] * _dt, _max_linacc, _dt);
   double new_vely =
-      limit(_state[kIndVy], _state[kIndVy] + _prev_u0[kIndAy] * _dt,
-            _max_linacc, _dt);
+      limit(state[kIndVy], state[kIndVy] + u[kIndAy] * _dt, _max_linacc, _dt);
 
   // ensure velx and y are within input bounds
   new_velx = std::max(std::min(new_velx, _max_linvel), -_max_linvel);
   new_vely = std::max(std::min(new_vely, _max_linvel), -_max_linvel);
 
-  /*std::cout << "[MPCC] accelerations are: " << _prev_u0[kIndAx] << " "*/
-  /*          << _prev_u0[kIndAy] << std::endl;*/
-  /*std::cout << "[MPCC] Input is: " << new_velx << " " << new_vely << std::endl;*/
-
-  _cmd = {_prev_u0[0], _prev_u0[1]};
-
-  if (!_solve_success) {
-    std::cout << "[MPCC] SOLVER STATUS WAS INFEASIBLE!\n";
-  }
-
   return {new_velx, new_vely};
 }
 
-void DIMPCC::process_solver_output() {
-  // stored as x0, y0,..., x1, y1, ..., xN, yN, ...
-  Eigen::VectorXd xtraj((_mpc_steps + 1) * kNX);
-  Eigen::VectorXd utraj(_mpc_steps * kNU);
-  for (int i = 0; i < _mpc_steps; ++i) {
-    ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, i, "x", &xtraj[i * kNX]);
-    ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, i, "u", &utraj[i * kNU]);
-  }
-
-  ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x",
-                  &xtraj[_mpc_steps * kNX]);
-
-#ifdef UNICYCLE_MODEL_MPCC_NS
-  Eigen::VectorXd slacks(kNS);
-  // std::cout << "getting slacks " << NS << std::endl;
-  ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, 1, "sl", &slacks[0]);
-
-  /*std::cout << "[MPCC] Slack values are: " << slacks.transpose() << std::endl;*/
-#endif
-
-  _prev_x0 = xtraj;
-  _prev_u0 = utraj;
-
+void DIMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
+                                       const Eigen::VectorXd& utraj) {
   for (int i = 0; i <= _mpc_steps; ++i) {
     mpc_x[i]     = xtraj[kIndX + i * kIndStateInc];
     mpc_y[i]     = xtraj[kIndY + i * kIndStateInc];
@@ -577,10 +325,10 @@ const std::array<Eigen::VectorXd, 2> DIMPCC::get_input_limits() const {
   return {umin, umax};
 }
 
-mpcc::types::MPCHorizon DIMPCC::get_horizon() const {
+DIMPCC::MPCHorizon DIMPCC::get_horizon() const {
 
   // sadly c++17 does not support designated initializers 😭
-  mpcc::MPCHorizon horizon;
+  DIMPCC::MPCHorizon horizon;
   horizon.states.xs          = utils::vector_to_eigen(mpc_x);
   horizon.states.ys          = utils::vector_to_eigen(mpc_y);
   horizon.states.vs_x        = utils::vector_to_eigen(mpc_vx);
@@ -591,12 +339,13 @@ mpcc::types::MPCHorizon DIMPCC::get_horizon() const {
   horizon.inputs.accs_x       = utils::vector_to_eigen(mpc_ax);
   horizon.inputs.accs_y       = utils::vector_to_eigen(mpc_ay);
   horizon.inputs.arclens_ddot = utils::vector_to_eigen(mpc_s_ddots);
-  horizon.length              = _mpc_steps;
+  horizon.length              = _mpc_steps + 1;
 
-  const auto N = _mpc_steps;
+  const auto N = _mpc_steps + 1;
 
   // these should all hold true by construction, mostly here for
   // future refactoring in case I screw something up down the line
+  assert(horizon.states.xs.size() == N);
   assert(horizon.states.ys.size() == N);
   assert(horizon.states.vs_x.size() == N);
   assert(horizon.states.vs_y.size() == N);

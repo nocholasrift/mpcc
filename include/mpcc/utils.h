@@ -8,6 +8,7 @@ namespace utils {
 template <typename T>
 inline Eigen::Matrix<T, Eigen::Dynamic, 1> vector_to_eigen(
     const std::vector<T>& vec) {
+
   return Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>,
                     Eigen::Unaligned>(vec.data(), vec.size());
 }

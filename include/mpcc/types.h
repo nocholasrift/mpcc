@@ -3,7 +3,6 @@
 #include <mpcc/spline.h>
 #include <iostream>
 
-#include <regex>
 #include <stdexcept>
 #include <unsupported/Eigen/Splines>
 
@@ -18,22 +17,31 @@ class SplineWrapper {
 using StateHorizon = struct StateHorizon {
   Eigen::VectorXd xs;
   Eigen::VectorXd ys;
-  Eigen::VectorXd vs_x;
-  Eigen::VectorXd vs_y;
+  // Eigen::VectorXd vs_x;
+  // Eigen::VectorXd vs_y;
   Eigen::VectorXd arclens;
   Eigen::VectorXd arclens_dot;
 };
 
 using InputHorizon = struct InputHorizon {
-  Eigen::VectorXd accs_x;
-  Eigen::VectorXd accs_y;
+  // Eigen::VectorXd accs_x;
+  // Eigen::VectorXd accs_y;
   Eigen::VectorXd arclens_ddot;
 };
 
-using MPCHorizon = struct MPCHorizon {
-  StateHorizon states;
-  InputHorizon inputs;
+template <typename Derived>
+struct MPCHorizon {
+  typename Derived::StateHorizon states;
+  typename Derived::InputHorizon inputs;
   unsigned int length{0};
+
+  Eigen::VectorXd get_state_at_step(unsigned int step) const {
+    return states.get_state_at_step(step);
+  }
+
+  Eigen::VectorXd get_input_at_step(unsigned int step) const {
+    return inputs.get_input_at_step(step);
+  }
 };
 
 using Spline1D = Eigen::Spline<double, 1, 3>;
