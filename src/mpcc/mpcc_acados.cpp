@@ -201,6 +201,8 @@ void UnicycleMPCC::load_params(const std::map<std::string, double>& params) {
 
   std::cout << "!! MPC Obj parameters updated !! " << std::endl;
   std::cout << "!! ACADOS model instantiated !! " << std::endl;
+
+  std::cout << "prev x0 size is: " << _prev_x0.size() << "\n";
 }
 
 Eigen::VectorXd UnicycleMPCC::next_state(const Eigen::VectorXd& current_state,

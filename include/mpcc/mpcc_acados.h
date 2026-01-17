@@ -202,8 +202,6 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC> {
   bool is_acados_ready() { return _acados_ocp_capsule != nullptr; }
 
  private:
-  Eigen::VectorXd _prev_x0;
-  Eigen::VectorXd _prev_u0;
 
   Eigen::MatrixXd _dyna_obs;
 
