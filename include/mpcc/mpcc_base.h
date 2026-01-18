@@ -7,6 +7,7 @@
 #include <Eigen/Core>
 //
 // acados
+#include <mpcc/acados_interface.h>
 #include "acados_c/ocp_nlp_interface.h"
 
 #include <cmath>
@@ -41,7 +42,6 @@ class MPCBase {
 
   bool set_solver_parameters(const TrajectoryView& reference,
                              const unsigned int num_params) {
-    // double params[num_params];
     std::vector<double> params;
     params.resize(num_params);
     auto& ctrls_x = reference.xs;
@@ -76,9 +76,8 @@ class MPCBase {
       params[i + 2 * ctrls_x.size() + _tubes[0].size()] = _tubes[1](i);
     }
 
-    MPCImpl& impl = static_cast<MPCImpl&>(*this);
-    for (int i = 0; i < _mpc_steps + 1; ++i) {
-      impl.acados_capsule_update_params(params, i);
+    for (int step = 0; step < _mpc_steps + 1; ++step) {
+      _acados_solver.update_params(step, params);
     }
 
     return true;
@@ -179,7 +178,7 @@ class MPCBase {
 
  protected:
   bool is_solver_ready(const Eigen::VectorXd& state) {
-    if (!static_cast<MPCImpl*>(this)->is_acados_ready()) {
+    if (!_acados_solver.is_initialized()) {
       std::cerr << termcolor::yellow << "[MPCC] Acados not yet initialized!"
                 << termcolor::reset << std::endl;
     }
@@ -201,20 +200,14 @@ class MPCBase {
 
   void set_acados_initial_constraints(const Eigen::VectorXd& initial_state) {
 
-    double lbx0[MPCImpl::kNBX0];
-    double ubx0[MPCImpl::kNBX0];
-
-    memcpy(lbx0, &initial_state[0], MPCImpl::kNBX0 * sizeof(double));
-    memcpy(ubx0, &initial_state[0], MPCImpl::kNBX0 * sizeof(double));
-
-    ocp_nlp_constraints_model_set(_nlp_config, _nlp_dims, _nlp_in, 0, "lbx",
-                                  lbx0);
-    ocp_nlp_constraints_model_set(_nlp_config, _nlp_dims, _nlp_in, 0, "ubx",
-                                  ubx0);
+    unsigned int initial_stage = 0;
+    _acados_solver.set_model_constraint(initial_stage, "lbx",
+                                        initial_state.data());
+    _acados_solver.set_model_constraint(initial_stage, "ubx",
+                                        initial_state.data());
   }
 
   void warm_start_mpc(const Eigen::VectorXd& initial_state) {
-    // in our case kNX = kNBX0
 
     // should be true by construction
     assert(_prev_x0.size() == (_mpc_steps + 1) * MPCImpl::kNX);
@@ -227,7 +220,6 @@ class MPCBase {
       warm_start_no_u(initial_state);
     } else {
       std::cout << "using shifted warm start\n";
-      // warm_start_shifted_u(false, x0);
       warm_start_shifted_u((prev_pos - curr_pos).norm() > 5e-2, initial_state);
     }
   }
@@ -245,56 +237,44 @@ class MPCBase {
 
       // project forward previous control inputs, starting from true current
       // state
-      for (int i = 0; i < _mpc_steps - 1; ++i) {
-        ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i, "x", &curr[0]);
-        ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i, "u",
-                        &_prev_u0[(i + 1) * MPCImpl::kNU]);
+      for (int step = 0; step < _mpc_steps - 1; ++step) {
+        _acados_solver.set_output(step, "x", curr.data());
+        _acados_solver.set_output(step, "u",
+                                  &_prev_u0[(step + 1) * MPCImpl::kNU]);
         curr = static_cast<MPCImpl*>(this)->next_state(
-            curr, _prev_u0.segment((i + 1) * MPCImpl::kNU, MPCImpl::kNU));
-        // std::cout << curr.transpose() << std::endl;
+            curr, _prev_u0.segment((step + 1) * MPCImpl::kNU, MPCImpl::kNU));
       }
 
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps - 1, "x",
-                      &curr[0]);
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps - 1, "u",
-                      &_prev_u0[(_mpc_steps - 1) * MPCImpl::kNU]);
+      _acados_solver.set_output(_mpc_steps - 1, "x", curr.data());
+      _acados_solver.set_output(_mpc_steps - 1, "u",
+                                &_prev_u0[(_mpc_steps - 1) * MPCImpl::kNU]);
 
       curr = static_cast<MPCImpl*>(this)->next_state(
           curr, _prev_u0.tail(MPCImpl::kNU));
-      // std::cout << curr.transpose() << std::endl;
 
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x",
-                      &curr[0]);
-      // exit(0);
+      _acados_solver.set_output(_mpc_steps, "x", curr.data());
     } else {
-      for (int i = 1; i < _mpc_steps; ++i) {
+      for (int step = 1; step < _mpc_steps; ++step) {
         Eigen::VectorXd warm_state =
-            _prev_x0.segment(i * MPCImpl::kNX, MPCImpl::kNX);
+            _prev_x0.segment(step * MPCImpl::kNX, MPCImpl::kNX);
         warm_state(MPCImpl::kIndS) -= starting_s;
-        // warm_state(MPCImpl::kIndS) = std::max(warm_state(MPCImpl::kIndS), 1e-6);
 
-        std::cout << i << " " << warm_state.transpose() << "\n";
-        ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i - 1, "x",
-                        &warm_state[0]);
-        ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i - 1, "u",
-                        &_prev_u0[i * MPCImpl::kNU]);
+        _acados_solver.set_output(step, "x", warm_state.data());
+        _acados_solver.set_output(step, "u", &_prev_u0[step * MPCImpl::kNU]);
       }
 
       Eigen::VectorXd xN_prev = _prev_x0.tail(MPCImpl::kNX);
       xN_prev(MPCImpl::kIndS) -= starting_s;
-      // xN_prev(MPCImpl::kIndS) = std::max(xN_prev(MPCImpl::kIndS), 1e-6);
 
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps - 1, "x",
-                      &xN_prev[0]);
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps - 1, "u",
-                      &_prev_u0[(_mpc_steps - 1) * MPCImpl::kNU]);
+      _acados_solver.set_output(_mpc_steps - 1, "x", xN_prev.data());
+      _acados_solver.set_output(_mpc_steps - 1, "u",
+                                &_prev_u0[(_mpc_steps - 1) * MPCImpl::kNU]);
 
       Eigen::VectorXd uN_prev = _prev_u0.tail(MPCImpl::kNU);
       Eigen::VectorXd xN =
           static_cast<MPCImpl*>(this)->next_state(xN_prev, uN_prev);
 
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x",
-                      &xN[0]);
+      _acados_solver.set_output(_mpc_steps, "x", xN.data());
     }
   }
 
@@ -302,55 +282,53 @@ class MPCBase {
     double x_init[MPCImpl::kNX];
     memcpy(x_init, &initial_state[0], MPCImpl::kNX * sizeof(double));
 
-    double u_init[MPCImpl::kNU];
-    u_init[0] = 0.0;
-    u_init[1] = 0.0;
-    u_init[2] = 0.0;
+    Eigen::VectorXd u_init = Eigen::VectorXd::Zero(MPCImpl::kNU);
 
-    // x_init[5] = x_init[3];
-
-    for (int i = 0; i < _mpc_steps; ++i) {
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i, "x", x_init);
-      ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, i, "u", u_init);
+    for (int step = 0; step < _mpc_steps; ++step) {
+      _acados_solver.set_output(step, "x", initial_state.data());
+      _acados_solver.set_output(step, "u", u_init.data());
     }
 
-    ocp_nlp_out_set(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x", x_init);
+    _acados_solver.set_output(_mpc_steps, "x", x_init);
   }
 
   void process_solver_output(Eigen::VectorXd& xtraj, Eigen::VectorXd& utraj) {
     // stored as x0, y0,..., x1, y1, ..., xN, yN, ...
-    for (int i = 0; i < _mpc_steps; ++i) {
-      // std::array<double, 3> u;
-      ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, i, "x",
-                      &xtraj[i * MPCImpl::kNX]);
-      ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, i, "u",
-                      &utraj[i * MPCImpl::kNU]);
-      // ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, i, "u", &u[0]);
-      // std::cout << i << " " << u[0] << " " << u[1] << " " << u[2] << "\n";
+    for (int step = 0; step < _mpc_steps; ++step) {
+      _acados_solver.get_output(step, "x", &xtraj[step * MPCImpl::kNX]);
+      _acados_solver.get_output(step, "u", &utraj[step * MPCImpl::kNU]);
     }
 
-    ocp_nlp_out_get(_nlp_config, _nlp_dims, _nlp_out, _mpc_steps, "x",
-                    &xtraj[_mpc_steps * MPCImpl::kNX]);
-
-    // std::cout << "xtraj is:\n";
-    // for (int i = 0; i < xtraj.size(); i += MPCImpl::kNX) {
-    //   std::cout << i << " " << xtraj.segment(i, MPCImpl::kNX).transpose()
-    //             << "\n";
-    // }
-    //
-    // std::cout << "utraj is:\n";
-    // for (int i = 0; i < utraj.size(); i += MPCImpl::kNU) {
-    //   std::cout << i << " " << utraj.segment(i, MPCImpl::kNU).transpose()
-    //             << "\n";
-    // }
-
-    // _prev_x0 = xtraj;
-    // _prev_u0 = utraj;
+    _acados_solver.get_output(_mpc_steps, "x",
+                              &xtraj[_mpc_steps * MPCImpl::kNX]);
 
     static_cast<MPCImpl*>(this)->map_trajectory_to_buffers(xtraj, utraj);
   }
 
+  bool run_acados_solver(const Eigen::VectorXd& initial_state) {
+    // run at most 2 times, if first fails, try with simple initialization
+    int status               = 0;
+    unsigned int num_retries = 2;
+    for (int i = 0; i < num_retries; ++i) {
+      status = _acados_solver.solve();
+
+      if (status == ACADOS_SUCCESS) {
+        _is_shift_warm = true;
+        _solve_success = true;
+        break;
+      } else {
+        _is_shift_warm = false;
+        warm_start_no_u(initial_state);
+      }
+    }
+
+    return status == ACADOS_SUCCESS;
+  }
+
  protected:
+  using SolverTraits = types::SolverTraits<MPCImpl>;
+  AcadosInterface<SolverTraits> _acados_solver;
+
   sim_config* _sim_config;
   sim_in* _sim_in;
   sim_out* _sim_out;

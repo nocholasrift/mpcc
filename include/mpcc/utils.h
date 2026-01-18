@@ -1,5 +1,5 @@
 #pragma once
-#include <mpcc/types.h>
+#include <map>
 
 #include <Eigen/Core>
 
@@ -34,6 +34,13 @@ inline double eval_traj(const Eigen::VectorXd& coeffs, double x) {
   }
 
   return ret;
+}
+
+inline void get_param(const std::map<std::string, double>& params,
+                      const std::string& key, double& value) {
+  if (auto it = params.find(key); it != params.end()) {
+    value = params.at(key);
+  }
 }
 
 }  // namespace utils

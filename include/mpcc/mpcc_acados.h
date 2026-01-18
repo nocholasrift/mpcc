@@ -2,11 +2,12 @@
 
 #include <mpcc/mpcc_base.h>
 #include <mpcc/types.h>
-#include <cstdlib>
 
-#include <Eigen/Dense>
+#include <cstdlib>
 #include <map>
 #include <vector>
+
+#include <Eigen/Dense>
 
 // acados
 #include "acados_sim_solver_unicycle_model_mpcc.h"
@@ -14,6 +15,59 @@
 
 namespace mpcc {
 using TrajectoryView = types::Trajectory::View;
+
+class UnicycleMPCC;
+
+// setup acados solver traits for class
+template <>
+struct types::SolverTraits<UnicycleMPCC> {
+  using SolverCapsule = unicycle_model_mpcc_solver_capsule;
+
+  static int create_capsule(double mpc_steps, double*& time_steps,
+                            SolverCapsule*& capsule) {
+    capsule = unicycle_model_mpcc_acados_create_capsule();
+    return unicycle_model_mpcc_acados_create_with_discretization(
+        capsule, mpc_steps, time_steps);
+  }
+
+  static void free_capsule(SolverCapsule*& capsule) noexcept {
+    unicycle_model_mpcc_acados_free(capsule);
+  }
+
+  static ocp_nlp_in* get_nlp_in(SolverCapsule* capsule) {
+    return unicycle_model_mpcc_acados_get_nlp_in(capsule);
+  }
+
+  static ocp_nlp_out* get_nlp_out(SolverCapsule* capsule) {
+    return unicycle_model_mpcc_acados_get_nlp_out(capsule);
+  }
+
+  static void* get_nlp_opts(SolverCapsule* capsule) {
+    return unicycle_model_mpcc_acados_get_nlp_opts(capsule);
+  }
+
+  static ocp_nlp_dims* get_nlp_dims(SolverCapsule* capsule) {
+    return unicycle_model_mpcc_acados_get_nlp_dims(capsule);
+  }
+
+  static ocp_nlp_solver* get_nlp_solver(SolverCapsule* capsule) {
+    return unicycle_model_mpcc_acados_get_nlp_solver(capsule);
+  }
+
+  static ocp_nlp_config* get_nlp_config(SolverCapsule* capsule) {
+    return unicycle_model_mpcc_acados_get_nlp_config(capsule);
+  }
+
+  static int solve(SolverCapsule* capsule) {
+    return unicycle_model_mpcc_acados_solve(capsule);
+  }
+
+  static void set_params(SolverCapsule* capsule, unsigned int step,
+                         const std::vector<double>& params) {
+    unicycle_model_mpcc_acados_update_params(
+        capsule, step, const_cast<double*>(params.data()), params.size());
+  }
+};
 
 class UnicycleMPCC : public MPCBase<UnicycleMPCC> {
   friend class MPCBase<UnicycleMPCC>;
@@ -75,6 +129,7 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC> {
 
   using MPCHorizon = types::MPCHorizon<UnicycleMPCC>;
 
+ public:
   UnicycleMPCC();
   virtual ~UnicycleMPCC();
 
@@ -180,29 +235,13 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC> {
 
   Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state);
 
-  bool run_acados_solver(const Eigen::VectorXd& initial_state);
-
   std::array<double, 2> compute_mpc_vel_command(const Eigen::VectorXd& state,
                                                 const Eigen::VectorXd& u);
-
-  // vs_x and vs_y must be _mpc_steps length prior
-  void compute_world_frame_velocities(Eigen::VectorXd& vs_x,
-                                      Eigen::VectorXd& vs_y) const;
-
-  // accs_x and accs_y must be _mpc_steps -1 length prior
-  void compute_world_frame_accelerations(Eigen::VectorXd& accs_x,
-                                         Eigen::VectorXd& accs_y) const;
-
-  void acados_capsule_update_params(const std::vector<double>& params,
-                                    unsigned int step);
 
   void map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
                                  const Eigen::VectorXd& utraj);
 
-  bool is_acados_ready() { return _acados_ocp_capsule != nullptr; }
-
  private:
-
   Eigen::MatrixXd _dyna_obs;
 
   double _ds;

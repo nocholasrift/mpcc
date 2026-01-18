@@ -74,16 +74,12 @@ UnicycleMPCC::UnicycleMPCC() {
 
   _odom = Eigen::VectorXd(3);
 
+  _acados_solver.initialize(_mpc_steps);
+
   // cpg_update_A_mat(0, -1.1);
 }
 
-UnicycleMPCC::~UnicycleMPCC() {
-  if (_acados_ocp_capsule)
-    delete _acados_ocp_capsule;
-
-  if (_new_time_steps)
-    delete _new_time_steps;
-}
+UnicycleMPCC::~UnicycleMPCC() {}
 
 void UnicycleMPCC::load_params(const std::map<std::string, double>& params) {
   _params = params;
@@ -149,41 +145,11 @@ void UnicycleMPCC::load_params(const std::map<std::string, double>& params) {
                    ? params.at("CBF_PADDING")
                    : _padding;
 
-  _acados_ocp_capsule = unicycle_model_mpcc_acados_create_capsule();
-
-  if (_new_time_steps)
-    delete[] _new_time_steps;
-
-  _acados_sim_capsule = unicycle_model_mpcc_acados_sim_solver_create_capsule();
-  int status = unicycle_model_mpcc_acados_sim_create(_acados_sim_capsule);
-
+  int status = _acados_solver.initialize(_mpc_steps);
   if (status) {
-    throw std::runtime_error("acados_create() returned status " +
-                             std::to_string(status) + ". Exiting.");
+    throw std::runtime_error("Acados initialization failed with status + " +
+                             std::to_string(status) + "!");
   }
-
-  // acados sim
-  _sim_in     = unicycle_model_mpcc_acados_get_sim_in(_acados_sim_capsule);
-  _sim_out    = unicycle_model_mpcc_acados_get_sim_out(_acados_sim_capsule);
-  _sim_dims   = unicycle_model_mpcc_acados_get_sim_dims(_acados_sim_capsule);
-  _sim_config = unicycle_model_mpcc_acados_get_sim_config(_acados_sim_capsule);
-
-  status = unicycle_model_mpcc_acados_create_with_discretization(
-      _acados_ocp_capsule, _mpc_steps, _new_time_steps);
-
-  if (status) {
-    throw std::runtime_error(
-        "unicycle_model_mpcc_acados_create() returned status " +
-        std::to_string(status) + ". Exiting.");
-  }
-
-  // acados solver
-  _nlp_in     = unicycle_model_mpcc_acados_get_nlp_in(_acados_ocp_capsule);
-  _nlp_out    = unicycle_model_mpcc_acados_get_nlp_out(_acados_ocp_capsule);
-  _nlp_opts   = unicycle_model_mpcc_acados_get_nlp_opts(_acados_ocp_capsule);
-  _nlp_dims   = unicycle_model_mpcc_acados_get_nlp_dims(_acados_ocp_capsule);
-  _nlp_solver = unicycle_model_mpcc_acados_get_nlp_solver(_acados_ocp_capsule);
-  _nlp_config = unicycle_model_mpcc_acados_get_nlp_config(_acados_ocp_capsule);
 
   mpc_x.resize(_mpc_steps + 1);
   mpc_y.resize(_mpc_steps + 1);
@@ -196,13 +162,16 @@ void UnicycleMPCC::load_params(const std::map<std::string, double>& params) {
   mpc_linaccs.resize(_mpc_steps);
   mpc_s_ddots.resize(_mpc_steps);
 
-  _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
-  _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
+  if (_prev_x0.size() != (_mpc_steps + 1) * kNX) {
+    std::cout << termcolor::yellow
+              << "x0, u0 size differs from mpc_steps size, resizing and "
+                 "zeroing out\n";
+    _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
+    _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
+  }
 
   std::cout << "!! MPC Obj parameters updated !! " << std::endl;
   std::cout << "!! ACADOS model instantiated !! " << std::endl;
-
-  std::cout << "prev x0 size is: " << _prev_x0.size() << "\n";
 }
 
 Eigen::VectorXd UnicycleMPCC::next_state(const Eigen::VectorXd& current_state,
@@ -210,37 +179,29 @@ Eigen::VectorXd UnicycleMPCC::next_state(const Eigen::VectorXd& current_state,
   Eigen::VectorXd ret(kNX);
 
   // Extracting current state values
-  double x1     = current_state(0);
-  double y1     = current_state(1);
-  double theta1 = current_state(2);
-  double v1     = current_state(3);
-  double s1     = current_state(4);
-  double sdot1  = current_state(5);
+  double x1     = current_state(kIndX);
+  double y1     = current_state(kIndY);
+  double theta1 = current_state(kIndTheta);
+  double v1     = current_state(kIndV);
+  double s1     = current_state(kIndS);
+  double sdot1  = current_state(kIndSDot);
 
   // Extracting control inputs
-  double a     = control(0);
-  double w     = control(1);
-  double sddot = control(2);
+  double a     = control(kIndLinAcc);
+  double w     = control(kIndAngVel);
+  double sddot = control(kIndSDDot);
 
   // Dynamics equations
   // for numerical reasons, theta is not wrapped before going into solver.
-  ret(0) = x1 + v1 * cos(theta1) * _dt;
-  ret(1) = y1 + v1 * sin(theta1) * _dt;
-  ret(2) = theta1 + w * _dt;
-  ret(3) = std::max(std::min(v1 + a * _dt, _max_linvel), -_max_linvel);
-  ret(4) = s1 + sdot1 * _dt;
-  ret(5) = std::max(std::min(sdot1 + sddot * _dt, _max_linvel), -_max_linvel);
+  ret(kIndX)     = x1 + v1 * cos(theta1) * _dt;
+  ret(kIndY)     = y1 + v1 * sin(theta1) * _dt;
+  ret(kIndTheta) = theta1 + w * _dt;
+  ret(kIndV)     = std::max(std::min(v1 + a * _dt, _max_linvel), -_max_linvel);
+  ret(kIndS)     = s1 + sdot1 * _dt;
+  ret(kIndSDot) =
+      std::max(std::min(sdot1 + sddot * _dt, _max_linvel), -_max_linvel);
 
   return ret;
-}
-
-void UnicycleMPCC::acados_capsule_update_params(
-    const std::vector<double>& params, unsigned int step) {
-
-  assert(params.size() == kNP);
-  unicycle_model_mpcc_acados_update_params(_acados_ocp_capsule, step,
-                                           const_cast<double*>(params.data()),
-                                           params.size());
 }
 
 void UnicycleMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
@@ -277,32 +238,6 @@ Eigen::VectorXd UnicycleMPCC::prepare_initial_state(
   return x0;
 }
 
-bool UnicycleMPCC::run_acados_solver(const Eigen::VectorXd& initial_state) {
-  // run at most 2 times, if first fails, try with simple initialization
-  int status               = 0;
-  unsigned int num_retries = 2;
-  for (int i = 0; i < num_retries; ++i) {
-    status = unicycle_model_mpcc_acados_solve(_acados_ocp_capsule);
-    // for some reason this causes problems in docker container, commenting
-    // out for now
-    // ocp_nlp_get(_nlp_config, _nlp_solver, "time_tot", &timer);
-    // elapsed_time += timer;
-
-    if (status == ACADOS_SUCCESS) {
-      std::cout << "solve succeeded\n";
-      _is_shift_warm = true;
-      _solve_success = true;
-      break;
-    } else {
-      std::cout << "solve failed going to try no u warm\n";
-      _is_shift_warm = false;
-      warm_start_no_u(initial_state);
-    }
-  }
-
-  return status == ACADOS_SUCCESS;
-}
-
 std::array<double, 2> UnicycleMPCC::compute_mpc_vel_command(
     const Eigen::VectorXd& state, const Eigen::VectorXd& u) {
 
@@ -311,9 +246,6 @@ std::array<double, 2> UnicycleMPCC::compute_mpc_vel_command(
   double curr_angvel = u[kIndAngVel];
   double new_vel =
       limit(state[kIndV], state[kIndV] + u[kIndLinAcc] * _dt, _max_linacc, _dt);
-
-  std::cout << "desired angvel " << u[kIndAngVel] << " actual " << curr_angvel
-            << "\n";
 
   return {new_vel, curr_angvel};
 }
@@ -358,39 +290,9 @@ Eigen::VectorXd UnicycleMPCC::get_cbf_data(const Eigen::VectorXd& state,
   return Eigen::Vector3d(0., 0., 0.);
 }
 
-void UnicycleMPCC::compute_world_frame_velocities(Eigen::VectorXd& vs_x,
-                                                  Eigen::VectorXd& vs_y) const {
-  assert(vs_x.size() == _mpc_steps + 1);
-  assert(vs_y.size() == _mpc_steps + 1);
-
-  for (int i = 0; i <= _mpc_steps; ++i) {
-    vs_x[i] = mpc_linvels[i] * cos(mpc_theta[i]);
-    vs_y[i] = mpc_linvels[i] * sin(mpc_theta[i]);
-  }
-}
-
-void UnicycleMPCC::compute_world_frame_accelerations(
-    Eigen::VectorXd& accs_x, Eigen::VectorXd& accs_y) const {
-  assert(accs_x.size() == _mpc_steps);
-  assert(accs_y.size() == _mpc_steps);
-
-  for (int i = 0; i < _mpc_steps; ++i) {
-    accs_x[i] = mpc_linaccs[i] * cos(mpc_theta[i]);
-    accs_y[i] = mpc_linaccs[i] * sin(mpc_theta[i]);
-  }
-}
-
 UnicycleMPCC::MPCHorizon UnicycleMPCC::get_horizon() const {
 
   UnicycleMPCC::MPCHorizon horizon;
-  // horizon.states.vs_x = Eigen::VectorXd(_mpc_steps + 1);
-  // horizon.states.vs_y = Eigen::VectorXd(_mpc_steps + 1);
-  // compute_world_frame_velocities(horizon.states.vs_x, horizon.states.vs_y);
-
-  // horizon.inputs.accs_x = Eigen::VectorXd(_mpc_steps);
-  // horizon.inputs.accs_y = Eigen::VectorXd(_mpc_steps);
-  // compute_world_frame_accelerations(horizon.inputs.accs_x,
-  //                                   horizon.inputs.accs_y);
 
   horizon.states.xs          = utils::vector_to_eigen(mpc_x);
   horizon.states.ys          = utils::vector_to_eigen(mpc_y);

@@ -60,14 +60,11 @@ DIMPCC::DIMPCC() {
   mpc_ax.resize(_mpc_steps);
   mpc_ay.resize(_mpc_steps);
   mpc_s_ddots.resize(_mpc_steps);
+
+  _acados_solver.initialize(_mpc_steps);
 }
 
-DIMPCC::~DIMPCC() {
-  if (_acados_ocp_capsule)
-    double_integrator_mpcc_acados_free(_acados_ocp_capsule);
-  if (_new_time_steps)
-    delete _new_time_steps;
-}
+DIMPCC::~DIMPCC() {}
 
 void DIMPCC::load_params(const std::map<std::string, double>& params) {
   _params = params;
@@ -119,67 +116,33 @@ void DIMPCC::load_params(const std::map<std::string, double>& params) {
   double new_steps =
       _params.find("STEPS") != _params.end() ? _params.at("STEPS") : _mpc_steps;
 
-  bool should_create = (new_steps != _mpc_steps) || (fabs(new_dt - _dt) > 1e-3);
-
   _dt        = new_dt;
   _mpc_steps = new_steps;
 
-  if (should_create) {
+  int status = _acados_solver.initialize(_mpc_steps);
+  if (status) {
+    throw std::runtime_error("Acados initialization failed with status + " +
+                             std::to_string(status) + "!");
+  }
 
-    int status = initialize_acados();
+  mpc_x.resize(_mpc_steps + 1);
+  mpc_y.resize(_mpc_steps + 1);
+  mpc_vx.resize(_mpc_steps + 1);
+  mpc_vy.resize(_mpc_steps + 1);
+  mpc_s.resize(_mpc_steps + 1);
+  mpc_s_dot.resize(_mpc_steps + 1);
 
-    if (status) {
-      throw std::runtime_error(
-          "double_integrator_mpcc_acados_create() returned status " +
-          std::to_string(status) + ". Exiting.");
-    }
+  mpc_ax.resize(_mpc_steps);
+  mpc_ay.resize(_mpc_steps);
+  mpc_s_ddots.resize(_mpc_steps);
 
-    mpc_x.resize(_mpc_steps + 1);
-    mpc_y.resize(_mpc_steps + 1);
-    mpc_vx.resize(_mpc_steps + 1);
-    mpc_vy.resize(_mpc_steps + 1);
-    mpc_s.resize(_mpc_steps + 1);
-    mpc_s_dot.resize(_mpc_steps + 1);
-
-    mpc_ax.resize(_mpc_steps);
-    mpc_ay.resize(_mpc_steps);
-    mpc_s_ddots.resize(_mpc_steps);
-
+  if (_prev_x0.size() != (_mpc_steps + 1) * kNX) {
+    std::cout << termcolor::yellow
+              << "x0, u0 size differs from mpc_steps size, resizing and "
+                 "zeroing out\n";
     _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
     _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
   }
-}
-
-int DIMPCC::initialize_acados() {
-  if (_acados_ocp_capsule) {
-    double_integrator_mpcc_acados_free(_acados_ocp_capsule);
-  }
-
-  _acados_ocp_capsule = double_integrator_mpcc_acados_create_capsule();
-
-  if (_new_time_steps) {
-    delete[] _new_time_steps;
-    _new_time_steps = nullptr;
-  }
-
-  int status = double_integrator_mpcc_acados_create_with_discretization(
-      _acados_ocp_capsule, _mpc_steps, _new_time_steps);
-
-  if (status) {
-    return status;
-  }
-
-  // acados solver
-  _nlp_in   = double_integrator_mpcc_acados_get_nlp_in(_acados_ocp_capsule);
-  _nlp_out  = double_integrator_mpcc_acados_get_nlp_out(_acados_ocp_capsule);
-  _nlp_opts = double_integrator_mpcc_acados_get_nlp_opts(_acados_ocp_capsule);
-  _nlp_dims = double_integrator_mpcc_acados_get_nlp_dims(_acados_ocp_capsule);
-  _nlp_solver =
-      double_integrator_mpcc_acados_get_nlp_solver(_acados_ocp_capsule);
-  _nlp_config =
-      double_integrator_mpcc_acados_get_nlp_config(_acados_ocp_capsule);
-
-  return 0;
 }
 
 void DIMPCC::reset_horizon() {
@@ -231,16 +194,6 @@ Eigen::VectorXd DIMPCC::next_state(const Eigen::VectorXd& current_state,
   return ret;
 }
 
-void DIMPCC::acados_capsule_update_params(const std::vector<double>& params,
-                                          unsigned int step) {
-  assert(params.size() == kNP);
-  // pretty sure this function doesn't actually change the parameter data
-  // so the cast shouldn't cause any changes in params
-  double_integrator_mpcc_acados_update_params(
-      _acados_ocp_capsule, step, const_cast<double*>(params.data()),
-      params.size());
-}
-
 Eigen::VectorXd DIMPCC::prepare_initial_state(const Eigen::VectorXd& state) {
   Eigen::VectorXd x0 = state;
   // x0(kIndS)          = 0.;
@@ -249,31 +202,6 @@ Eigen::VectorXd DIMPCC::prepare_initial_state(const Eigen::VectorXd& state) {
   }
 
   return x0;
-}
-
-bool DIMPCC::run_acados_solver(const Eigen::VectorXd& initial_state) {
-  // run at most 2 times, if first fails, try with simple initialization
-  int status               = 0;
-  unsigned int num_retries = 2;
-  for (int i = 0; i < num_retries; ++i) {
-    status = double_integrator_mpcc_acados_solve(_acados_ocp_capsule);
-    // for some reason this causes problems in docker container, commenting
-    // out for now
-    // ocp_nlp_get(_nlp_config, _nlp_solver, "time_tot", &timer);
-    // elapsed_time += timer;
-
-    if (status == ACADOS_SUCCESS) {
-
-      _is_shift_warm = true;
-      _solve_success = true;
-      break;
-    } else {
-      _is_shift_warm = false;
-      warm_start_no_u(initial_state);
-    }
-  }
-
-  return status == ACADOS_SUCCESS;
 }
 
 std::array<double, 2> DIMPCC::compute_mpc_vel_command(
