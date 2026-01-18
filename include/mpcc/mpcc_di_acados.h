@@ -14,6 +14,58 @@
 namespace mpcc {
 using TrajectoryView = types::Trajectory::View;
 
+class DIMPCC;
+
+template <>
+struct types::SolverTraits<DIMPCC> {
+  using SolverCapsule = double_integrator_mpcc_solver_capsule;
+
+  static int create_capsule(double mpc_steps, double*& time_steps,
+                            SolverCapsule*& capsule) {
+    capsule = double_integrator_mpcc_acados_create_capsule();
+    return double_integrator_mpcc_acados_create_with_discretization(
+        capsule, mpc_steps, time_steps);
+  }
+
+  static void free_capsule(SolverCapsule*& capsule) noexcept {
+    double_integrator_mpcc_acados_free(capsule);
+  }
+
+  static ocp_nlp_in* get_nlp_in(SolverCapsule* capsule) {
+    return double_integrator_mpcc_acados_get_nlp_in(capsule);
+  }
+
+  static ocp_nlp_out* get_nlp_out(SolverCapsule* capsule) {
+    return double_integrator_mpcc_acados_get_nlp_out(capsule);
+  }
+
+  static void* get_nlp_opts(SolverCapsule* capsule) {
+    return double_integrator_mpcc_acados_get_nlp_opts(capsule);
+  }
+
+  static ocp_nlp_dims* get_nlp_dims(SolverCapsule* capsule) {
+    return double_integrator_mpcc_acados_get_nlp_dims(capsule);
+  }
+
+  static ocp_nlp_solver* get_nlp_solver(SolverCapsule* capsule) {
+    return double_integrator_mpcc_acados_get_nlp_solver(capsule);
+  }
+
+  static ocp_nlp_config* get_nlp_config(SolverCapsule* capsule) {
+    return double_integrator_mpcc_acados_get_nlp_config(capsule);
+  }
+
+  static int solve(SolverCapsule* capsule) {
+    return double_integrator_mpcc_acados_solve(capsule);
+  }
+
+  static void set_params(SolverCapsule* capsule, unsigned int step,
+                         const std::vector<double>& params) {
+    double_integrator_mpcc_acados_update_params(
+        capsule, step, const_cast<double*>(params.data()), params.size());
+  }
+};
+
 class DIMPCC : public MPCBase<DIMPCC> {
   friend class MPCBase<DIMPCC>;
 
@@ -73,6 +125,7 @@ class DIMPCC : public MPCBase<DIMPCC> {
 
   using MPCHorizon = types::MPCHorizon<DIMPCC>;
 
+ public:
   DIMPCC();
   virtual ~DIMPCC();
 
@@ -113,8 +166,6 @@ class DIMPCC : public MPCBase<DIMPCC> {
 
   Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state);
 
-  bool run_acados_solver(const Eigen::VectorXd& initial_state);
-
   std::array<double, 2> compute_mpc_vel_command(const Eigen::VectorXd& state,
                                                 const Eigen::VectorXd& u);
 
@@ -122,15 +173,8 @@ class DIMPCC : public MPCBase<DIMPCC> {
   // void warm_start_no_u(double* x_init);
   // void warm_start_shifted_u(bool correct_perturb, const Eigen::VectorXd& state);
 
-  void acados_capsule_update_params(const std::vector<double>& params,
-                                    unsigned int step);
-
   void map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
                                  const Eigen::VectorXd& utraj);
-
-  bool is_acados_ready() { return _acados_ocp_capsule != nullptr; }
-
-  int initialize_acados();
 
  private:
   bool _has_run;

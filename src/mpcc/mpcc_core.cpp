@@ -8,7 +8,9 @@
 using namespace mpcc;
 
 MPCCore::MPCCore() {
-  _mpc = UnicycleMPCC();
+  // using emplace because all MPC classes have non-copyable
+  // solver interface inherited from the base class
+  _mpc.emplace<UnicycleMPCC>();
 }
 
 MPCCore::MPCCore(const MPCType& mpc_input_type) {
@@ -17,11 +19,11 @@ MPCCore::MPCCore(const MPCType& mpc_input_type) {
   if (_mpc_input_type == MPCType::kUnicycle) {
     std::cout << termcolor::green << "[MPC Core] Using unicycle model"
               << termcolor::reset << std::endl;
-    _mpc = UnicycleMPCC();
+    _mpc.emplace<UnicycleMPCC>();
   } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
     std::cout << termcolor::green << "[MPC Core] Using double integrator model"
               << termcolor::reset << std::endl;
-    _mpc = DIMPCC();
+    _mpc.emplace<DIMPCC>();
   } else {
     throw std::runtime_error(
         "Invalid MPC input type: " +
@@ -31,21 +33,14 @@ MPCCore::MPCCore(const MPCType& mpc_input_type) {
 
 MPCCore::~MPCCore() {}
 
-void MPCCore::get_param(const std::map<std::string, double>& params,
-                        const std::string& key, double& value) {
-  if (auto it = params.find(key); it != params.end()) {
-    value = params.at(key);
-  }
-}
-
 void MPCCore::load_params(const std::map<std::string, double>& params) {
-  get_param(params, "DT", _dt);
-  get_param(params, "MAX_ANGA", _max_anga);
-  get_param(params, "MAX_LINACC", _max_linacc);
-  get_param(params, "LINVEL", _max_vel);
-  get_param(params, "ANGVEL", _max_angvel);
-  get_param(params, "ANGLE_GAIN", _prop_gain);
-  get_param(params, "ANGLE_THRESH", _prop_angle_thresh);
+  utils::get_param(params, "DT", _dt);
+  utils::get_param(params, "MAX_ANGA", _max_anga);
+  utils::get_param(params, "MAX_LINACC", _max_linacc);
+  utils::get_param(params, "LINVEL", _max_vel);
+  utils::get_param(params, "ANGVEL", _max_angvel);
+  utils::get_param(params, "ANGLE_GAIN", _prop_gain);
+  utils::get_param(params, "ANGLE_THRESH", _prop_angle_thresh);
 
   _params = params;
 

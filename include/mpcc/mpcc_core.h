@@ -85,9 +85,6 @@ class MPCCore {
   const types::Trajectory& get_trajectory() { return _trajectory; }
 
  private:
-  void get_param(const std::map<std::string, double>& params,
-                 const std::string& key, double& value);
-
   // wizardry to wrap varient visit lambda function for mpc
   // using decltype(auto) to ensure constness is not stripped away
   // thanks to template argument deduction, don't need to use <> syntax

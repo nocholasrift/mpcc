@@ -44,6 +44,9 @@ struct MPCHorizon {
   }
 };
 
+template <typename MPCType>
+struct SolverTraits;
+
 using Spline1D = Eigen::Spline<double, 1, 3>;
 
 // polynomial class takes in coefficients in order of ascending degree!
