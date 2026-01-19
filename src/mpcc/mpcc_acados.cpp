@@ -47,8 +47,8 @@ UnicycleMPCC::UnicycleMPCC() {
   _has_run   = false;
   _odom_init = false;
 
-  _acados_ocp_capsule = nullptr;
-  _new_time_steps     = nullptr;
+  _traj_alignment_threshold = .1;
+  _alignment_p_gain         = 1;
 
   _s_dot = 0;
 
@@ -144,6 +144,9 @@ void UnicycleMPCC::load_params(const std::map<std::string, double>& params) {
   _padding   = params.find("CBF_PADDING") != params.end()
                    ? params.at("CBF_PADDING")
                    : _padding;
+
+  utils::get_param(params, "ANGLE_GAIN", _alignment_p_gain);
+  utils::get_param(params, "ANGLE_THRESH", _traj_alignment_threshold);
 
   int status = _acados_solver.initialize(_mpc_steps);
   if (status) {
@@ -244,8 +247,11 @@ std::array<double, 2> UnicycleMPCC::compute_mpc_vel_command(
   // double curr_angvel =
   //     limit(_prev_u0[kIndAngVel], u[kIndAngVel], _max_anga, _dt);
   double curr_angvel = u[kIndAngVel];
+
+  // make sure velocity does not violate acc bounds, then cap
   double new_vel =
       limit(state[kIndV], state[kIndV] + u[kIndLinAcc] * _dt, _max_linacc, _dt);
+  new_vel = std::max(-_max_linvel, std::min(new_vel, _max_linvel));
 
   return {new_vel, curr_angvel};
 }
@@ -319,4 +325,41 @@ UnicycleMPCC::MPCHorizon UnicycleMPCC::get_horizon() const {
   assert(horizon.inputs.arclens_ddot.size() == N - 1);
 
   return horizon;
+}
+
+// object is orientable (see orientable.h), so we must check trajectory alignemnt
+// before
+std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
+    const Eigen::VectorXd& state, const types::Trajectory& reference) const {
+  double min_meaningful_len = .1;
+  double eps_s              = .05;
+
+  double current_s = reference.get_closest_s(state.head(2));
+
+  // only attempt to align if we are near beginning of trajectory, otherwise just let robot
+  // run. Otherwise we will be stopping a lot along the trajectory whenever we are off, even
+  // if CBF is engaged to go off course of trajectory.
+  if (current_s > min_meaningful_len ||
+      reference.get_true_length() < min_meaningful_len) {
+    return std::nullopt;
+  }
+
+  Eigen::Vector2d point =
+      reference(current_s + eps_s, mpcc::types::Trajectory::kFirstOrder);
+
+  double traj_heading = atan2(point[1], point[0]);
+
+  if (!is_aligned(traj_heading, state[kIndTheta], _traj_alignment_threshold)) {
+    std::cout << termcolor::yellow
+              << "Unicycle model is executing presolve hook!\n"
+              << termcolor::reset << std::endl;
+    double desired_angvel =
+        get_orient_control(traj_heading, state[kIndTheta], _alignment_p_gain,
+                           -_max_angvel, _max_angvel);
+    double desired_vel = 0;
+
+    return std::optional<std::array<double, 2>>({desired_vel, desired_angvel});
+  }
+
+  return std::nullopt;
 }

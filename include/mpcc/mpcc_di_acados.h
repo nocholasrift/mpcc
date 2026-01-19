@@ -186,8 +186,5 @@ class DIMPCC : public MPCBase<DIMPCC> {
   // parameters
   double _max_linvel;
   double _max_linacc;
-
-  double_integrator_mpcc_sim_solver_capsule* _acados_sim_capsule = nullptr;
-  double_integrator_mpcc_solver_capsule* _acados_ocp_capsule     = nullptr;
 };
 }  // namespace mpcc

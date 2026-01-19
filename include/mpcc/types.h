@@ -335,7 +335,7 @@ class Trajectory {
     return min_dist;
   }
 
-  View view() {
+  View view() const {
     // x and y are forced to have same knots
     return {.knots  = spline_x_.get_knots(),
             .xs     = evaluate_axis_at_knots(kX),
@@ -361,7 +361,7 @@ class Trajectory {
  private:
   // axis 0 == x, axis 1 == y
   // use kX and kY...
-  Row evaluate_axis_at_knots(unsigned int axis) {
+  Row evaluate_axis_at_knots(unsigned int axis) const {
     // spline x and y by construction have the same knots...
     Row knots = spline_x_.get_knots();
     Spline spl;

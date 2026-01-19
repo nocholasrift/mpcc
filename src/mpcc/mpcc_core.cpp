@@ -85,46 +85,6 @@ const std::array<Eigen::VectorXd, 2>& MPCCore::get_tubes() const {
   return call_mpc([&](auto& mpc) -> decltype(auto) { return mpc.get_tubes(); });
 }
 
-bool MPCCore::orient_robot() {
-  // calculate heading error between robot and trajectory start
-  // use 1st point as most times first point has 0 velocity
-
-  double start = _trajectory.get_closest_s(_odom.head(2));
-  double eps_s = .05;
-
-  Eigen::Vector2d point =
-      _trajectory(start + eps_s, mpcc::types::Trajectory::kFirstOrder);
-  double traj_heading = atan2(point[1], point[0]);
-
-  // wrap between -pi and pi
-  double e = atan2(sin(traj_heading - _odom(2)), cos(traj_heading - _odom(2)));
-
-  if (std::isnan(e)) {
-    std::cout << termcolor::red << "[MPC Core] heading error nan, returning"
-              << termcolor::reset << std::endl;
-    return false;
-  }
-
-  std::cout << termcolor::yellow
-            << "[MPC Core] trajectory reset, checking if we need to align... "
-               "error = "
-            << e * 180. / M_PI << " deg" << termcolor::reset << std::endl;
-
-  // if error is larger than _prop_angle_thresh use proportional controller to
-  // align
-  if (fabs(e) > _prop_angle_thresh) {
-    // _mpc->reset_horizon();
-    call_mpc([&](auto& mpc) { mpc.reset_horizon(); });
-    _curr_vel = 0;
-    _curr_angvel =
-        std::max(-_max_angvel, std::min(_max_angvel, _prop_gain * e));
-
-    return true;
-  }
-
-  return false;
-}
-
 std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
                                      bool is_reverse) {
   if (!_is_set) {
@@ -133,17 +93,16 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
     return {0, 0};
   }
 
-  if (_ref_length > .1 && _traj_reset) {
-    if (_mpc_input_type == MPCType::kUnicycle && orient_robot())
-      return {_curr_vel, _curr_angvel};
-  }
-
   _traj_reset = false;
 
-  double new_vel;
   double time_to_solve = 0.;
 
-  double current_s = _trajectory.get_closest_s(state.head(2));
+  double current_s = std::max(_trajectory.get_closest_s(state.head(2)), 1e-6);
+  double s_dot = std::min(std::max((current_s - _prev_s) / _dt, 0.), _max_vel);
+
+  int N_virtual_states = 2;
+  Eigen::VectorXd mpcc_state(state.size() + N_virtual_states);
+  mpcc_state << state, 0., s_dot;
 
   // Just like with trajectory length,acados MPC also has fixed number of knots
   // that can be used for the trajectory due to a quirk with Casadi Splines.
@@ -154,8 +113,11 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
 
   auto start                        = std::chrono::high_resolution_clock::now();
   std::array<double, 2> mpc_command = call_mpc([&](auto& mpc) {
-    return mpc.solve(state, adjusted_traj.view(), is_reverse);
+    return mpc.solve(mpcc_state, adjusted_traj, is_reverse);
   });
+  // std::array<double, 2> mpc_command = call_mpc([&](auto& mpc) {
+  //   return mpc.solve(state, adjusted_traj.view(), is_reverse);
+  // });
 
   auto end = std::chrono::high_resolution_clock::now();
 
@@ -166,6 +128,8 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   _has_run     = true;
   _curr_vel    = mpc_command[0];
   _curr_angvel = mpc_command[1];
+
+  _prev_s = current_s;
 
   return mpc_command;
 }

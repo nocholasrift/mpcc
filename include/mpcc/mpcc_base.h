@@ -101,6 +101,11 @@ class MPCBase {
                                        const Eigen::VectorXd& control,
                                        bool is_abv) const = 0;
 
+  std::optional<std::array<double, 2>> presolve_hook(
+      const Eigen::VectorXd& state, const types::Trajectory& reference) const {
+    return std::nullopt;
+  }
+
   const bool get_solver_status() const { return _solve_success; }
 
   double limit(double prev_val, double input, double max_rate,
@@ -117,10 +122,16 @@ class MPCBase {
   }
 
   std::array<double, 2> solve(const Eigen::VectorXd& state,
-                              const types::Trajectory::View& reference,
+                              const types::Trajectory& reference,
                               bool is_reverse) {
     MPCImpl& impl  = static_cast<MPCImpl&>(*this);
     _solve_success = false;
+
+    std::optional<std::array<double, 2>> pre_cmd =
+        impl.presolve_hook(state, reference);
+    if (pre_cmd) {
+      return *pre_cmd;
+    }
 
     /*************************************
   ********** INITIAL CONDITION *********
@@ -140,7 +151,7 @@ class MPCBase {
     /*************************************
   ********* SET REFERENCE PARAMS *******
   **************************************/
-    if (!set_solver_parameters(reference, MPCImpl::kNP)) {
+    if (!set_solver_parameters(reference.view(), MPCImpl::kNP)) {
       return {0, 0};
     }
 
@@ -149,7 +160,7 @@ class MPCBase {
     /*************************************
   ************* RUN SOLVER *************
   **************************************/
-    _solve_success = impl.run_acados_solver(x0);
+    _solve_success = run_acados_solver(x0);
     std::cout << "done solving\n";
 
     /*************************************
@@ -328,20 +339,6 @@ class MPCBase {
  protected:
   using SolverTraits = types::SolverTraits<MPCImpl>;
   AcadosInterface<SolverTraits> _acados_solver;
-
-  sim_config* _sim_config;
-  sim_in* _sim_in;
-  sim_out* _sim_out;
-  void* _sim_dims;
-
-  ocp_nlp_in* _nlp_in;
-  ocp_nlp_out* _nlp_out;
-  ocp_nlp_dims* _nlp_dims;
-  ocp_nlp_config* _nlp_config;
-  ocp_nlp_solver* _nlp_solver;
-  void* _nlp_opts;
-
-  double* _new_time_steps;
 
   Eigen::VectorXd _state;
   Eigen::VectorXd _odom;
