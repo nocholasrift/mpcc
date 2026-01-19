@@ -33,19 +33,6 @@ class MPCCore {
    * vel, and prop controller gains and thresholds
    **********************************************************************/
 
-  bool orient_robot();
-  /**********************************************************************
-   * Function: MPCCore::orient_robot()
-   * Description: Orients the robot to the reference trajectory
-   * Parameters:
-   * N/A
-   * Returns:
-   * true if robot is not aligned with reference. False otherwise.
-   * Notes:
-   * A proportional controller is used to align the robot with the
-   * reference trajectory if the error is larger than the threshold
-   **********************************************************************/
-
   std::array<double, 2> solve(const Eigen::VectorXd& state,
                               bool is_reverse = false);
   /**********************************************************************
@@ -114,6 +101,7 @@ class MPCCore {
 
   double _prop_gain{1.0};
   double _prop_angle_thresh{0.5};
+  double _prev_s{0.};
 
   bool _is_set{false};
   bool _use_cbf{false};

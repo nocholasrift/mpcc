@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mpcc/mpcc_base.h>
+#include <mpcc/orientable.h>
 #include <mpcc/types.h>
 
 #include <cstdlib>
@@ -69,7 +70,7 @@ struct types::SolverTraits<UnicycleMPCC> {
   }
 };
 
-class UnicycleMPCC : public MPCBase<UnicycleMPCC> {
+class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
   friend class MPCBase<UnicycleMPCC>;
 
  public:
@@ -241,6 +242,9 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC> {
   void map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
                                  const Eigen::VectorXd& utraj);
 
+  std::optional<std::array<double, 2>> presolve_hook(
+      const Eigen::VectorXd& state, const types::Trajectory& reference) const;
+
  private:
   Eigen::MatrixXd _dyna_obs;
 
@@ -252,21 +256,14 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC> {
   double _max_linacc;
   double _max_anga;
 
-  // double _alpha_abv;
-  // double _alpha_blw;
-  // double _colinear;
-  // double _padding;
+  double _traj_alignment_threshold;
+  double _alignment_p_gain;
 
   double _s_dot;
 
   unsigned int iterations;
 
   bool _use_eigen;
-  // bool _is_shift_warm;
   bool _use_dyna_obs;
-  // bool _has_run;
-
-  unicycle_model_mpcc_sim_solver_capsule* _acados_sim_capsule;
-  unicycle_model_mpcc_solver_capsule* _acados_ocp_capsule;
 };
 }  // namespace mpcc

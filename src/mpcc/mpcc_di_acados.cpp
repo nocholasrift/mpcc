@@ -43,8 +43,6 @@ DIMPCC::DIMPCC() {
   _is_shift_warm = false;
   _odom_init     = false;
 
-  _new_time_steps = nullptr;
-
   _state = Eigen::VectorXd::Zero(kNX);
 
   _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
