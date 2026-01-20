@@ -10,16 +10,15 @@ namespace map_util {
 class OccupancyGrid {
  private:
   std::vector<unsigned char> data;
-  int width;
-  int height;
-  double resolution;
-  double origin_x;
-  double origin_y;
+  int width{0};
+  int height{0};
+  double resolution{0};
+  double origin_x{0};
+  double origin_y{0};
 
-  bool resized;
-  bool use_sdf;
+  bool resized{false};
 
-  int reset_counter;
+  int reset_counter{0};
 
   std::vector<unsigned char> occupied_values;
   std::vector<unsigned char> no_information_values;
@@ -27,60 +26,41 @@ class OccupancyGrid {
   std::unordered_set<uint64_t> known_occupied_inds;
 
  public:
-  Eigen::MatrixXd _sdf;
+  struct MapConfig {
+    int width;
+    int height;
+    double resolution;
+    Eigen::Vector2d origin;
+    std::vector<unsigned char> occupied_values;
+    std::vector<unsigned char> no_information_values;
+  };
 
-  OccupancyGrid() {
-    width      = 0;
-    height     = 0;
-    resolution = 0.0;
-    origin_x   = 0.0;
-    origin_y   = 0.0;
+  OccupancyGrid() {}
 
-    resized       = false;
-    use_sdf       = false;
-    reset_counter = 0;
-  }
-
-  OccupancyGrid(int w, int h, double res, double ox, double oy,
-                const std::vector<unsigned char>& d,
-                const std::vector<unsigned char>& ov,
-                const std::vector<unsigned char>& niv) {
-
-    width                 = w;
-    height                = h;
-    resolution            = res;
-    origin_x              = ox;
-    origin_y              = oy;
-    occupied_values       = ov;
-    no_information_values = niv;
-    reset_counter         = 0;
+  OccupancyGrid(const MapConfig& config, const std::vector<unsigned char>& d)
+      : width(config.width),
+        height(config.height),
+        resolution(config.resolution),
+        origin_x(config.origin[0]),
+        origin_y(config.origin[1]),
+        occupied_values(config.occupied_values),
+        no_information_values(config.no_information_values) {
 
     data = d;
-
     update_occupied_obstacles();
-
-    resized       = false;
-    this->use_sdf = false;
   }
 
-  OccupancyGrid(int w, int h, double res, double ox, double oy,
-                unsigned char* d, const std::vector<unsigned char>& ov,
-                const std::vector<unsigned char>& niv) {
-    width                 = w;
-    height                = h;
-    resolution            = res;
-    origin_x              = ox;
-    origin_y              = oy;
-    occupied_values       = ov;
-    no_information_values = niv;
-    reset_counter         = 0;
+  OccupancyGrid(const MapConfig& config, unsigned char* d)
+      : width(config.width),
+        height(config.height),
+        resolution(config.resolution),
+        origin_x(config.origin[0]),
+        origin_y(config.origin[1]),
+        occupied_values(config.occupied_values),
+        no_information_values(config.no_information_values) {
 
-    data = std::vector<unsigned char>(d, d + (w * h));
-
+    data = std::vector<unsigned char>(d, d + (width * height));
     update_occupied_obstacles();
-
-    resized       = false;
-    this->use_sdf = false;
   }
 
   void update(int w, int h, double res, double ox, double oy,
@@ -322,8 +302,9 @@ class OccupancyGrid {
     std::vector<unsigned int> end_m   = world_to_map(end(0), end(1));
 
     if (!raycast(start_m[0], start_m[1], end_m[0], end_m[1], true_end[0],
-                 true_end[1], layer, test_val, max_range))
+                 true_end[1], layer, test_val, max_range)) {
       return false;
+    }
 
     return true;
   }
@@ -485,45 +466,6 @@ class OccupancyGrid {
   std::vector<unsigned char> get_no_info_values() const {
     return no_information_values;
   }
-
-  // void push_trajectory(std::vector<rfn_state_t> &traj, double thresh_dist =
-  // .1,
-  //                      int max_iters = 100) {
-  //   if (!use_sdf)
-  //     throw std::invalid_argument(
-  //         "[get_signed_distance] SDF not generated, use_sdf is false");
-  //
-  //   double step_size = resolution / 2.0;
-  //   for (rfn_state_t &x : traj) {
-  //     // perform gradient descent on point if it is too close to obstacles
-  //     double dist;
-  //     try {
-  //       dist = get_signed_dist(x.pos(0), x.pos(1));
-  //     } catch (...) {
-  //       return;
-  //     }
-  //     Eigen::Vector2d p = x.pos.head(2);
-  //     if (dist < thresh_dist) {
-  //       for (int i = 0; i < max_iters && dist < thresh_dist; ++i) {
-  //         // get normalized gradient vector to obstacle
-  //         std::vector<double> d = get_dist_grad(p(0), p(1));
-  //         Eigen::Vector2d grad = {d[0], d[1]};
-  //         try {
-  //           Eigen::Vector2d tmp = p + step_size * grad;
-  //           dist = get_signed_dist(tmp[0], tmp[1]);
-  //         } catch (...) {
-  //           x.pos.head(2) = p;
-  //           return;
-  //         }
-  //
-  //         p = p + step_size * grad;
-  //       }
-  //
-  //       // update trajectory
-  //       x.pos.head(2) = p;
-  //     }
-  //   }
-  // }
 };
 typedef OccupancyGrid occupancy_grid_t;
 

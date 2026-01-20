@@ -53,9 +53,11 @@ using Spline1D = Eigen::Spline<double, 1, 3>;
 // c0 + c1 * t + c2 * t^2 ...
 class Polynomial {
  public:
+  using Coeffs = Eigen::VectorXd;
+
   Polynomial() = default;
 
-  Polynomial(const Eigen::VectorXd& coeffs)
+  Polynomial(const Coeffs& coeffs)
       : coeffs_(coeffs), degree_(coeffs.size() - 1) {}
 
   ~Polynomial() = default;
@@ -83,8 +85,29 @@ class Polynomial {
     return result;
   }
 
+  double operator()(double t) const { return pos(t); }
+  double operator()(double t, unsigned int order) const {
+    return derivative(t, order);
+  }
+
+  const Coeffs& get_coeffs() const { return coeffs_; }
+
+  // there are N+1 coefficients for an N degree polynomial
+  const double get_degree() const { return coeffs_.size() - 1; }
+
+  // i like being able to perform some operations in the setter so
+  // i am also including an r-value setter.
+  void set_coeffs(Coeffs& coeffs) { coeffs_ = coeffs; }
+  void set_coeffs(Coeffs&& coeffs) { coeffs_ = coeffs; }
+
+  // some static expressions for common orders, anything after 3,
+  // just make your own local variable for it...
+  static constexpr unsigned int kFirstOrder  = 1;
+  static constexpr unsigned int kSecondOrder = 2;
+  static constexpr unsigned int kThirdOrder  = 3;
+
  private:
-  Eigen::VectorXd coeffs_{Eigen::Vector3d::Zero()};
+  Coeffs coeffs_;
   unsigned int degree_{0};
 
  private:
@@ -379,6 +402,65 @@ class Trajectory {
 
     return vals;
   }
+};
+
+class Corridor {
+ public:
+  struct Sample {
+    Eigen::Vector2d center, tangent, above, below;
+  };
+
+  enum class Side { kAbove, kBelow };
+
+  Corridor(const Trajectory& ref, const Polynomial& abv, const Polynomial& blw,
+           double s_start)
+      : ref_(ref), abv_(abv), blw_(blw), s_offset_(s_start) {}
+
+  const Polynomial& get_above_poly() const { return abv_; }
+
+  const Polynomial& get_below_poly() const { return blw_; }
+
+  const Trajectory& get_trajectory() const { return ref_; }
+
+  const Polynomial::Coeffs& get_tube_coeffs(Side side) const {
+    switch (side) {
+      case Side::kAbove:
+        return abv_.get_coeffs();
+      case Side::kBelow:
+        return blw_.get_coeffs();
+      default:
+        throw std::runtime_error(
+            "Invalid parameter passed to get_tube_coeffs. Should be"
+            "either Corridor::Side::kAbove or Corridor::Side::kBelow");
+    }
+  }
+
+  Sample get_at(double s_local) const {
+    double s_glob = s_offset_ + s_local;
+
+    Eigen::Vector2d pos = ref_(s_glob);
+    Eigen::Vector2d tan = ref_(s_glob, Trajectory::kFirstOrder);
+    tan.normalize();
+
+    Eigen::Vector2d norm(-tan.y(), tan.x());
+
+    double d_abv = abv_.pos(s_local);
+    double d_blw = blw_.pos(s_local);
+
+    Sample corridor_sample;
+    corridor_sample.center  = pos;
+    corridor_sample.tangent = tan;
+    corridor_sample.above   = pos + norm * d_abv;
+    corridor_sample.below   = pos + norm * d_blw;
+
+    return corridor_sample;
+  }
+
+ private:
+  const Trajectory& ref_;
+  const Polynomial& abv_;
+  const Polynomial& blw_;
+  double s_offset_;
 };
 
 }  // namespace types

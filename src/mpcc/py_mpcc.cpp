@@ -32,6 +32,9 @@ PYBIND11_MODULE(py_mpcc, m) {
   py::class_<Polynomial>(m, "Polynomial")
       .def(py::init<>())
       .def(py::init<const Eigen::VectorXd&>())
+      .def("set_coeffs", static_cast<void (Polynomial::*)(Eigen::VectorXd&)>(
+                             &Polynomial::set_coeffs))
+      .def("get_coeffs", &Polynomial::get_coeffs)
       .def("derivative", &Polynomial::derivative)
       .def("pos", &Polynomial::pos);
 
@@ -113,11 +116,12 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def(py::init<const MPCType&>())
       .def("load_params", &MPCCore::load_params)
       .def("get_params", &MPCCore::get_params)
+      .def("set_map", &MPCCore::set_map)
       .def("set_odom", &MPCCore::set_odom)
-      .def("set_tubes", &MPCCore::set_tubes)
       .def("set_trajectory",
            (void (MPCCore::*)(const Eigen::VectorXd&, const Eigen::VectorXd&,
                               const Eigen::VectorXd&))&MPCCore::set_trajectory)
+      .def("get_tube", &MPCCore::get_tube)
       .def("get_cbf_data", &MPCCore::get_cbf_data)
       .def("get_horizon", &MPCCore::get_horizon)
       .def("solve", &MPCCore::solve)
@@ -128,11 +132,24 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def("get_state_limits", &MPCCore::get_state_limits)
       .def("get_state", &MPCCore::get_state);
 
+  py::class_<map_util::OccupancyGrid::MapConfig>(m, "MapConfig")
+      .def(py::init<>())
+      .def_readwrite("width", &map_util::OccupancyGrid::MapConfig::width)
+      .def_readwrite("height", &map_util::OccupancyGrid::MapConfig::height)
+
+      .def_readwrite("resolution",
+                     &map_util::OccupancyGrid::MapConfig::resolution)
+      .def_readwrite("origin", &map_util::OccupancyGrid::MapConfig::origin)
+
+      .def_readwrite("occupied_values",
+                     &map_util::OccupancyGrid::MapConfig::occupied_values)
+      .def_readwrite(
+          "no_information_values",
+          &map_util::OccupancyGrid::MapConfig::no_information_values);
+
   py::class_<map_util::OccupancyGrid>(m, "OccupancyGrid", py::module_local())
       .def(py::init<>())
-      .def(py::init<int, int, double, double, double,
-                    std::vector<unsigned char>&,
-                    const std::vector<unsigned char>&,
+      .def(py::init<const map_util::OccupancyGrid::MapConfig&,
                     const std::vector<unsigned char>&>())
       .def("get_origin", &map_util::OccupancyGrid::get_origin)
       .def("world_to_map", &map_util::OccupancyGrid::world_to_map)
