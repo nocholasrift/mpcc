@@ -40,15 +40,28 @@ class MPCBase {
   }
   virtual void reset_horizon() = 0;
 
-  bool set_solver_parameters(const TrajectoryView& reference,
+  bool set_solver_parameters(const types::Corridor& corridor,
                              const unsigned int num_params) {
+    using Side = types::Corridor::Side;
     std::vector<double> params;
     params.resize(num_params);
-    auto& ctrls_x = reference.xs;
-    auto& ctrls_y = reference.ys;
 
-    int provided_params = ctrls_x.size() + ctrls_y.size() + _tubes[0].size() +
-                          _tubes[1].size() + 8;
+    const TrajectoryView& traj_view = corridor.get_trajectory().view();
+    const auto& ctrls_x             = traj_view.xs;
+    const auto& ctrls_y             = traj_view.ys;
+
+    // this shoudl never happen... but just in case.
+    if (corridor.get_above_poly().get_degree() !=
+        corridor.get_below_poly().get_degree()) {
+      std::cerr << termcolor::yellow
+                << "[MPCC] tube degrees do not match for above and below!"
+                << num_params << termcolor::reset << std::endl;
+      return false;
+    }
+
+    int N_tube_coeffs = corridor.get_above_poly().get_coeffs().size();
+    int provided_params =
+        ctrls_x.size() + ctrls_y.size() + 2 * N_tube_coeffs + 8;
     if (provided_params != num_params) {
       std::cerr << termcolor::yellow << "[MPCC] provided param count"
                 << provided_params << " does not match acados parameter size "
@@ -66,14 +79,18 @@ class MPCBase {
     params[num_params - 2] = _w_ql_lyap;
     params[num_params - 1] = _gamma;
 
-    for (int i = 0; i < ctrls_x.size(); ++i) {
-      params[i]                  = ctrls_x[i];
-      params[i + ctrls_x.size()] = ctrls_y[i];
+    int N_ctrls = ctrls_x.size();
+    for (int i = 0; i < N_ctrls; ++i) {
+      params[i]           = ctrls_x[i];
+      params[i + N_ctrls] = ctrls_y[i];
     }
 
-    for (int i = 0; i < _tubes[0].size(); ++i) {
-      params[i + 2 * ctrls_x.size()]                    = _tubes[0](i);
-      params[i + 2 * ctrls_x.size() + _tubes[0].size()] = _tubes[1](i);
+    const auto& above_coeffs = corridor.get_tube_coeffs(Side::kAbove);
+    const auto& below_coeffs = corridor.get_tube_coeffs(Side::kBelow);
+
+    for (int i = 0; i < N_tube_coeffs; ++i) {
+      params[i + 2 * N_ctrls]                 = above_coeffs(i);
+      params[i + 2 * N_ctrls + N_tube_coeffs] = below_coeffs(i);
     }
 
     for (int step = 0; step < _mpc_steps + 1; ++step) {
@@ -82,12 +99,6 @@ class MPCBase {
 
     return true;
   }
-
-  void set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {
-    _tubes = tubes;
-  }
-
-  const std::array<Eigen::VectorXd, 2>& get_tubes() const { return _tubes; }
 
   virtual const Eigen::VectorXd& get_state() const                      = 0;
   virtual const std::array<Eigen::VectorXd, 2> get_state_limits() const = 0;
@@ -102,7 +113,7 @@ class MPCBase {
                                        bool is_abv) const = 0;
 
   std::optional<std::array<double, 2>> presolve_hook(
-      const Eigen::VectorXd& state, const types::Trajectory& reference) const {
+      const Eigen::VectorXd& state, const types::Corridor& reference) const {
     return std::nullopt;
   }
 
@@ -122,13 +133,14 @@ class MPCBase {
   }
 
   std::array<double, 2> solve(const Eigen::VectorXd& state,
-                              const types::Trajectory& reference,
+                              const types::Corridor& corridor,
                               bool is_reverse) {
     MPCImpl& impl  = static_cast<MPCImpl&>(*this);
     _solve_success = false;
 
     std::optional<std::array<double, 2>> pre_cmd =
-        impl.presolve_hook(state, reference);
+        impl.presolve_hook(state, corridor);
+
     if (pre_cmd) {
       return *pre_cmd;
     }
@@ -136,7 +148,7 @@ class MPCBase {
     /*************************************
   ********** INITIAL CONDITION *********
   **************************************/
-    if (!is_solver_ready(state)) {
+    if (!is_solver_ready(state, corridor)) {
       return {0, 0};
     }
 
@@ -151,7 +163,7 @@ class MPCBase {
     /*************************************
   ********* SET REFERENCE PARAMS *******
   **************************************/
-    if (!set_solver_parameters(reference.view(), MPCImpl::kNP)) {
+    if (!set_solver_parameters(corridor, MPCImpl::kNP)) {
       return {0, 0};
     }
 
@@ -188,13 +200,19 @@ class MPCBase {
   }
 
  protected:
-  bool is_solver_ready(const Eigen::VectorXd& state) {
+  bool is_solver_ready(const Eigen::VectorXd& state,
+                       const types::Corridor& corridor) {
+    using Side = types::Corridor::Side;
+
     if (!_acados_solver.is_initialized()) {
       std::cerr << termcolor::yellow << "[MPCC] Acados not yet initialized!"
                 << termcolor::reset << std::endl;
+      return false;
     }
 
-    if (_tubes[0].size() == 0 || _tubes[1].size() == 0) {
+    const auto& above_coeffs = corridor.get_tube_coeffs(Side::kAbove);
+    const auto& below_coeffs = corridor.get_tube_coeffs(Side::kAbove);
+    if (above_coeffs.size() == 0 || below_coeffs.size() == 0) {
       std::cerr << "[MPCC] tubes are not set yet, mpc cannot run" << std::endl;
       return false;
     }
@@ -347,8 +365,6 @@ class MPCBase {
   Eigen::VectorXd _prev_u0;
 
   std::map<std::string, double> _params;
-
-  std::array<Eigen::VectorXd, 2> _tubes;
 
   int _mpc_steps;
   int _ref_samples;

@@ -1,9 +1,9 @@
-#include "mpcc/mpcc_core.h"
+#include <mpcc/mpcc_core.h>
+#include <mpcc/tube_gen.h>
+#include <mpcc/termcolor.hpp>
 
 #include <chrono>
 #include <cmath>
-
-#include "mpcc/termcolor.hpp"
 
 using namespace mpcc;
 
@@ -42,10 +42,26 @@ void MPCCore::load_params(const std::map<std::string, double>& params) {
   utils::get_param(params, "ANGLE_GAIN", _prop_gain);
   utils::get_param(params, "ANGLE_THRESH", _prop_angle_thresh);
 
+  // hack for now, will come back to fix...
+  double tube_degree{0.}, tube_samples{0.};
+  utils::get_param(params, "TUBE_DEGREE", tube_degree);
+  utils::get_param(params, "TUBE_SAMPLES", tube_samples);
+  utils::get_param(params, "MAX_TUBE_WIDTH", _max_tube_width);
+
+  _tube_degree  = static_cast<int>(tube_degree);
+  _tube_samples = static_cast<int>(tube_samples);
+  _max_tube_width /= 2.;
+
   _params = params;
 
   // _mpc->load_params(params);
   call_mpc([&](auto& mpc) { mpc.load_params(params); });
+}
+
+void MPCCore::set_map(const map_util::OccupancyGrid::MapConfig& config,
+                      std::vector<unsigned char>& d) {
+  _map_util        = map_util::OccupancyGrid(config, d);
+  _is_map_util_set = true;
 }
 
 void MPCCore::set_odom(const Eigen::Vector3d& odom) {
@@ -71,38 +87,43 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
   std::cout << "received trajectory of length: " << _ref_length << "\n";
   std::cout << "trajectory has " << N << " knots\n";
 
-  _is_set = true;
-}
-
-// void MPCCore::set_tubes(const std::vector<Spline1D>& tubes)
-void MPCCore::set_tubes(const std::array<Eigen::VectorXd, 2>& tubes) {
-  // _mpc->set_tubes(tubes);
-  call_mpc([&](auto& mpc) { mpc.set_tubes(tubes); });
-}
-
-const std::array<Eigen::VectorXd, 2>& MPCCore::get_tubes() const {
-  // return _mpc->get_tubes();
-  return call_mpc([&](auto& mpc) -> decltype(auto) { return mpc.get_tubes(); });
+  _is_traj_set = true;
 }
 
 std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
                                      bool is_reverse) {
-  if (!_is_set) {
-    std::cout << termcolor::yellow << "[MPC Core] trajectory not set!"
+
+  if (!_is_traj_set || !_is_map_util_set) {
+    std::cout << termcolor::yellow << "[MPC Core] trajectory or map not set!"
               << termcolor::reset << std::endl;
     return {0, 0};
   }
 
-  _traj_reset = false;
-
-  double time_to_solve = 0.;
-
+  // get s value on taj closest to robot position
   double current_s = std::max(_trajectory.get_closest_s(state.head(2)), 1e-6);
-  double s_dot = std::min(std::max((current_s - _prev_s) / _dt, 0.), _max_vel);
+
+  // define the tubes right before solving.
+  double horizon     = _trajectory.get_extended_length();
+  double true_length = _trajectory.get_true_length();
+  if (current_s + horizon > true_length) {
+    horizon = true_length - current_s;
+  }
+
+  bool status = tube::construct_tubes(_tube_degree, _tube_samples,
+                                      _max_tube_width, _trajectory, current_s,
+                                      horizon, _map_util, _mpc_tube);
+
+  // if tube can't be constructed in next iteration, just try to keep the old tubes.
+  // if (!status) {
+  //   return {0, 0};
+  // }
 
   int N_virtual_states = 2;
+  double s_dot = std::min(std::max((current_s - _prev_s) / _dt, 0.), _max_vel);
+
+  double mpc_s_offset = 0.;
   Eigen::VectorXd mpcc_state(state.size() + N_virtual_states);
-  mpcc_state << state, 0., s_dot;
+  mpcc_state << state, mpc_s_offset, s_dot;
 
   // Just like with trajectory length,acados MPC also has fixed number of knots
   // that can be used for the trajectory due to a quirk with Casadi Splines.
@@ -111,17 +132,16 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   types::Trajectory adjusted_traj =
       _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
 
+  types::Corridor corridor(adjusted_traj, _mpc_tube[0], _mpc_tube[1],
+                           mpc_s_offset);
+
   auto start                        = std::chrono::high_resolution_clock::now();
-  std::array<double, 2> mpc_command = call_mpc([&](auto& mpc) {
-    return mpc.solve(mpcc_state, adjusted_traj, is_reverse);
-  });
-  // std::array<double, 2> mpc_command = call_mpc([&](auto& mpc) {
-  //   return mpc.solve(state, adjusted_traj.view(), is_reverse);
-  // });
+  std::array<double, 2> mpc_command = call_mpc(
+      [&](auto& mpc) { return mpc.solve(mpcc_state, corridor, is_reverse); });
 
   auto end = std::chrono::high_resolution_clock::now();
 
-  time_to_solve =
+  double time_to_solve =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
 

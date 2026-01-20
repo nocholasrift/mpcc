@@ -270,25 +270,28 @@ inline void setup_highs_model(HighsModel& model, int d, int N,
   }
 }
 
-inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
-                       double min_dist, double max_dist,
-                       const std::vector<double>& dists,
-                       Eigen::VectorXd& coeffs) {
+inline bool get_tube_coeffs(int d, int N, double traj_arc_len, double horizon,
+                            double min_dist, double max_dist,
+                            const std::vector<double>& dists,
+                            Eigen::VectorXd& coeffs) {
 
   HighsModel model;
   setup_highs_model(model, d, N, traj_arc_len, horizon, min_dist, max_dist,
                     dists);
 
-  /*std::cout << "highs\n";*/
   Highs highs;
   highs.setOptionValue("output_flag", false);
   HighsStatus return_status = highs.passModel(model);
   if (return_status != HighsStatus::kOk) {
+    // for (int i = 0; i < dists.size(); ++i) {
+    //   std::cout << dists[i] << " ";
+    // }
+    //
+    // std::cout << "\n";
     std::cerr << "[Tube Gen] Highs solver could not be properly setup!\n";
     return false;
   }
 
-  /*std::cout << "get lp\n";*/
   const HighsLp& lp = highs.getLp();
 
   return_status = highs.run();
@@ -298,19 +301,18 @@ inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
     return false;
   }
 
-  /*std::cout << "model status\n";*/
   const HighsModelStatus& model_status = highs.getModelStatus();
   if (model_status != HighsModelStatus::kOptimal) {
     std::cerr << "[Tube Gen] Warning: model status was not optimal"
               << highs.modelStatusToString(model_status) << "\n";
   }
 
-  // std::cout << "solution:\n";
+  // std::cout << "coeffs: ";
   coeffs.resize(lp.num_col_);
   const HighsSolution& solution = highs.getSolution();
   for (int col = 0; col < lp.num_col_; ++col) {
     coeffs[col] = solution.col_value[col];
-    // std::cout << solution.col_value[col] << ", ";
+    // std::cout << coeffs[col] << " ";
   }
   // std::cout << "\n";
   /*highs.resetGlobalScheduler(true);*/
@@ -321,12 +323,10 @@ inline bool get_coeffs(int d, int N, double traj_arc_len, double horizon,
 }
 
 inline bool construct_tubes(int d, int N, double max_dist,
-                            const Trajectory& traj, double traj_arc_len,
-                            double len_start, double horizon,
+                            const Trajectory& traj, double len_start,
+                            double horizon,
                             const map_util::OccupancyGrid& grid_map,
-                            std::vector<Eigen::VectorXd>& tubes) {
-
-  tubes.resize(2);
+                            std::array<types::Polynomial, 2>& tubes) {
 
   // get distances
   double min_dist_abv;
@@ -337,19 +337,24 @@ inline bool construct_tubes(int d, int N, double max_dist,
   bool status = get_distances(traj, N, max_dist, len_start, horizon, grid_map,
                               min_dist_abv, min_dist_blw, ds_above, ds_below);
 
-  if (!get_coeffs(d, N, traj_arc_len, horizon, min_dist_abv, max_dist, ds_above,
-                  tubes[0])) {
-    std::cout << "[TUBE_GEN] get_coeffs above returned with some error\n";
+  double traj_arc_len = traj.get_extended_length();
+  Eigen::VectorXd abv_coeffs, blw_coeffs;
+  if (!get_tube_coeffs(d, N, traj_arc_len, horizon, min_dist_abv, max_dist,
+                       ds_above, abv_coeffs)) {
+    std::cout << "[TUBE_GEN] get_tube_coeffs above returned with some error\n";
     return false;
   }
 
-  if (!get_coeffs(d, N, traj_arc_len, horizon, min_dist_blw, max_dist, ds_below,
-                  tubes[1])) {
-    std::cout << "[TUBE_GEN] get_coeffs below returned with some error\n";
+  if (!get_tube_coeffs(d, N, traj_arc_len, horizon, min_dist_blw, max_dist,
+                       ds_below, blw_coeffs)) {
+    std::cout << "[TUBE_GEN] get_tube_coeffs below returned with some error\n";
     return false;
   }
 
-  tubes[1] *= -1;
+  // std::cout << "above coeffs: " << abv_coeffs.transpose() << "\n";
+  // std::cout << "below coeffs: " << blw_coeffs.transpose() << "\n";
+  tubes[0].set_coeffs(abv_coeffs);
+  tubes[1].set_coeffs(-1 * blw_coeffs);
 
   return true;
 }

@@ -330,11 +330,12 @@ UnicycleMPCC::MPCHorizon UnicycleMPCC::get_horizon() const {
 // object is orientable (see orientable.h), so we must check trajectory alignemnt
 // before
 std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
-    const Eigen::VectorXd& state, const types::Trajectory& reference) const {
+    const Eigen::VectorXd& state, const types::Corridor& corridor) const {
   double min_meaningful_len = .1;
   double eps_s              = .05;
 
-  double current_s = reference.get_closest_s(state.head(2));
+  const auto& reference = corridor.get_trajectory();
+  double current_s      = reference.get_closest_s(state.head(2));
 
   // only attempt to align if we are near beginning of trajectory, otherwise just let robot
   // run. Otherwise we will be stopping a lot along the trajectory whenever we are off, even
@@ -345,7 +346,7 @@ std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
   }
 
   Eigen::Vector2d point =
-      reference(current_s + eps_s, mpcc::types::Trajectory::kFirstOrder);
+      reference(current_s + eps_s, types::Trajectory::kFirstOrder);
 
   double traj_heading = atan2(point[1], point[0]);
 
