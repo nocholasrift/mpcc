@@ -18,16 +18,17 @@
     <node name="model_server" pkg="mpcc" type="model_server_di.py" output="screen" />
 	</group>
 
+  <!--<node name="mpcc" pkg="mpcc" type="mpcc_ros" launch-prefix="lldb --><!--" output="screen"> -->
 	<node name="mpcc" pkg="mpcc" type="mpcc_ros" output="screen">
 		<!--<param name="mpc_type" value="$(arg mpc_type)" />-->
 
 		<remap from="/odometry/filtered" to="$(arg odomTopic)" />
-		<remap from="/cmd_vel" to="$(arg cmdTopic)" />
+		<!--<remap from="/cmd_vel" to="$(arg cmdTopic)" />-->
 	</node>
 
 	<rosparam file="$(find mpcc)/params/local_costmap_params.yaml" command="load" ns="local_costmap/local_costmap/" />
 	<node name="local_costmap" pkg="mpcc" type="local_costmap" output="screen" />
-	<node name="cmd_mapper" pkg="mpcc" type="di_to_uni_cmd_mapper.py" output="screen" />
+	<!--<node name="cmd_mapper" pkg="mpcc" type="di_to_uni_cmd_mapper.py" output="screen" />-->
 
   <include file="$(find mpcc)/launch/gmapping.launch" /> 
 

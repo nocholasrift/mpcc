@@ -7,9 +7,9 @@
 
 namespace map_util {
 // struct mimicing nav_msgs::OccupancyGrid
-class OccupancyGrid {
- private:
-  std::vector<unsigned char> data;
+//
+class IGrid{
+protected:
   int width{0};
   int height{0};
   double resolution{0};
@@ -20,112 +20,13 @@ class OccupancyGrid {
 
   int reset_counter{0};
 
-  std::vector<unsigned char> occupied_values;
-  std::vector<unsigned char> no_information_values;
-
   std::unordered_set<uint64_t> known_occupied_inds;
+public:
+  IGrid() = default;
 
- public:
-  struct MapConfig {
-    int width;
-    int height;
-    double resolution;
-    Eigen::Vector2d origin;
-    std::vector<unsigned char> occupied_values;
-    std::vector<unsigned char> no_information_values;
-  };
+  IGrid(int w, int h, double res, const Eigen::Vector2d& origin) : width(w), height(h), resolution(res), origin_x(origin[0]), origin_y(origin[1]){}
+  virtual ~IGrid() = default;
 
-  OccupancyGrid() {}
-
-  OccupancyGrid(const MapConfig& config, const std::vector<unsigned char>& d)
-      : width(config.width),
-        height(config.height),
-        resolution(config.resolution),
-        origin_x(config.origin[0]),
-        origin_y(config.origin[1]),
-        occupied_values(config.occupied_values),
-        no_information_values(config.no_information_values) {
-
-    data = d;
-    update_occupied_obstacles();
-  }
-
-  OccupancyGrid(const MapConfig& config, unsigned char* d)
-      : width(config.width),
-        height(config.height),
-        resolution(config.resolution),
-        origin_x(config.origin[0]),
-        origin_y(config.origin[1]),
-        occupied_values(config.occupied_values),
-        no_information_values(config.no_information_values) {
-
-    data = std::vector<unsigned char>(d, d + (width * height));
-    update_occupied_obstacles();
-  }
-
-  void update(int w, int h, double res, double ox, double oy,
-              const std::vector<unsigned char>& d,
-              const std::vector<unsigned char>& ov,
-              const std::vector<unsigned char>& niv) {
-    if (w != width || h != height || origin_x != ox || origin_y != oy ||
-        reset_counter++ > 10) {
-      std::cout
-          << "[OccupancyGrid] Costmap metadata changed, updating occupancies"
-          << std::endl;
-      // reset cache since map has changed geometry
-      known_occupied_inds.clear();
-      reset_counter = 0;
-    }
-
-    width                 = w;
-    height                = h;
-    resolution            = res;
-    origin_x              = ox;
-    origin_y              = oy;
-    occupied_values       = ov;
-    no_information_values = niv;
-    data                  = d;
-
-    update_occupied_obstacles();
-  }
-
-  void update(int w, int h, double res, double ox, double oy, unsigned char* d,
-              const std::vector<unsigned char>& ov,
-              const std::vector<unsigned char>& niv) {
-    if (w != width || h != height || origin_x != ox || origin_y != oy ||
-        reset_counter++ > 10) {
-      std::cout
-          << "[OccupancyGrid] Costmap metadata changed, updating occupancies"
-          << std::endl;
-      // reset cache since map has changed geometry
-      known_occupied_inds.clear();
-      reset_counter = 0;
-    }
-
-    width                 = w;
-    height                = h;
-    resolution            = res;
-    origin_x              = ox;
-    origin_y              = oy;
-    occupied_values       = ov;
-    no_information_values = niv;
-    data                  = std::vector<unsigned char>(d, d + (w * h));
-
-    update_occupied_obstacles();
-  }
-
-  // std::vector<double> clamp_point_to_bounds(const std::vector<double>& goal)
-  // {
-  //     std::vector<double> clamped = goal;
-  //
-  //     double wx_max = origin_x + width * resolution;
-  //     double wy_max = origin_y + height * resolution;
-  //
-  //     clamped[0] = std::min(std::max(clamped[0], origin_x), wx_max);
-  //     clamped[1] = std::min(std::max(clamped[1], origin_y), wy_max);
-  //
-  //     return clamped;
-  // }
   std::vector<double> clamp_point_to_bounds(const std::vector<double>& current,
                                             const std::vector<double>& goal) {
     double epsilon = .95;
@@ -170,7 +71,7 @@ class OccupancyGrid {
 
     return {current[0] + (t_max)*dx, current[1] + (t_max)*dy};
   }
-
+  
   // define these functions with vectors so we can pybind them more easily
   std::vector<unsigned int> world_to_map(double x, double y) const {
     if (x < origin_x || y < origin_y) {
@@ -230,53 +131,11 @@ class OccupancyGrid {
     return my * width + mx;
   }
 
-  const unsigned char* get_data() const { return data.data(); }
-
-  unsigned char get_cost(double x, double y, const std::string& layer) const {
-    std::vector<unsigned int> cells = world_to_map(x, y);
-    return get_cost(cells[0], cells[1], layer);
-  }
-
-  unsigned char get_cost(unsigned int mx, unsigned int my,
-                         const std::string& layer) const {
-    return get_cost(cells_to_index(mx, my), layer);
-  }
-
   double get_resolution() const { return resolution; }
 
   std::vector<double> get_origin() const { return {origin_x, origin_y}; }
 
   std::vector<int> get_size() const { return {width, height}; }
-
-  unsigned char get_cost(unsigned int index, const std::string& layer) const {
-    if (layer == "inflated")
-      return data[index];
-    else if (layer == "obstacles") {
-      if (data[index] == occupied_values[0])
-        return 0;
-      return data[index];
-    } else {
-      std::string err = "[get_cost] layer not found: " + layer;
-      throw std::invalid_argument(err);
-    }
-
-    return data[index];
-  }
-
-  unsigned char get_cost(unsigned int index, const std::string& layer) {
-    if (layer == "inflated")
-      return data[index];
-    else if (layer == "obstacles") {
-      if (data[index] == occupied_values[0])
-        return 0;
-      return data[index];
-    } else {
-      std::string err = "[get_cost] layer not found: " + layer;
-      throw std::invalid_argument(err);
-    }
-
-    return data[index];
-  }
 
   bool is_occupied(double x, double y, const std::string& layer) const {
     std::vector<unsigned int> cells = world_to_map(x, y);
@@ -288,35 +147,48 @@ class OccupancyGrid {
     return is_occupied(cells_to_index(mx, my), layer);
   }
 
-  bool is_occupied(unsigned int index, const std::string& layer) const {
-    unsigned char cost = get_cost(index, layer);
-    return std::find(occupied_values.begin(), occupied_values.end(), cost) !=
-           occupied_values.end();
-  }
+  virtual bool is_occupied(unsigned int index, const std::string& layer) const = 0;
 
+  // convenience function to use is_occupied if no custom function is passed in
   bool raycast(const Eigen::Vector2d& start, const Eigen::Vector2d& end,
                Eigen::Vector2d& true_end, const std::string& layer,
-               const std::vector<unsigned char>* test_val = nullptr,
                unsigned int max_range                     = 1e6) const {
     std::vector<unsigned int> start_m = world_to_map(start(0), start(1));
     std::vector<unsigned int> end_m   = world_to_map(end(0), end(1));
 
+    auto test_func = [this](unsigned int mx, unsigned int my, const std::string& layer){
+      return this->is_occupied(mx, my, layer);
+    };
+
     if (!raycast(start_m[0], start_m[1], end_m[0], end_m[1], true_end[0],
-                 true_end[1], layer, test_val, max_range)) {
+                 true_end[1], layer, test_func, max_range)) {
       return false;
     }
 
     return true;
   }
 
+  template <typename Callable>
+  bool raycast(const Eigen::Vector2d& start, const Eigen::Vector2d& end,
+               Eigen::Vector2d& true_end, const std::string& layer,
+               Callable&& test_func,
+               unsigned int max_range                     = 1e6) const {
+    std::vector<unsigned int> start_m = world_to_map(start(0), start(1));
+    std::vector<unsigned int> end_m   = world_to_map(end(0), end(1));
+
+    if (!raycast(start_m[0], start_m[1], end_m[0], end_m[1], true_end[0],
+                 true_end[1], layer, test_func, max_range)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  template <typename Callable>
   bool raycast(unsigned int sx, unsigned int sy, unsigned int ex,
                unsigned int ey, double& x, double& y, const std::string& layer,
-               const std::vector<unsigned char>* test_val = nullptr,
+               Callable&& test_func,
                unsigned int max_range                     = 1e6) const {
-
-    if (!test_val) {
-      test_val = &occupied_values;
-    }
 
     bool ray_hit        = false;
     unsigned int size_x = width;
@@ -340,12 +212,12 @@ class OccupancyGrid {
       int error_y = abs_dx / 2;
       ray_hit =
           bresenham(abs_dx, abs_dy, error_y, offset_dx, offset_dy, offset,
-                    (unsigned int)(scale * abs_dx), term, layer, *test_val);
+                    (unsigned int)(scale * abs_dx), term, layer, test_func);
     } else {
       int error_x = abs_dy / 2;
       ray_hit =
           bresenham(abs_dy, abs_dx, error_x, offset_dy, offset_dx, offset,
-                    (unsigned int)(scale * abs_dy), term, layer, *test_val);
+                    (unsigned int)(scale * abs_dy), term, layer, test_func);
     }
 
     // convert costmap index to world coordinates
@@ -363,11 +235,12 @@ class OccupancyGrid {
 
   // following bresenham / raycast method from
   // https://docs.ros.org/en/api/costmap_2d/html/costmap__2d_8h_source.html
+  template <typename Callable>
   bool bresenham(unsigned int abs_da, unsigned int abs_db, int error_b,
                  int offset_a, int offset_b, unsigned int offset,
                  unsigned int max_range, unsigned int& term,
                  const std::string layer,
-                 const std::vector<unsigned char>& test_val) const {
+                 Callable&& test_func) const {
     bool ray_hit     = false;
     unsigned int end = std::min(max_range, abs_da);
     unsigned int mx, my;
@@ -380,8 +253,7 @@ class OccupancyGrid {
       mx                              = cells[0];
       my                              = cells[1];
 
-      unsigned char cost = get_cost(mx, my, layer);
-      if (std::find(test_val.begin(), test_val.end(), cost) != test_val.end()) {
+      if (test_func(mx, my, layer)) {
         ray_hit = true;
         break;
       }
@@ -397,8 +269,7 @@ class OccupancyGrid {
       mx    = cells[0];
       my    = cells[1];
 
-      cost = get_cost(mx, my, layer);
-      if (std::find(test_val.begin(), test_val.end(), cost) != test_val.end()) {
+      if (test_func(mx, my, layer)) {
         ray_hit = true;
         break;
       }
@@ -410,6 +281,23 @@ class OccupancyGrid {
     // this occupied offset!
     term = ray_hit ? last_free_offset : offset;
     return ray_hit;
+  }
+
+  void update_occupied_obstacles() {
+    for (unsigned int j = 0; j < height; ++j) {
+      for (unsigned int i = 0; i < width; ++i) {
+        unsigned int idx = cells_to_index(i, j);
+        if (known_occupied_inds.find(idx) != known_occupied_inds.end()) {
+          continue;
+        }
+
+        if (is_occupied(i, j, "inflated"))
+          known_occupied_inds.insert(idx);
+      }
+    }
+
+    std::cout << "[OccupancyGrid] Found " << known_occupied_inds.size()
+              << " occupied cells " << std::endl;
   }
 
   std::vector<Eigen::VectorXd> get_occupied(uint8_t dims) const {
@@ -441,32 +329,152 @@ class OccupancyGrid {
 
     return paddedObs;
   }
+};
+//
 
-  void update_occupied_obstacles() {
-    for (unsigned int j = 0; j < height; ++j) {
-      for (unsigned int i = 0; i < width; ++i) {
-        unsigned int idx = cells_to_index(i, j);
-        if (known_occupied_inds.find(idx) != known_occupied_inds.end()) {
-          continue;
-        }
+template <typename T>
+class OccupancyGrid : public IGrid {
+ private:
+  std::vector<T> data;
+  std::vector<T> occupied_values;
+  std::vector<T> no_information_values;
 
-        if (is_occupied(i, j, "inflated"))
-          known_occupied_inds.insert(idx);
-      }
-    }
+ public:
+  struct MapConfig {
+    int width;
+    int height;
+    double resolution;
+    Eigen::Vector2d origin;
+    std::vector<T> occupied_values;
+    std::vector<T> no_information_values;
+  };
 
-    std::cout << "[OccupancyGrid] Found " << known_occupied_inds.size()
-              << " occupied cells " << std::endl;
+  OccupancyGrid() {}
+
+  OccupancyGrid(const MapConfig& config, const std::vector<T>& d)
+      : IGrid(config.width, config.height, config.resolution, config.origin),
+        occupied_values(config.occupied_values),
+        no_information_values(config.no_information_values) {
+
+    data = d;
+    update_occupied_obstacles();
   }
 
-  std::vector<unsigned char> get_occupied_values() const {
+  OccupancyGrid(const MapConfig& config, T* d)
+      : IGrid(config.width, config.height, config.resolution, config.origin),
+        occupied_values(config.occupied_values),
+        no_information_values(config.no_information_values) {
+
+    data = std::vector<T>(d, d + (width * height));
+    update_occupied_obstacles();
+  }
+
+  void update(int w, int h, double res, double ox, double oy,
+              const std::vector<T>& d,
+              const std::vector<T>& ov,
+              const std::vector<T>& niv) {
+    if (w != width || h != height || origin_x != ox || origin_y != oy ||
+        reset_counter++ > 10) {
+      std::cout
+          << "[OccupancyGrid] Costmap metadata changed, updating occupancies"
+          << std::endl;
+      // reset cache since map has changed geometry
+      known_occupied_inds.clear();
+      reset_counter = 0;
+    }
+
+    width                 = w;
+    height                = h;
+    resolution            = res;
+    origin_x              = ox;
+    origin_y              = oy;
+    occupied_values       = ov;
+    no_information_values = niv;
+    data                  = d;
+
+    update_occupied_obstacles();
+  }
+
+  void update(int w, int h, double res, double ox, double oy, T* d,
+              const std::vector<T>& ov,
+              const std::vector<T>& niv) {
+    if (w != width || h != height || origin_x != ox || origin_y != oy ||
+        reset_counter++ > 10) {
+      std::cout
+          << "[OccupancyGrid] Costmap metadata changed, updating occupancies"
+          << std::endl;
+      // reset cache since map has changed geometry
+      known_occupied_inds.clear();
+      reset_counter = 0;
+    }
+
+    width                 = w;
+    height                = h;
+    resolution            = res;
+    origin_x              = ox;
+    origin_y              = oy;
+    occupied_values       = ov;
+    no_information_values = niv;
+    data                  = std::vector<T>(d, d + (w * h));
+
+    update_occupied_obstacles();
+  }
+
+  const T* get_data() const { return data.data(); }
+
+  T get_cost(double x, double y, const std::string& layer) const {
+    std::vector<unsigned int> cells = world_to_map(x, y);
+    return get_cost(cells[0], cells[1], layer);
+  }
+
+  T get_cost(unsigned int mx, unsigned int my,
+                         const std::string& layer) const {
+    return get_cost(cells_to_index(mx, my), layer);
+  }
+
+  T get_cost(unsigned int index, const std::string& layer) const {
+    if (layer == "inflated")
+      return data[index];
+    else if (layer == "obstacles") {
+      if (occupied_values.size() > 1 && data[index] == occupied_values[0])
+        return 0;
+      return data[index];
+    } else {
+      std::string err = "[get_cost] layer not found: " + layer;
+      throw std::invalid_argument(err);
+    }
+
+    return data[index];
+  }
+
+  T get_cost(unsigned int index, const std::string& layer) {
+    if (layer == "inflated")
+      return data[index];
+    else if (layer == "obstacles") {
+      if (data[index] == occupied_values[0])
+        return 0;
+      return data[index];
+    } else {
+      std::string err = "[get_cost] layer not found: " + layer;
+      throw std::invalid_argument(err);
+    }
+
+    return data[index];
+  }
+
+  virtual bool is_occupied(unsigned int index, const std::string& layer) const override {
+    T cost = get_cost(index, layer);
+    return std::find(occupied_values.begin(), occupied_values.end(), cost) !=
+           occupied_values.end();
+  }
+
+  std::vector<T> get_occupied_values() const {
     return occupied_values;
   }
 
-  std::vector<unsigned char> get_no_info_values() const {
+  std::vector<T> get_no_info_values() const {
     return no_information_values;
   }
 };
-typedef OccupancyGrid occupancy_grid_t;
 
 }  // end namespace map_util

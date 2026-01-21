@@ -11,7 +11,6 @@
 #include <Eigen/Dense>
 
 // acados
-#include "acados_sim_solver_unicycle_model_mpcc.h"
 #include "acados_solver_unicycle_model_mpcc.h"
 
 namespace mpcc {
@@ -107,8 +106,13 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
             "[MPCHorizon] requested state at step " + std::to_string(step) +
             " for horizon of size " + std::to_string(xs.size()));
       }
-      return {xs[step], ys[step],      thetas[step],
-              vs[step], arclens[step], arclens_dot[step]};
+      // some of the robots have an older eigen version so we must use
+      // some older syntax :(
+      Eigen::Matrix<double, kNX, 1> ret;
+      ret << xs[step], ys[step],      thetas[step],
+              vs[step], arclens[step], arclens_dot[step];
+
+      return ret;
     }
   };
 
@@ -124,11 +128,25 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
             " for horizon of size " + std::to_string(arclens_ddot.size()));
       }
       // return {angvels[step], linaccs[step], arclens_ddot[step]};
-      return {linaccs[step], angvels[step], arclens_ddot[step]};
+      Eigen::Matrix<double, kNU, 1> ret;
+      ret << linaccs[step], angvels[step], arclens_ddot[step];
+      return ret;
     }
   };
 
-  using MPCHorizon = types::MPCHorizon<UnicycleMPCC>;
+  struct MPCHorizon : public types::MPCHorizon<UnicycleMPCC>{
+      Eigen::Vector2d get_pos(unsigned int step) const{
+        return {states.xs[step], states.ys[step]};
+      }
+
+      Eigen::Vector2d get_vel(unsigned int step) const{
+        return {states.vs[step] * cos(states.thetas[step]), states.vs[step] * sin(states.thetas[step])};
+      }
+
+      Eigen::Vector2d get_acc(unsigned int step) const{
+        return {inputs.linaccs[step] * cos(states.thetas[step]), inputs.linaccs[step] * sin(states.thetas[step])};
+      }
+  };
 
  public:
   UnicycleMPCC();
@@ -234,7 +252,8 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
    * N/A
    **********************************************************************/
 
-  Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state);
+  Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state, 
+                                        const types::Corridor& corridor);
 
   std::array<double, 2> compute_mpc_vel_command(const Eigen::VectorXd& state,
                                                 const Eigen::VectorXd& u);

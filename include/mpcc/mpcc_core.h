@@ -52,8 +52,13 @@ class MPCCore {
   /***********************
    * Setters and Getters
    ***********************/
-  void set_map(const map_util::OccupancyGrid::MapConfig& config,
-               std::vector<unsigned char>& d);
+  // compiler was giving me linker errrors so I had to implement the fn here :(
+  template <typename T>
+  void set_map(const typename map_util::OccupancyGrid<T>::MapConfig& config,
+               const std::vector<T>& d){
+    _map_util        = std::make_unique<map_util::OccupancyGrid<T>>(config, d);
+    _is_map_util_set = true;
+  }
   void set_odom(const Eigen::Vector3d& odom);
   void set_goal(const Eigen::Vector2d& goal);
   void set_trajectory(const Eigen::VectorXd& x_pts,
@@ -78,6 +83,10 @@ class MPCCore {
   // and never stored permanently
   types::Corridor get_corridor(const Eigen::Vector2d& position) const {
     double current_s = _trajectory.get_closest_s(position);
+    return types::Corridor(_trajectory, _mpc_tube[0], _mpc_tube[1], current_s);
+  }
+
+  types::Corridor get_corridor(double current_s) const {
     return types::Corridor(_trajectory, _mpc_tube[0], _mpc_tube[1], current_s);
   }
 
@@ -127,7 +136,7 @@ class MPCCore {
   types::Trajectory _trajectory;
   std::array<types::Polynomial, 2> _mpc_tube;
 
-  map_util::OccupancyGrid _map_util;
+  std::unique_ptr<map_util::IGrid> _map_util;
 
   std::array<double, 2> _prev_cmd;
 

@@ -226,8 +226,8 @@ void UnicycleMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
   }
 }
 
-Eigen::VectorXd UnicycleMPCC::prepare_initial_state(
-    const Eigen::VectorXd& state) {
+Eigen::VectorXd UnicycleMPCC::prepare_initial_state(const Eigen::VectorXd& state,
+                                              const types::Corridor& corridor) {
   Eigen::VectorXd x0 = state;
   if (_has_run) {
     Eigen::VectorXd prev_x0 = _prev_x0.head(kNX);

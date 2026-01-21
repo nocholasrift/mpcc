@@ -203,7 +203,7 @@ endif()
 ########################
 if(catkin_FOUND)
   set(MPCC_SRCS
-    src/mpcc/logger.cpp
+    # src/mpcc/logger.cpp
     src/mpcc/mpcc_ros.cpp
     src/mpcc/mpcc_core.cpp
     src/mpcc/mpcc_acados.cpp

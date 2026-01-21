@@ -103,8 +103,10 @@ class DIMPCC : public MPCBase<DIMPCC> {
             "[MPCHorizon] requested state at step " + std::to_string(step) +
             " for horizon of size " + std::to_string(xs.size()));
       }
-      return {xs[step],   ys[step],      vs_x[step],
-              vs_y[step], arclens[step], arclens_dot[step]};
+      Eigen::Matrix<double, kNX, 1> ret;
+      ret << xs[step], ys[step], vs_x[step], vs_y[step], arclens[step],
+          arclens_dot[step];
+      return ret;
     }
   };
 
@@ -119,11 +121,25 @@ class DIMPCC : public MPCBase<DIMPCC> {
             "[MPCHorizon] requested input at step " + std::to_string(step) +
             " for horizon of size " + std::to_string(arclens_ddot.size()));
       }
-      return {accs_x[step], accs_y[step], arclens_ddot[step]};
+      Eigen::Matrix<double, kNU, 1> ret;
+      ret << accs_x[step], accs_y[step], arclens_ddot[step];
+      return ret;
     }
   };
 
-  using MPCHorizon = types::MPCHorizon<DIMPCC>;
+  struct MPCHorizon : public types::MPCHorizon<DIMPCC> {
+    Eigen::Vector2d get_pos(unsigned int step) const {
+      return {states.xs[step], states.ys[step]};
+    }
+
+    Eigen::Vector2d get_vel(unsigned int step) const {
+      return {states.vs_x[step], states.vs_y[step]};
+    }
+
+    Eigen::Vector2d get_acc(unsigned int step) const {
+      return {inputs.accs_x[step], inputs.accs_y[step]};
+    }
+  };
 
  public:
   DIMPCC();
@@ -164,7 +180,8 @@ class DIMPCC : public MPCBase<DIMPCC> {
   Eigen::VectorXd next_state(const Eigen::VectorXd& current_state,
                              const Eigen::VectorXd& control);
 
-  Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state);
+  Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state,
+                                        const types::Corridor& corridor);
 
   std::array<double, 2> compute_mpc_vel_command(const Eigen::VectorXd& state,
                                                 const Eigen::VectorXd& u);

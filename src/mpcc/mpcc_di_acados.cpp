@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include "mpcc/types.h"
 
 using namespace mpcc;
 
@@ -19,7 +20,7 @@ DIMPCC::DIMPCC() {
   _dt         = -1;
   _max_linvel = 2.;
   _max_linacc = 2.;
-  _mpc_steps  = 20;
+  _mpc_steps  = 10;
 
   _w_ql      = 50.0;
   _w_qc      = .1;
@@ -117,6 +118,7 @@ void DIMPCC::load_params(const std::map<std::string, double>& params) {
   _dt        = new_dt;
   _mpc_steps = new_steps;
 
+  std::cout << "mpc steps: " << _mpc_steps << "\n";
   int status = _acados_solver.initialize(_mpc_steps);
   if (status) {
     throw std::runtime_error("Acados initialization failed with status + " +
@@ -192,11 +194,18 @@ Eigen::VectorXd DIMPCC::next_state(const Eigen::VectorXd& current_state,
   return ret;
 }
 
-Eigen::VectorXd DIMPCC::prepare_initial_state(const Eigen::VectorXd& state) {
+Eigen::VectorXd DIMPCC::prepare_initial_state(const Eigen::VectorXd& state,
+                                              const types::Corridor& corridor) {
+  double eps         = 1e-6;
   Eigen::VectorXd x0 = state;
   // x0(kIndS)          = 0.;
-  if (x0.segment(2, 2).norm() < 1e-6) {
-    x0(kIndVx) = 1e-6;
+  if (x0.segment(kIndVx, 2).norm() < eps) {
+    const types::Trajectory ref = corridor.get_trajectory();
+    Eigen::Vector2d tangent     = ref(eps, types::Trajectory::kFirstOrder);
+    double theta                = atan2(tangent(1), tangent(0));
+    Eigen::Vector2d unit_head(cos(theta), sin(theta));
+    x0(kIndVx) = eps * unit_head(0);
+    x0(kIndVy) = eps * unit_head(1);
   }
 
   return x0;

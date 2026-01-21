@@ -35,59 +35,10 @@ typedef struct Distances distances_t;
  * Notes:
  * Will return false if start or end indices not in map
  **********************************************************************/
-#ifdef FOUND_CATKIN
-inline bool raycast_grid(const Eigen::Vector2d& start,
-                         const Eigen::Vector2d& dir,
-                         const grid_map::GridMap& grid_map, double max_dist,
-                         double& actual_dist) {
-  // get indices in map
-  grid_map::Index start_ind;
-  if (!grid_map.getIndex(start, start_ind))
-    return false;
-
-  // raycast several times with small purturbations in direction to ensure
-  // thin obstacles are detected
-  double min_dist  = 1e6;
-  double theta_dir = atan2(dir(1), dir(0));
-
-  for (int i = 0; i < 1; ++i) {
-    // purturb by degrees each time
-    double theta = theta_dir + i * M_PI / 180;
-    Eigen::Vector2d end =
-        start + max_dist * Eigen::Vector2d(cos(theta), sin(theta));
-
-    grid_map::Index end_ind;
-    if (!grid_map.getIndex(end, end_ind))
-      return false;
-
-    // raycast
-    Eigen::Vector2d ray_end = end;
-    for (grid_map::LineIterator iterator(grid_map, start_ind, end_ind);
-         !iterator.isPastEnd(); ++iterator) {
-
-      if (grid_map.at("layer", *iterator) > 90) {
-        // I'm pretty sure this isn't possible
-        if (!grid_map.getPosition(*iterator, ray_end))
-          return false;
-
-        break;
-      }
-    }
-
-    double dist = (start - ray_end).norm();
-    if (dist < min_dist)
-      min_dist = dist;
-  }
-
-  /*actual_dist = std::max(min_dist - 0.25, 0.);*/
-  actual_dist = min_dist;
-  return true;
-}
-#endif
 
 inline bool get_distances(const Trajectory& traj, int N, double max_dist,
                           double len_start, double horizon,
-                          const map_util::OccupancyGrid& grid_map,
+                          const map_util::IGrid& grid_map,
                           double& min_dist_abv, double& min_dist_blw,
                           std::vector<double>& ds_above,
                           std::vector<double>& ds_below) {
@@ -190,20 +141,24 @@ inline void setup_highs_model(HighsModel& model, int d, int N,
                               double traj_arc_len, double horizon,
                               double min_dist, double max_dist,
                               const std::vector<double>& dist_vec) {
+  std::cout << "setting up high smodel\n";
   if (dist_vec.size() != N) {
     std::cerr << "[Tube Gen] Distance vector does not equal sample size N\n";
     return;
   }
 
+  std::cout << "horizon\n";
   if (horizon < 1e-1) {
     std::cerr << "[Tube Gen] Horizon too small! " << horizon << "\n";
     return;
   }
+  std::cout << "get samples\n";
   // figure out how many samples more we need to reach traj_arc_len
   double ds             = horizon / (N - 1);
   int num_extra_samples = (traj_arc_len - horizon) / ds;
 
   // setup cost function
+  std::cout << "setting up cost fn\n";
   std::vector<double> cost_coeffs;
   cost_coeffs.resize(d + 1);
 
@@ -283,11 +238,6 @@ inline bool get_tube_coeffs(int d, int N, double traj_arc_len, double horizon,
   highs.setOptionValue("output_flag", false);
   HighsStatus return_status = highs.passModel(model);
   if (return_status != HighsStatus::kOk) {
-    // for (int i = 0; i < dists.size(); ++i) {
-    //   std::cout << dists[i] << " ";
-    // }
-    //
-    // std::cout << "\n";
     std::cerr << "[Tube Gen] Highs solver could not be properly setup!\n";
     return false;
   }
@@ -307,14 +257,14 @@ inline bool get_tube_coeffs(int d, int N, double traj_arc_len, double horizon,
               << highs.modelStatusToString(model_status) << "\n";
   }
 
-  // std::cout << "coeffs: ";
+   /*std::cout << "coeffs: ";*/
   coeffs.resize(lp.num_col_);
   const HighsSolution& solution = highs.getSolution();
   for (int col = 0; col < lp.num_col_; ++col) {
     coeffs[col] = solution.col_value[col];
-    // std::cout << coeffs[col] << " ";
+     /*std::cout << coeffs[col] << " ";*/
   }
-  // std::cout << "\n";
+   /*std::cout << "\n";*/
   /*highs.resetGlobalScheduler(true);*/
 
   /*std::cout << "done getting coeffs\n";*/
@@ -325,7 +275,7 @@ inline bool get_tube_coeffs(int d, int N, double traj_arc_len, double horizon,
 inline bool construct_tubes(int d, int N, double max_dist,
                             const Trajectory& traj, double len_start,
                             double horizon,
-                            const map_util::OccupancyGrid& grid_map,
+                            const map_util::IGrid& grid_map,
                             std::array<types::Polynomial, 2>& tubes) {
 
   // get distances
@@ -351,8 +301,6 @@ inline bool construct_tubes(int d, int N, double max_dist,
     return false;
   }
 
-  // std::cout << "above coeffs: " << abv_coeffs.transpose() << "\n";
-  // std::cout << "below coeffs: " << blw_coeffs.transpose() << "\n";
   tubes[0].set_coeffs(abv_coeffs);
   tubes[1].set_coeffs(-1 * blw_coeffs);
 
