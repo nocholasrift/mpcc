@@ -58,12 +58,6 @@ void MPCCore::load_params(const std::map<std::string, double>& params) {
   call_mpc([&](auto& mpc) { mpc.load_params(params); });
 }
 
-void MPCCore::set_map(const map_util::OccupancyGrid::MapConfig& config,
-                      std::vector<unsigned char>& d) {
-  _map_util        = map_util::OccupancyGrid(config, d);
-  _is_map_util_set = true;
-}
-
 void MPCCore::set_odom(const Eigen::Vector3d& odom) {
   _odom = odom;
   // _mpc->set_odom(odom);
@@ -86,6 +80,7 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
 
   std::cout << "received trajectory of length: " << _ref_length << "\n";
   std::cout << "trajectory has " << N << " knots\n";
+  std::cout << "start point: " << _trajectory(0).transpose() << "\n";
 
   _is_traj_set = true;
 }
@@ -99,6 +94,8 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
     return {0, 0};
   }
 
+  std::cout << "getting current s\n";
+
   // get s value on taj closest to robot position
   double current_s = std::max(_trajectory.get_closest_s(state.head(2)), 1e-6);
 
@@ -109,9 +106,10 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
     horizon = true_length - current_s;
   }
 
+  std::cout << "constructing tubes\n";
   bool status = tube::construct_tubes(_tube_degree, _tube_samples,
                                       _max_tube_width, _trajectory, current_s,
-                                      horizon, _map_util, _mpc_tube);
+                                      horizon, *_map_util, _mpc_tube);
 
   // if tube can't be constructed in next iteration, just try to keep the old tubes.
   // if (!status) {
@@ -132,6 +130,8 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   types::Trajectory adjusted_traj =
       _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
 
+  std::cout << "current_s: " << current_s << "\n";
+
   types::Corridor corridor(adjusted_traj, _mpc_tube[0], _mpc_tube[1],
                            mpc_s_offset);
 
@@ -144,6 +144,8 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   double time_to_solve =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
+
+  std::cout << "command is: " << mpc_command[0] << " " << mpc_command[1] << "\n";
 
   _has_run     = true;
   _curr_vel    = mpc_command[0];

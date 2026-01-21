@@ -116,7 +116,7 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def(py::init<const MPCType&>())
       .def("load_params", &MPCCore::load_params)
       .def("get_params", &MPCCore::get_params)
-      .def("set_map", &MPCCore::set_map)
+      .def("set_map", &MPCCore::set_map<unsigned char>)
       .def("set_odom", &MPCCore::set_odom)
       .def("set_trajectory",
            (void (MPCCore::*)(const Eigen::VectorXd&, const Eigen::VectorXd&,
@@ -132,35 +132,59 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def("get_state_limits", &MPCCore::get_state_limits)
       .def("get_state", &MPCCore::get_state);
 
-  py::class_<map_util::OccupancyGrid::MapConfig>(m, "MapConfig")
+  py::class_<map_util::IGrid, std::shared_ptr<map_util::IGrid>>(m, "IGrid")
+      .def("world_to_map", &map_util::IGrid::world_to_map)
+      .def("map_to_world", &map_util::IGrid::map_to_world)
+      .def("index_to_cells", &map_util::IGrid::index_to_cells)
+      .def("cells_to_index", &map_util::IGrid::cells_to_index)
+      .def("get_origin", &map_util::IGrid::get_origin)
+      .def("get_resolution", &map_util::IGrid::get_resolution)
+      .def("get_size", &map_util::IGrid::get_size)
+      .def("is_occupied", py::overload_cast<unsigned int, const std::string&>(&map_util::IGrid::is_occupied, py::const_))
+      .def("clamp_point_to_bounds", &map_util::IGrid::clamp_point_to_bounds)
+      .def("get_occupied", &map_util::IGrid::get_occupied);
+
+  // python will only have access to the unsigned char version for now :)
+  using OccupancyGrid = map_util::OccupancyGrid<unsigned char>;
+  py::class_<OccupancyGrid::MapConfig>(m, "MapConfig")
       .def(py::init<>())
-      .def_readwrite("width", &map_util::OccupancyGrid::MapConfig::width)
-      .def_readwrite("height", &map_util::OccupancyGrid::MapConfig::height)
+      .def_readwrite("width", &OccupancyGrid::MapConfig::width)
+      .def_readwrite("height", &OccupancyGrid::MapConfig::height)
 
       .def_readwrite("resolution",
-                     &map_util::OccupancyGrid::MapConfig::resolution)
-      .def_readwrite("origin", &map_util::OccupancyGrid::MapConfig::origin)
+                     &OccupancyGrid::MapConfig::resolution)
+      .def_readwrite("origin", &OccupancyGrid::MapConfig::origin)
 
       .def_readwrite("occupied_values",
-                     &map_util::OccupancyGrid::MapConfig::occupied_values)
+                     &OccupancyGrid::MapConfig::occupied_values)
       .def_readwrite(
           "no_information_values",
-          &map_util::OccupancyGrid::MapConfig::no_information_values);
+          &OccupancyGrid::MapConfig::no_information_values);
 
-  py::class_<map_util::OccupancyGrid>(m, "OccupancyGrid", py::module_local())
+  py::class_<OccupancyGrid, map_util::IGrid, std::shared_ptr<OccupancyGrid>>(m, "OccupancyGrid")
       .def(py::init<>())
-      .def(py::init<const map_util::OccupancyGrid::MapConfig&,
-                    const std::vector<unsigned char>&>())
-      .def("get_origin", &map_util::OccupancyGrid::get_origin)
-      .def("world_to_map", &map_util::OccupancyGrid::world_to_map)
-      .def("cells_to_index", &map_util::OccupancyGrid::cells_to_index)
-      .def("get_cost", py::overload_cast<unsigned int, const std::string&>(
-                           &map_util::OccupancyGrid::get_cost))
+      .def(py::init<const OccupancyGrid::MapConfig&, const std::vector<unsigned char>&>())
+      .def("get_cost", py::overload_cast<unsigned int, const std::string&>(&OccupancyGrid::get_cost, py::const_))
       .def("update", py::overload_cast<int, int, double, double, double,
-                                       const std::vector<unsigned char>&,
-                                       const std::vector<unsigned char>&,
-                                       const std::vector<unsigned char>&>(
-                         &map_util::OccupancyGrid::update));
+                                     const std::vector<unsigned char>&,
+                                     const std::vector<unsigned char>&,
+                                     const std::vector<unsigned char>&>(&OccupancyGrid::update))
+      .def("get_occupied_values", &OccupancyGrid::get_occupied_values);
+
+  /*py::class_<OccupancyGrid>(m, "OccupancyGrid", py::module_local())*/
+  /*    .def(py::init<>())*/
+  /*    .def(py::init<const OccupancyGrid::MapConfig&,*/
+  /*                  const std::vector<unsigned char>&>())*/
+  /*    .def("get_origin", &OccupancyGrid::get_origin)*/
+  /*    .def("world_to_map", &OccupancyGrid::world_to_map)*/
+  /*    .def("cells_to_index", &OccupancyGrid::cells_to_index)*/
+  /*    .def("get_cost", py::overload_cast<unsigned int, const std::string&>(*/
+  /*                         &OccupancyGrid::get_cost))*/
+  /*    .def("update", py::overload_cast<int, int, double, double, double,*/
+  /*                                     const std::vector<unsigned char>&,*/
+  /*                                     const std::vector<unsigned char>&,*/
+  /*                                     const std::vector<unsigned char>&>(*/
+  /*                       &OccupancyGrid::update));*/
 
   // tube generation
   m.def("construct_tubes", &tube::construct_tubes);

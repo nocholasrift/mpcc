@@ -8,7 +8,6 @@
 //
 // acados
 #include <mpcc/acados_interface.h>
-#include "acados_c/ocp_nlp_interface.h"
 
 #include <cmath>
 #include <map>
@@ -152,7 +151,7 @@ class MPCBase {
       return {0, 0};
     }
 
-    Eigen::VectorXd x0 = impl.prepare_initial_state(state);
+    Eigen::VectorXd x0 = impl.prepare_initial_state(state, corridor);
     set_acados_initial_constraints(x0);
 
     /*************************************
@@ -167,13 +166,11 @@ class MPCBase {
       return {0, 0};
     }
 
-    std::cout << "done setting solver params\n";
 
     /*************************************
   ************* RUN SOLVER *************
   **************************************/
     _solve_success = run_acados_solver(x0);
-    std::cout << "done solving\n";
 
     /*************************************
   *********** PROCESS OUTPUT ***********

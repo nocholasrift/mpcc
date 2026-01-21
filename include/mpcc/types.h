@@ -1,8 +1,8 @@
 #pragma once
 
 #include <mpcc/spline.h>
-#include <iostream>
 
+#include <iostream>
 #include <stdexcept>
 #include <unsupported/Eigen/Splines>
 
@@ -41,6 +41,25 @@ struct MPCHorizon {
 
   Eigen::VectorXd get_input_at_step(unsigned int step) const {
     return inputs.get_input_at_step(step);
+  }
+
+  double get_arclen_at_step(unsigned int step) const {
+    return states.arclens[step];
+  }
+
+  Eigen::VectorXd get_pos_at_step(unsigned int step) const {
+    return static_cast<const typename Derived::MPCHorizon*>(this)->get_pos(
+        step);
+  }
+
+  Eigen::VectorXd get_vel_at_step(unsigned int step) const {
+    return static_cast<const typename Derived::MPCHorizon*>(this)->get_vel(
+        step);
+  }
+
+  Eigen::VectorXd get_acc_at_step(unsigned int step) const {
+    return static_cast<const typename Derived::MPCHorizon*>(this)->get_acc(
+        step);
   }
 };
 
@@ -97,8 +116,14 @@ class Polynomial {
 
   // i like being able to perform some operations in the setter so
   // i am also including an r-value setter.
-  void set_coeffs(Coeffs& coeffs) { coeffs_ = coeffs; }
-  void set_coeffs(Coeffs&& coeffs) { coeffs_ = coeffs; }
+  void set_coeffs(Coeffs& coeffs) {
+    coeffs_ = coeffs;
+    degree_ = coeffs.size() - 1;
+  }
+  void set_coeffs(Coeffs&& coeffs) {
+    coeffs_ = coeffs;
+    degree_ = coeffs.size() - 1;
+  }
 
   // some static expressions for common orders, anything after 3,
   // just make your own local variable for it...
@@ -116,7 +141,7 @@ class Polynomial {
     double pow{1.};
     Eigen::VectorXd basis{Eigen::VectorXd::Zero(degree_ + 1)};
 
-    for (unsigned int i{0}; i <= basis.size(); ++i) {
+    for (unsigned int i{0}; i < basis.size(); ++i) {
       basis[i] = pow;
       pow *= t;
     }
@@ -241,14 +266,14 @@ class Trajectory {
   Trajectory(const Row& knots, const Row& xs, const Row& ys) {
     spline_x_         = Spline(knots, xs);
     spline_y_         = Spline(knots, ys);
-    true_arc_len_     = knots(Eigen::indexing::last);
+    true_arc_len_     = knots(knots.size() - 1);
     extended_arc_len_ = true_arc_len_;
   }
 
   Trajectory(const Spline& x, const Spline& y)
       : spline_x_(x),
         spline_y_(y),
-        true_arc_len_(y.get_knots()(Eigen::indexing::last)),
+        true_arc_len_(y.get_knots()(y.get_knots().size() - 1)),
         extended_arc_len_(true_arc_len_) {}
 
   // extension length is the new full arc length of the traj
