@@ -50,7 +50,7 @@ prop_gain: 1.5
 prop_gain_thresh: .5
 # prop_gain_thresh: .349
 
-max_tube_width: 3.0
+max_tube_width: .75
 
 # recompile after changing all params from here on
 ref_length_size: 4

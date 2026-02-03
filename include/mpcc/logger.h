@@ -5,44 +5,29 @@
 #include <mpcc/RLState.h>
 #include <mpcc/mpcc_core.h>
 
-#include <amrl_logging/LoggingBufferCheck.h>
-#include <amrl_logging/LoggingData.h>
-#include <amrl_logging/LoggingDropTable.h>
-#include <amrl_logging/LoggingStart.h>
-#include <amrl_logging/LoggingStop.h>
 #include <ros/ros.h>
 #include <std_msgs/Bool.h>
 #include <Eigen/Core>
-#include <amrl_logging_util/util.hpp>
 
 #include <cstdint>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace logger {
 
 class RLLogger {
  public:
   RLLogger(ros::NodeHandle& nh,
-           const std::unordered_map<std::string_view, double>& params,
+           const std::unordered_map<std::string, double>& params,
            bool is_logging);
 
-  void load_params(const std::unordered_map<std::string_view, double>& params);
+  void load_params(const std::unordered_map<std::string, double>& params);
 
   ~RLLogger();
 
-  void log_transition(const MPCCore& mpc_core, double len_start,
-                      double ref_len);
-  bool request_alpha(MPCCore& mpc_core, double ref_len);
+  void log_transition(const mpcc::MPCCore& mpc_core, double len_start);
+  bool request_alpha(mpcc::MPCCore& mpc_core);
 
  private:
-  void collision_cb(const std_msgs::Bool::ConstPtr& msg);
-  void fill_state(const MPCCore& mpc_core, mpcc::RLState& state);
-
-  std::string serialize_state(const mpcc::RLState& state);
-
-  double compute_reward();
+  void fill_state(const mpcc::MPCCore& mpc_core, mpcc::RLState& state);
 
   ros::NodeHandle _nh;
 
@@ -50,8 +35,6 @@ class RLLogger {
   ros::Publisher _logging_pub;
   ros::Publisher _alpha_pub_abv;
   ros::Publisher _alpha_pub_blw;
-
-  ros::Subscriber _collision_sub;
 
   ros::ServiceClient _sac_srv;
 
@@ -86,7 +69,7 @@ class RLLogger {
 
   uint8_t _exceeded_bounds;
 
-  std::unordered_map<std::string_view, double> _params;
+  std::unordered_map<std::string, double> _params;
 };
 
 double normalize(double val, double min, double max);

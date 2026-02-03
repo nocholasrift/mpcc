@@ -111,29 +111,7 @@ class ModelServer:
 
     def query_sac(self, req):
         obs = None
-        obs = np.array(
-            [
-                self.normalize(req.vx, self.vx_min, self.vx_max),
-                self.normalize(req.vy, self.vy_min, self.vy_max),
-                self.normalize(req.ax, self.ax_min, self.ax_max),
-                self.normalize(req.ay, self.ay_min, self.ay_max),
-                self.normalize(
-                    req.obs_dist_abv, self.dist_to_obs_min, self.dist_to_obs_max
-                ),
-                self.normalize(
-                    req.obs_dist_blw, self.dist_to_obs_min, self.dist_to_obs_max
-                ),
-                self.normalize(
-                    req.heading_dist, self.head_to_obs_min, self.head_to_obs_max
-                ),
-                self.normalize(req.progress, self.progress_min, self.progress_max),
-                req.h_val_abv,
-                req.h_val_blw,
-                self.normalize(req.alpha_abv, self.min_alpha, self.max_alpha),
-                self.normalize(req.alpha_blw, self.min_alpha, self.max_alpha),
-                1.0 if req.solver_status == "true" else 0.0,
-            ]
-        )
+        obs = np.array([])
 
         obs = torch.FloatTensor(obs).to(ptu.device)
 
