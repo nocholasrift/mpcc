@@ -36,6 +36,7 @@ MPCCore::~MPCCore() {}
 
 void MPCCore::load_params(const std::map<std::string, double>& params) {
   utils::get_param(params, "DT", _dt);
+  utils::get_param(params, "REF_LENGTH", _tube_horizon);
   utils::get_param(params, "MAX_ANGA", _max_anga);
   utils::get_param(params, "MAX_LINACC", _max_linacc);
   utils::get_param(params, "LINVEL", _max_vel);
@@ -53,6 +54,10 @@ void MPCCore::load_params(const std::map<std::string, double>& params) {
   _tube_degree  = static_cast<int>(tube_degree);
   _tube_samples = static_cast<int>(tube_samples);
   _max_tube_width /= 2.;
+
+  double mpc_steps = _mpc_steps;
+  utils::get_param(params, "STEPS", mpc_steps);
+  _mpc_steps = static_cast<int>(mpc_steps);
 
   tube::TubeGenerator::Settings tube_settings;
   tube_settings.degree       = _tube_degree;
@@ -121,18 +126,31 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   double current_s = std::max(_trajectory.get_closest_s(state.head(2)), 1e-6);
 
   // define the tubes right before solving.
-  if(_has_run){
+  if (_has_run) {
     AnyHorizon horizon = get_horizon();
 
-    size_t horizon_steps = std::visit([&](const auto& arg) {return arg.length; }, horizon);
-    double last_s = std::visit([&](const auto& arg) { return arg.get_arclen_at_step(horizon_steps-1);}, horizon);
+    size_t horizon_steps =
+        std::visit([&](const auto& arg) { return arg.length; }, horizon);
+    double last_s = std::visit(
+        [&](const auto& arg) {
+          return arg.get_arclen_at_step(horizon_steps - 1);
+        },
+        horizon);
 
-    if (std::abs(_trajectory.get_arclen() - last_s) < 5e-1){
-      double extend_len = _trajectory.get_arclen() + 1.0;
-      _trajectory =
-          utils::extend_trajectory(_trajectory, extend_len);
+    double max_possible_horizon_dist = _max_vel * _dt * _mpc_steps;
+    std::cout << "LAST S WAS: " << last_s << "\n";
+    std::cout << "remaining len: " << _trajectory.get_arclen() - current_s
+              << "\n";
+    std::cout << "MAX POSSIBLE HORIZ DIST " << max_possible_horizon_dist
+              << "\n";
+    if (std::abs(_trajectory.get_arclen() - current_s - last_s) <
+        1.5 * max_possible_horizon_dist) {
+      double extend_len =
+          _trajectory.get_arclen() + 2 * max_possible_horizon_dist;
+      _trajectory = utils::extend_trajectory(_trajectory, extend_len);
+      std::cout << "near trajectory end, extending to len: "
+                << _trajectory.get_arclen() << "\n";
     }
-
   }
 
   /*double extend_len = _trajectory.get_arclen() + 2.0;*/

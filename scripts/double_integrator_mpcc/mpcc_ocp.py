@@ -61,6 +61,8 @@ def create_ocp(yaml_file, casadi_dir):
 
     con_upper_bounds = np.array([1e6, 1e6])
     con_lower_bounds = np.array([0, 0])
+    # con_upper_bounds = np.array([1e6, 1e6])
+    # con_lower_bounds = np.array([-1e6, -1e6])
     # con_upper_bounds = np.array([0, 1e6, 1e6])
     # con_lower_bounds = np.array([-1e6, 0, 0])
 
