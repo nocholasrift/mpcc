@@ -118,6 +118,8 @@ set(ACADOS_OUTPUT_HEADERS "")
 set(ACADOS_OUTPUT_LIBS "")
 set(ACADOS_TARGETS "")
 
+set(CASADI_OUTPUT_LIBS "")
+
 set(ACADOS_CODE_DIR
     ${CMAKE_BINARY_DIR}/acados_code_gen
 )
@@ -145,8 +147,7 @@ foreach(model ${ACADOS_MODELS})
   list(APPEND ACADOS_OUTPUT_SRC ${${model}_SRC})
   list(APPEND ACADOS_OUTPUT_HEADERS ${${model}_HEADERS})
   list(APPEND ACADOS_OUTPUT_LIBS ${${model}_LIBS})
-
-  message(${ACADOS_OUTPUT_LIBS})
+  list(APPEND CASADI_OUTPUT_LIBS ${${model}_CASADI_LIBS})
 
   add_custom_command(
     OUTPUT ${${model}_OUTPUT_FILES}
@@ -234,6 +235,7 @@ if(catkin_FOUND)
     ${ACADOS_LIBRARIES}
     ${EIGEN3_LIBRARIES}
     ${ACADOS_OUTPUT_LIBS}
+    ${CASADI_OUTPUT_LIBS}
     ${BLASFEO_LIBRARIES}
     highs
   )

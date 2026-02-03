@@ -86,8 +86,8 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
   // handle a fixed length trajectory,which has been fixed at REF_LENGTH
   int N = knot_parameters.size();
   // double required_mpc_length = _params["REF_LENGTH"];
-  _prev_traj  = _trajectory;
-  _trajectory = types::Trajectory(knot_parameters, x_pts, y_pts);
+  _trajectory              = types::Trajectory(knot_parameters, x_pts, y_pts);
+  _non_extended_trajectory = _trajectory;
 
   // _trajectory.extend_to_length(required_mpc_length);
 
@@ -145,9 +145,8 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
               << "\n";
     if (std::abs(_trajectory.get_arclen() - current_s - last_s) <
         1.5 * max_possible_horizon_dist) {
-      double extend_len =
-          _trajectory.get_arclen() + 2 * max_possible_horizon_dist;
-      _trajectory = utils::extend_trajectory(_trajectory, extend_len);
+      double extend_len = _trajectory.get_arclen() + max_possible_horizon_dist;
+      _trajectory       = utils::extend_trajectory(_trajectory, extend_len);
       std::cout << "near trajectory end, extending to len: "
                 << _trajectory.get_arclen() << "\n";
     }
@@ -181,8 +180,11 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
 
   // passing in 0 here because, by construction, adjusted traj will start at s = 0
   double tube_starting_s = 0;
-  bool status            = _tube_generator.generate(*_map_util, adjusted_traj,
-                                                    tube_starting_s, horizon);
+  // bool status            = _tube_generator.generate(*_map_util, adjusted_traj,
+  // tube_starting_s, horizon);
+  bool status =
+      _tube_generator.generate(*_map_util, adjusted_traj, tube_starting_s,
+                               _non_extended_trajectory.get_arclen());
 
   // if (!_is_tube_generated) {
   //

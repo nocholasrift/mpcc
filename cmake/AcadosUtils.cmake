@@ -45,9 +45,11 @@ function(collect_acados_generated_code model_prefix output_dir cxx_output_dir)
   set(${model_prefix}_LIBS
     ${output_dir}/libacados_ocp_solver_${model}.${lib_ext}
     ${output_dir}/libacados_sim_solver_${model}.${lib_ext}
-    # these cpp libraries are always .so
+  )
+
+  set(${model_prefix}_CASADI_LIBS
+    # these casadi libraries are always .so
     ${cxx_output_dir}/libcasadi_${model_prefix}_internals.so
-    # ${cxx_output_dir}/libacados_sim_solver_${model}.so
   )
 
   set(${model_prefix}_OUTPUT_FILES 
@@ -61,6 +63,7 @@ function(collect_acados_generated_code model_prefix output_dir cxx_output_dir)
   set(${model_prefix}_SRC "${${model_prefix}_SRC}" PARENT_SCOPE)
   set(${model_prefix}_HEADERS "${${model_prefix}_HEADERS}" PARENT_SCOPE)
   set(${model_prefix}_LIBS "${${model_prefix}_LIBS}" PARENT_SCOPE)
+  set(${model_prefix}_CASADI_LIBS "${${model_prefix}_LIBS}" PARENT_SCOPE)
 
   set(${model_prefix}_SRC_CXX "${${model_prefix}_SRC_CPP}" PARENT_SCOPE)
   set(${model_prefix}_HEADERS_CXX "${${model_prefix}_HEADERS_CPP}" PARENT_SCOPE)

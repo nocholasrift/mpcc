@@ -370,19 +370,6 @@ class TubeGenerator {
 
   void set_verbose(bool is_verbose) { solver_.set_verbose(is_verbose); }
 
-  /*void shift_tube_domain(double len_start, double horizon,*/
-  /*                       types::Polynomial& abv, types::Polynomial& blw) {*/
-  /*  Eigen::VectorXd domain = Eigen::VectorXd::LinSpaced(num_samples_, len_start,*/
-  /*                                                      len_start + horizon);*/
-  /*  abv = types::Polynomial::polyfit(domain.array() - len_start, abv_(domain),*/
-  /*                                   degree_);*/
-  /*  blw = types::Polynomial::polyfit(domain.array() - len_start, blw_(domain),*/
-  /*                                   degree_);*/
-  /**/
-  /*  shifted_abv_ = abv;*/
-  /*  shifted_blw_ = blw;*/
-  /*}*/
-
   [[nodiscard]] bool get_distances(const map_util::IGrid& grid_map,
                                    const Trajectory& traj, double start,
                                    double horizon, double& min_dist_abv,
@@ -392,7 +379,7 @@ class TubeGenerator {
     using TrajSide = types::Trajectory::Side;
 
     // get distances above and below
-    double end = start + horizon;
+    double end = traj.get_arclen();
 
     bool dist_status =
         grid_map.get_distances(traj, num_samples_, start, end, max_distance_,
@@ -402,14 +389,23 @@ class TubeGenerator {
       return false;
     }
 
-    // std::cout << "d_abv:\n";
-    for (auto& dist : dists_abv) {
-      if (dist < 0) {
-        dist = max_distance_;
+    double ds = (end - start) / (num_samples_);
+
+    {
+      int i = 0;
+      for (auto& dist : dists_abv) {
+        double s = ds * i++;
+        if (dist < 0 || s > horizon) {
+          dist = max_distance_;
+        }
       }
-      // std::cout << dist << ", ";
     }
-    // std::cout << "\n";
+
+    std::cout << "d_abv:\n";
+    for (auto& dist : dists_abv) {
+      std::cout << dist << " ";
+    }
+    std::cout << "\n";
 
     dist_status =
         grid_map.get_distances(traj, num_samples_, start, end, max_distance_,
@@ -418,14 +414,15 @@ class TubeGenerator {
       return false;
     }
 
-    // std::cout << "d_blw:\n";
-    for (auto& dist : dists_blw) {
-      if (dist < 0) {
-        dist = max_distance_;
+    {
+      int i = 0;
+      for (auto& dist : dists_blw) {
+        double s = ds * i++;
+        if (dist < 0 || s > horizon) {
+          dist = max_distance_;
+        }
       }
-      // std::cout << dist << ", ";
     }
-    // std::cout << "\n";
 
     return dist_status;
   }
@@ -448,7 +445,7 @@ class TubeGenerator {
     double multiplier      = 1.0;
     for (int i = 0; i <= degree_; ++i) {
       cost_coeffs[i] = multiplier * -1.0 / (i + 1);
-      multiplier *= discount_factor;
+      // multiplier *= discount_factor;
     }
     cost_coeffs[0] *= 3;
 
@@ -474,10 +471,6 @@ class TubeGenerator {
 
   void setup_solver_matrices() {
 
-    // unsigned int num_extra_samples =
-    //     (traj.get_extended_length() - settings.horizon) / ds;
-
-    // solver_.set_matrices(ds);
     solver_.set_matrices(1.0 / (num_samples_ - 1));
   }
 
