@@ -19,6 +19,7 @@ from casadi import (
     DM,
 )
 
+
 class DebugRegistry:
     def __init__(self):
         self.exprs = {}
@@ -160,18 +161,22 @@ class mpcc_ode_model:
         # arc_len_knots = MX.sym("knots", 11)
 
         self.arc_len_knots = np.linspace(0, 1, params["mpc_ref_samples"])
-        xspl = MX.sym('xspl', 1, 1)
-        yspl = MX.sym('yspl', 1, 1)
+        xspl = MX.sym("xspl", 1, 1)
+        yspl = MX.sym("yspl", 1, 1)
 
         self.L_path = MX.sym("L_path", 1)
 
-        self.interp_x = interpolant("interp_x", "bspline", [self.arc_len_knots.tolist()])
+        self.interp_x = interpolant(
+            "interp_x", "bspline", [self.arc_len_knots.tolist()]
+        )
         self.interp_exp_x = self.interp_x(xspl, self.x_coeff)
-        self.xr_func = Function('xr', [xspl, self.x_coeff], [self.interp_exp_x])
-        
-        self.interp_y = interpolant("interp_y", "bspline", [self.arc_len_knots.tolist()])
+        self.xr_func = Function("xr", [xspl, self.x_coeff], [self.interp_exp_x])
+
+        self.interp_y = interpolant(
+            "interp_y", "bspline", [self.arc_len_knots.tolist()]
+        )
         self.interp_exp_y = self.interp_y(yspl, self.y_coeff)
-        self.yr_func = Function('yr', [yspl, self.y_coeff], [self.interp_exp_y])
+        self.yr_func = Function("yr", [yspl, self.y_coeff], [self.interp_exp_y])
 
         s_norm = self.s1 / self.L_path
         self.xr = self.xr_func(s_norm, self.x_coeff)
@@ -377,9 +382,9 @@ class mpcc_ode_model:
         current_dir = os.getcwd()
         os.chdir(dir_name)
 
-        fname = "mpcc_casadi_double_integrator_internals"
+        fname = "casadi_double_integrator_mpcc_internals"
         self.debug.generate_c(f"{fname}.cpp", debug_inputs)
-        os.system(f"gcc -fPIC -shared {fname}.cpp -o {fname}.so")
+        os.system(f"gcc -fPIC -shared {fname}.cpp -o lib{fname}.so")
 
         os.chdir(current_dir)
 
@@ -393,24 +398,48 @@ if __name__ == "__main__":
 
     print("n_in =", f.n_in())
     for i in range(f.n_in()):
-        print(i,
-              f.name_in(i),
-              f.size_in(i),
-              f.sparsity_in(i))
+        print(i, f.name_in(i), f.size_in(i), f.sparsity_in(i))
 
     print("n_out =", f.n_out())
     for i in range(f.n_out()):
-        print(i,
-              f.name_out(i),
-              f.size_out(i))
+        print(i, f.name_out(i), f.size_out(i))
 
-    x = [-2.25e+00, -2.50e+00,  0.05e+00,  1.00e-6,  0.00e+00,  0.00e+00]
-    xs = [-2.24999693, -2.11674265, -1.97900936, -1.84491102, -1.71762874, -1.58263046,
- -1.4541721,  -1.32337543, -1.24702939, -1.24702939, -1.24702939]
-    ys = [-2.49999123, -2.11986464, -1.72696107, -1.34442668, -0.98133606, -0.59623445,
- -0.22978891,  0.14332701,  0.36111483,  0.36111483,  0.36111483]
-    coeffs = [ 0.36863125, -0.14984056,  0.44477208, -0.53646524,  0.30815822, -0.0849333,
-  0.00906838]
+    x = [-2.25e00, -2.50e00, 0.05e00, 1.00e-6, 0.00e00, 0.00e00]
+    xs = [
+        -2.24999693,
+        -2.11674265,
+        -1.97900936,
+        -1.84491102,
+        -1.71762874,
+        -1.58263046,
+        -1.4541721,
+        -1.32337543,
+        -1.24702939,
+        -1.24702939,
+        -1.24702939,
+    ]
+    ys = [
+        -2.49999123,
+        -2.11986464,
+        -1.72696107,
+        -1.34442668,
+        -0.98133606,
+        -0.59623445,
+        -0.22978891,
+        0.14332701,
+        0.36111483,
+        0.36111483,
+        0.36111483,
+    ]
+    coeffs = [
+        0.36863125,
+        -0.14984056,
+        0.44477208,
+        -0.53646524,
+        0.30815822,
+        -0.0849333,
+        0.00906838,
+    ]
 
     # if np.linalg.norm(x[2:4]) < 1e-9:
     #     x[3] = 1e-3
@@ -420,4 +449,3 @@ if __name__ == "__main__":
     print("lgh", model.compute_lgh_abv(x, coeffs, xs, ys))
     print("p_abv", model.compute_p_abv(x, coeffs, xs, ys))
     print("h_dot", model.compute_hdot_abv(x, coeffs, xs, ys))
-    
