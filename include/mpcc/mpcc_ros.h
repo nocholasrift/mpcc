@@ -5,7 +5,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Twist.h>
-/*#include <mpcc/logger.h>*/
+#include <mpcc/logger.h>
 #include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
@@ -122,7 +122,7 @@ class MPCCROS {
      * between different MPC class implementations, but in this project only
      * one is currently implemented (the MPCC). Will eventually add more.
      **********************************************************************/
-  /*std::unique_ptr<logger::RLLogger> _logger;*/
+  std::unique_ptr<logger::RLLogger> _logger;
 
   ros::Subscriber _trajSub;
   ros::Subscriber _trajNoResetSub;

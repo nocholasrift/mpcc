@@ -521,19 +521,15 @@ class Corridor {
   Sample get_at(double s_local) const {
     double s_glob = s_offset_ + s_local;
 
-    std::cout << "ref vals\n";
     Eigen::Vector2d pos = ref_(s_glob);
     Eigen::Vector2d tan = ref_(s_glob, Trajectory::kFirstOrder);
-    std::cout << "done\n";
     tan.normalize();
 
     Eigen::Vector2d norm(-tan.y(), tan.x());
 
     // tube borders are normalized in domain
-    std::cout << "tube vals\n";
     double d_abv = abv_.pos(s_local / ref_.get_arclen());
     double d_blw = blw_.pos(s_local / ref_.get_arclen());
-    std::cout << "done\n";
 
     Sample corridor_sample;
     corridor_sample.center  = pos;

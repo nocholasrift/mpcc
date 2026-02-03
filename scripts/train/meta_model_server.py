@@ -86,7 +86,6 @@ class ModelServer:
 
     def query_sac(self, req):
         req_state = list(req.state.state)
-        req_state.append(1.0 if req.state.solver_status == True else 0.0)
         obs = np.array(req_state)
 
         obs = torch.FloatTensor(obs).to(ptu.device)

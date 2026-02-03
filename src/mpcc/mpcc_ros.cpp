@@ -202,7 +202,7 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   }
 
   if (_use_cbf && (_is_logging || _is_eval)) {
-    std::unordered_map<std::string_view, double> logger_params;
+    std::unordered_map<std::string, double> logger_params;
     logger_params["MIN_ALPHA"]       = _min_alpha;
     logger_params["MAX_ALPHA"]       = _max_alpha;
     logger_params["MIN_ALPHA_DOT"]   = _min_alpha_dot;
@@ -214,8 +214,9 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
     logger_params["NUM_SAMPLES"]     = _num_samples;
     logger_params["MAX_PATH_LENGTH"] = _max_path_length;
 
-    /*_logger =*/
-    /*    std::make_unique<logger::RLLogger>(nh, logger_params, _is_logging);*/
+    _logger =
+        std::make_unique<logger::RLLogger>(nh, logger_params, _is_logging);
+
   } else if (!_use_cbf) {
     _cbf_alpha_abv = kMAX_ALPHA;
     _cbf_alpha_blw = kMAX_ALPHA;
@@ -284,11 +285,8 @@ void MPCCROS::visualizeTubes() {
   tubemsg_a.colors.reserve(2 * (horizon / .05));
   tubemsg_b.colors.reserve(2 * (horizon / .05));
 
-  ROS_WARN("LEN START + HORIZON IS: %.2f", len_start + horizon);
   for (double s = 0; s < horizon; s += .05) {
-    std::cout << "getting sample at " << s << "\n";
     mpcc::types::Corridor::Sample corr_sample = corridor.get_at(s);
-    std::cout << "done\n";
 
     geometry_msgs::Point& pt_a = tubemsg_a.points.emplace_back();
     pt_a.x                     = corr_sample.above(0);
@@ -317,7 +315,6 @@ void MPCCROS::visualizeTubes() {
     tubemsg_b.colors.push_back(color_msg_blw);
   }
 
-  ROS_WARN("done...");
   visualization_msgs::MarkerArray tube_ma;
   tube_ma.markers.reserve(2);
   tube_ma.markers.push_back(std::move(tubemsg_a));
@@ -497,8 +494,6 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
     return;
   }
 
-  // generate tubes
-  // std::vector<SplineWrapper> tubes;
   ros::Time now = ros::Time::now();
 
   Eigen::VectorXd state(4);
@@ -510,6 +505,11 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
     ROS_ERROR("Unknown MPC input type: %d",
               static_cast<unsigned int>(_mpc_input_type));
     return;
+  }
+
+  // before solve get update alpha values if dynamic alpha is enabled
+  if (_logger) {
+    _logger->request_alpha(*_mpc_core);
   }
 
   ROS_INFO("calling mpc core solve");
