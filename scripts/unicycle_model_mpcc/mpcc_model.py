@@ -15,8 +15,9 @@ from casadi import (
     bspline,
     Function,
     DM,
-    CodeGenerator
+    CodeGenerator,
 )
+
 
 class DebugRegistry:
     def __init__(self):
@@ -38,123 +39,6 @@ class DebugRegistry:
             f = Function(name, inputs, [expr])
             C.add(f)
         C.generate()
-
-
-def export_mpcc_ode_model_spline_param() -> AcadosModel:
-
-    model_name = "unicycle_model_mpcc"
-
-    # set up states & controls
-    x1 = MX.sym("x1")
-    y1 = MX.sym("y1")
-    theta1 = MX.sym("theta1")
-    v1 = MX.sym("v1")
-    s1 = MX.sym("s1")
-    sdot1 = MX.sym("sdot1")
-
-    x = vertcat(x1, y1, theta1, v1, s1, sdot1)
-
-    a = MX.sym("a")
-    w = MX.sym("w")
-    sddot = MX.sym("sddot")
-
-    u = vertcat(a, w, sddot)
-
-    v = MX.sym("v")
-    x_coeff = MX.sym("x_coeffs", 11)
-    y_coeff = MX.sym("y_coeffs", 11)
-    # arc_len_knots = DM([1.0] * 11)
-    # arc_len_knots = MX.sym("knots", 11)
-    p = vertcat(x_coeff, y_coeff)
-
-    arc_len_knots = np.linspace(0, 4, 11)
-    # arc_len_knots = np.linspace(0, 17.0385372, 11)
-    arc_len_knots = np.concatenate(
-        (
-            np.ones((4,)) * arc_len_knots[0],
-            arc_len_knots[2:-2],
-            np.ones((4,)) * arc_len_knots[-1],
-        )
-    )
-
-    # 1 denotes the multiplicity of the knots at the ends
-    # don't need clamped so leave as 1
-    x_spline_mx = bspline(v, x_coeff, [list(arc_len_knots)], [3], 1, {})
-    y_spline_mx = bspline(v, y_coeff, [list(arc_len_knots)], [3], 1, {})
-
-    spline_x = Function("xr", [v, x_coeff], [x_spline_mx], {})
-    spline_y = Function("yr", [v, y_coeff], [y_spline_mx], {})
-
-    xr = spline_x(s1, x_coeff)
-    yr = spline_y(s1, y_coeff)
-
-    xr_dot = jacobian(xr, s1)
-    yr_dot = jacobian(yr, s1)
-
-    # phi_r = atan2(xr_dot, yr_dot)
-    phi_r = atan2(yr_dot, xr_dot)
-
-    e_c = sin(phi_r) * (x1 - xr) - cos(phi_r) * (y1 - yr)
-    e_l = -cos(phi_r) * (x1 - xr) - sin(phi_r) * (y1 - yr)
-
-    Q_c = 4.0  # 50
-    Q_l = 100  # 3
-    Q_mat = np.diag([Q_c, Q_l, 1e-1, 5e-1, 1e-1])
-    Q_mat_e = np.diag([Q_c, Q_l])  # / 10
-
-    y_expr = vertcat(e_c, e_l, a, w, sddot)
-    y_expr_e = vertcat(e_c, e_l)
-
-    # xdot
-    x1_dot = MX.sym("x1_dot")
-    y1_dot = MX.sym("y1_dot")
-    theta1_dot = MX.sym("theta1_dot")
-    v1_dot = MX.sym("v1_dot")
-    s1_dot = MX.sym("s1_dot")
-    sdot1_dot = MX.sym("sdot1_dot")
-
-    xdot = vertcat(x1_dot, y1_dot, theta1_dot, v1_dot, s1_dot, sdot1_dot)
-
-    # dynamics
-    cos_theta = cos(theta1)
-    sin_theta = sin(theta1)
-    f_expl = vertcat(
-        v1 * cos_theta,
-        v1 * sin_theta,
-        w,
-        a,
-        sdot1,
-        sddot,
-    )
-
-    f_impl = xdot - f_expl
-
-    model = AcadosModel()
-
-    model.f_impl_expr = f_impl
-    model.f_expl_expr = f_expl
-    model.x = x
-    model.u = u
-    model.p = p
-    model.xdot = xdot
-    model.name = model_name
-
-    model.cost_expr_ext_cost = y_expr.T @ Q_mat @ y_expr - 0.2 * sdot1
-    model.cost_expr_ext_cost_e = y_expr_e.T @ Q_mat_e @ y_expr_e - 0.2 * sdot1
-
-    # store meta information
-    model.x_labels = [
-        "$x$ [m]",
-        "$y$ [m]",
-        r"$\theta$ [rad]",
-        "$v$ [m]",
-        "$s$ []",
-        "$sdot$ []",
-    ]
-    model.u_labels = ["$a$", "$w$", "$sddot$"]
-    model.t_label = "$t$ [s]"
-
-    return model
 
 
 def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
@@ -189,16 +73,16 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
     # arc_len_knots = np.linspace(0, params["ref_length_size"], params["mpc_ref_samples"])
     arc_len_knots = np.linspace(0, 1, params["mpc_ref_samples"])
 
-    xspl = MX.sym('xspl', 1, 1)
-    yspl = MX.sym('yspl', 1, 1)
+    xspl = MX.sym("xspl", 1, 1)
+    yspl = MX.sym("yspl", 1, 1)
 
     interp_x = interpolant("interp_x", "bspline", [arc_len_knots.tolist()])
     interp_exp_x = interp_x(xspl, x_coeff)
-    xr_func = Function('xr', [xspl, x_coeff], [interp_exp_x])
-    
+    xr_func = Function("xr", [xspl, x_coeff], [interp_exp_x])
+
     interp_y = interpolant("interp_y", "bspline", [arc_len_knots.tolist()])
     interp_exp_y = interp_y(yspl, y_coeff)
-    yr_func = Function('yr', [yspl, y_coeff], [interp_exp_y])
+    yr_func = Function("yr", [yspl, y_coeff], [interp_exp_y])
 
     s_norm = s1 / L_path
     xr = xr_func(s_norm, x_coeff)
@@ -215,7 +99,6 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
         # d_blw = d_blw + (d_blw_coeff[i] * s1**i)
         d_abv = d_abv + (d_abv_coeff[i] * s_norm**i)
         d_blw = d_blw + (d_blw_coeff[i] * s_norm**i)
-
 
     # phi_r = atan2(xr_dot, yr_dot)
     phi_r = atan2(yr_dot, xr_dot)
@@ -448,191 +331,10 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
     current_dir = os.getcwd()
     os.chdir(dir_name)
 
-    fname = "mpcc_casadi_unicycle_internals"
+    fname = "casadi_unicycle_model_mpcc_internals"
     debug.generate_c(fname, debug_inputs)
-    os.system(f"gcc -fPIC -shared {fname}.cpp -o {fname}.so")
+    os.system(f"gcc -fPIC -shared {fname}.cpp -o lib{fname}.so")
 
     os.chdir(current_dir)
-
-    return model
-
-
-def export_mpcc_ode_model_dyna_obs(params) -> AcadosModel:
-
-    model_name = "unicycle_model_mpcc"
-
-    # set up states & controls
-    x1 = MX.sym("x1")
-    y1 = MX.sym("y1")
-    theta1 = MX.sym("theta1")
-    v1 = MX.sym("v1")
-    s1 = MX.sym("s1")
-    sdot1 = MX.sym("sdot1")
-
-    x = vertcat(x1, y1, theta1, v1, s1, sdot1)
-
-    a = MX.sym("a")
-    w = MX.sym("w")
-    sddot = MX.sym("sddot")
-
-    u = vertcat(a, w, sddot)
-
-    v = MX.sym("v")
-    x_coeff = MX.sym("x_coeffs", params["mpc_ref_samples"])
-    y_coeff = MX.sym("y_coeffs", params["mpc_ref_samples"])
-
-    arc_len_knots = np.linspace(0, params["ref_length_size"], params["mpc_ref_samples"])
-    # arc_len_knots = np.linspace(0, 17.0385372, 11)
-    arc_len_knots = np.concatenate(
-        (
-            np.ones((4,)) * arc_len_knots[0],
-            arc_len_knots[2:-2],
-            np.ones((4,)) * arc_len_knots[-1],
-        )
-    )
-
-    # 1 denotes the multiplicity of the knots at the ends
-    # don't need clamped so leave as 1
-    x_spline_mx = bspline(v, x_coeff, [list(arc_len_knots)], [3], 1, {})
-    y_spline_mx = bspline(v, y_coeff, [list(arc_len_knots)], [3], 1, {})
-
-    spline_x = Function("xr", [v, x_coeff], [x_spline_mx], {})
-    spline_y = Function("yr", [v, y_coeff], [y_spline_mx], {})
-
-    xr = spline_x(s1, x_coeff)
-    yr = spline_y(s1, y_coeff)
-
-    xr_dot = jacobian(xr, s1)
-    yr_dot = jacobian(yr, s1)
-
-    phi_r = atan2(xr_dot, yr_dot)
-
-    e_c = sin(phi_r) * (x1 - xr) - cos(phi_r) * (y1 - yr)
-    e_l = -cos(phi_r) * (x1 - xr) - sin(phi_r) * (y1 - yr)
-
-    # xdot
-    x1_dot = MX.sym("x1_dot")
-    y1_dot = MX.sym("y1_dot")
-    theta1_dot = MX.sym("theta1_dot")
-    v1_dot = MX.sym("v1_dot")
-    s1_dot = MX.sym("s1_dot")
-    sdot1_dot = MX.sym("sdot1_dot")
-
-    xdot = vertcat(x1_dot, y1_dot, theta1_dot, v1_dot, s1_dot, sdot1_dot)
-
-    # dynamics
-    cos_theta = cos(theta1)
-    sin_theta = sin(theta1)
-    f_expl = vertcat(
-        v1 * cos_theta,
-        v1 * sin_theta,
-        w,
-        a,
-        sdot1,
-        sddot,
-    )
-
-    f_impl = xdot - f_expl
-
-    f = vertcat(v1 * cos_theta, v1 * sin_theta, 0, 0, sdot1, 0)
-    g = vertcat(
-        horzcat(0, 0, 0),
-        horzcat(0, 0, 0),
-        horzcat(0, 1, 0),
-        horzcat(1, 0, 0),
-        horzcat(0, 0, 0),
-        horzcat(0, 0, 1),
-    )
-
-    # cost
-    Q_c = MX.sym("Q_c")  # 0.1
-    Q_l = MX.sym("Q_l")  # 100
-    Q_s = MX.sym("Q_s")  # 0.5
-    Q_a = .5
-    Q_w = 1
-    Q_sdd = 1e-1
-
-    cost_expr = (
-        Q_c * e_c**2
-        + Q_l * e_l**2
-        + Q_a * a**2
-        + Q_w * w**2
-        + Q_sdd * sddot**2
-        - Q_s * sdot1
-    )
-
-    cost_expr_e = Q_c * e_c**2 + Q_l * e_l**2 - Q_s * sdot1
-    # cost_expr = y_expr.T @ Q_mat @ y_expr - Q_s * sdot1
-    # cost_expr_e = y_expr_e.T @ Q_mat_e @ y_expr_e - Q_s * sdot1
-
-    # Control Barrier Function
-    alpha_abv = MX.sym("alpha_abv")
-    alpha_blw = MX.sym("alpha_blw")
-
-    # Control Lyapunov Function
-    Ql_c = MX.sym("Ql_c")
-    Ql_l = MX.sym("Ql_l")
-    gamma = MX.sym("gamma")
-
-    v = Ql_c * e_c**2 + Ql_l * e_l**2  # + Q_s * (sdot1 - v1) ** 2
-    v_dot = jacobian(v, x) @ f + jacobian(v, x) @ g @ u
-
-    lyap_con = v_dot + gamma * v
-
-    # Dynamic Obstacle Avoidance
-    dyna_obs_x = MX.sym("dyna_obs_x")
-    dyna_obs_y = MX.sym("dyna_obs_y")
-
-    d_abv_coeff = MX.sym("d_above_coeffs", params["tube_poly_degree"] + 1)
-    d_blw_coeff = MX.sym("d_below_coeffs", params["tube_poly_degree"] + 1)
-
-    obstacle_con = (x1 - dyna_obs_x) ** 2 + (y1 - dyna_obs_y) ** 2 - (0.375) ** 2
-
-    p = vertcat(
-        x_coeff,
-        y_coeff,
-        d_abv_coeff,
-        d_blw_coeff,
-        Q_c,
-        Q_l,
-        Q_s,
-        alpha_abv,
-        alpha_blw,
-        Ql_c,
-        Ql_l,
-        gamma,
-        dyna_obs_x,
-        dyna_obs_y,
-    )
-
-    model = AcadosModel()
-    model.f_impl_expr = f_impl
-    model.f_expl_expr = f_expl
-    model.x = x
-    model.u = u
-    model.p = p
-    model.cost_expr_ext_cost = cost_expr
-    model.cost_expr_ext_cost_e = cost_expr_e
-    model.xdot = xdot
-    model.name = model_name
-
-    # no setting cbf for con_h_expr_e since no u in final step
-    # model.con_h_expr_0 = vertcat(con_abv, con_blw, lyap_con)
-    # model.con_h_expr = vertcat(con_abv, con_blw, lyap_con)
-
-    model.con_h_expr_0 = vertcat(lyap_con, obstacle_con)
-    model.con_h_expr = vertcat(lyap_con, obstacle_con)
-
-    # store meta information
-    model.x_labels = [
-        "$x$ [m]",
-        "$y$ [m]",
-        r"$\theta$ [rad]",
-        "$v$ [m]",
-        "$s$ []",
-        "$sdot$ []",
-    ]
-    model.u_labels = ["$a$", "$w$", "$sddot$"]
-    model.t_label = "$t$ [s]"
 
     return model
