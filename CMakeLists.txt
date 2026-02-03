@@ -119,7 +119,7 @@ set(ACADOS_OUTPUT_LIBS "")
 set(ACADOS_TARGETS "")
 
 set(ACADOS_CODE_DIR
-    ${CMAKE_BINARY_DIR}/acados_code_gen/
+    ${CMAKE_BINARY_DIR}/acados_code_gen
 )
 set(CASADI_GEN_DIR
   ${ACADOS_CODE_DIR}/casadi
@@ -137,13 +137,16 @@ foreach(model ${ACADOS_MODELS})
     # ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${model}/c_generated_code 
     # ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${model}/cpp_generated_code
     ${ACADOS_GEN_DIR}
+    ${CASADI_GEN_DIR}
   )
 
-  collect_acados_generated_code(${model} ${ACADOS_GEN_DIR})
+  collect_acados_generated_code(${model} ${ACADOS_GEN_DIR} ${CASADI_GEN_DIR})
   list(APPEND ACADOS_OUTPUT_SRC_CXX ${${model}_SRC_CXX})
   list(APPEND ACADOS_OUTPUT_SRC ${${model}_SRC})
   list(APPEND ACADOS_OUTPUT_HEADERS ${${model}_HEADERS})
   list(APPEND ACADOS_OUTPUT_LIBS ${${model}_LIBS})
+
+  message(${ACADOS_OUTPUT_LIBS})
 
   add_custom_command(
     OUTPUT ${${model}_OUTPUT_FILES}
@@ -185,7 +188,7 @@ if (pybind11_FOUND)
     src/mpcc/mpcc_acados.cpp
     src/mpcc/mpcc_di_acados.cpp
     src/mpcc/py_mpcc.cpp
-    ${double_integrator_SRC_CXX}
+    # ${double_integrator_SRC_CXX}
   )
   add_dependencies(py_mpcc ${ACADOS_TARGETS})
 
@@ -214,7 +217,7 @@ endif()
 ########################
 if(catkin_FOUND)
   set(MPCC_SRCS
-    # src/mpcc/logger.cpp
+    src/mpcc/logger.cpp
     src/mpcc/mpcc_ros.cpp
     src/mpcc/mpcc_core.cpp
     src/mpcc/mpcc_acados.cpp
@@ -233,7 +236,6 @@ if(catkin_FOUND)
     ${ACADOS_OUTPUT_LIBS}
     ${BLASFEO_LIBRARIES}
     highs
-    # cvxpy_lib
   )
   add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages ${ACADOS_TARGETS})
   target_compile_options(mpcc_ros PRIVATE -std=c++17 -O3)
