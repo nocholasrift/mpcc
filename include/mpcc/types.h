@@ -144,50 +144,50 @@ class Polynomial {
 
   // thanks to Patrick Löber
   // https://github.com/patLoeber/Polyfit/blob/master/PolyfitEigen.hpp
-  static Polynomial polyfit(
-      const Eigen::VectorXd& x_coeffs, const Eigen::VectorXd& y_coeffs,
-      const int degree,
-      const std::vector<double>& weights = std::vector<double>(),
-      bool useJacobi                     = true) {
-    using namespace Eigen;
-
-    bool useWeights = weights.size() > 0 && weights.size() == x_coeffs.size();
-
-    int numCoefficients = degree + 1;
-    size_t nCount       = x_coeffs.size();
-
-    MatrixXd X(nCount, numCoefficients);
-    MatrixXd Y(nCount, 1);
-
-    // fill Y matrix
-    for (size_t i = 0; i < nCount; i++) {
-      if (useWeights)
-        Y(i, 0) = y_coeffs[i] * weights[i];
-      else
-        Y(i, 0) = y_coeffs[i];
-    }
-
-    // fill X matrix (Vandermonde matrix)
-    for (size_t nRow = 0; nRow < nCount; nRow++) {
-      double nVal = 1.0f;
-      for (int nCol = 0; nCol < numCoefficients; nCol++) {
-        if (useWeights)
-          X(nRow, nCol) = nVal * weights[nRow];
-        else
-          X(nRow, nCol) = nVal;
-        nVal *= x_coeffs[nRow];
-      }
-    }
-
-    VectorXd coefficients;
-    if (useJacobi) {
-      coefficients = X.jacobiSvd<ComputeThinU | ComputeThinV>().solve(Y);
-    } else {
-      coefficients = X.colPivHouseholderQr().solve(Y);
-    }
-
-    return Polynomial(coefficients);
-  }
+  /*static Polynomial polyfit(*/
+  /*    const Eigen::VectorXd& x_coeffs, const Eigen::VectorXd& y_coeffs,*/
+  /*    const int degree,*/
+  /*    const std::vector<double>& weights = std::vector<double>(),*/
+  /*    bool useJacobi                     = true) {*/
+  /*  using namespace Eigen;*/
+  /**/
+  /*  bool useWeights = weights.size() > 0 && weights.size() == x_coeffs.size();*/
+  /**/
+  /*  int numCoefficients = degree + 1;*/
+  /*  size_t nCount       = x_coeffs.size();*/
+  /**/
+  /*  MatrixXd X(nCount, numCoefficients);*/
+  /*  MatrixXd Y(nCount, 1);*/
+  /**/
+  /*  // fill Y matrix*/
+  /*  for (size_t i = 0; i < nCount; i++) {*/
+  /*    if (useWeights)*/
+  /*      Y(i, 0) = y_coeffs[i] * weights[i];*/
+  /*    else*/
+  /*      Y(i, 0) = y_coeffs[i];*/
+  /*  }*/
+  /**/
+  /*  // fill X matrix (Vandermonde matrix)*/
+  /*  for (size_t nRow = 0; nRow < nCount; nRow++) {*/
+  /*    double nVal = 1.0f;*/
+  /*    for (int nCol = 0; nCol < numCoefficients; nCol++) {*/
+  /*      if (useWeights)*/
+  /*        X(nRow, nCol) = nVal * weights[nRow];*/
+  /*      else*/
+  /*        X(nRow, nCol) = nVal;*/
+  /*      nVal *= x_coeffs[nRow];*/
+  /*    }*/
+  /*  }*/
+  /**/
+  /*  VectorXd coefficients;*/
+  /*  if (useJacobi) {*/
+  /*    coefficients = X.jacobiSvd<ComputeThinU | ComputeThinV>().solve(Y);*/
+  /*  } else {*/
+  /*    coefficients = X.colPivHouseholderQr().solve(Y);*/
+  /*  }*/
+  /**/
+  /*  return Polynomial(coefficients);*/
+  /*}*/
 
   // some static expressions for common orders, anything after 3,
   // just make your own local variable for it...
@@ -521,14 +521,19 @@ class Corridor {
   Sample get_at(double s_local) const {
     double s_glob = s_offset_ + s_local;
 
+    std::cout << "ref vals\n";
     Eigen::Vector2d pos = ref_(s_glob);
     Eigen::Vector2d tan = ref_(s_glob, Trajectory::kFirstOrder);
+    std::cout << "done\n";
     tan.normalize();
 
     Eigen::Vector2d norm(-tan.y(), tan.x());
 
-    double d_abv = abv_.pos(s_local);
-    double d_blw = blw_.pos(s_local);
+    // tube borders are normalized in domain
+    std::cout << "tube vals\n";
+    double d_abv = abv_.pos(s_local / ref_.get_arclen());
+    double d_blw = blw_.pos(s_local / ref_.get_arclen());
+    std::cout << "done\n";
 
     Sample corridor_sample;
     corridor_sample.center  = pos;

@@ -83,6 +83,7 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
   // double required_mpc_length = _params["REF_LENGTH"];
   _prev_traj  = _trajectory;
   _trajectory = types::Trajectory(knot_parameters, x_pts, y_pts);
+
   // _trajectory.extend_to_length(required_mpc_length);
 
   double traj_len = _trajectory.get_arclen();
@@ -120,25 +121,41 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   double current_s = std::max(_trajectory.get_closest_s(state.head(2)), 1e-6);
 
   // define the tubes right before solving.
+  if(_has_run){
+    AnyHorizon horizon = get_horizon();
 
-  double extend_len = _trajectory.get_arclen() + 2.0;
-  types::Trajectory extended_trajectory =
-      utils::extend_trajectory(_trajectory, extend_len);
+    size_t horizon_steps = std::visit([&](const auto& arg) {return arg.length; }, horizon);
+    double last_s = std::visit([&](const auto& arg) { return arg.get_arclen_at_step(horizon_steps-1);}, horizon);
+
+    if (std::abs(_trajectory.get_arclen() - last_s) < 5e-1){
+      double extend_len = _trajectory.get_arclen() + 1.0;
+      _trajectory =
+          utils::extend_trajectory(_trajectory, extend_len);
+    }
+
+  }
+
+  /*double extend_len = _trajectory.get_arclen() + 2.0;*/
+  /*types::Trajectory extended_trajectory =*/
+  /*    utils::extend_trajectory(_trajectory, extend_len);*/
 
   // Just like with trajectory length,acados MPC also has fixed number of knots
   // that can be used for the trajectory due to a quirk with Casadi Splines.
   unsigned int required_mpc_knots =
       static_cast<unsigned int>(_params["REF_SAMPLES"]);
 
+  /*types::Trajectory adjusted_traj =*/
+  /*    extended_trajectory.get_adjusted_traj(current_s, required_mpc_knots);*/
   types::Trajectory adjusted_traj =
-      extended_trajectory.get_adjusted_traj(current_s, required_mpc_knots);
+      _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
 
   // bool status =
   //     _tube_generator.generate(*_map_util, _trajectory, current_s, horizon);
 
   // std::cout << "adjusted traj length: " << adjusted_traj.get_arclen() << "\n";
 
-  double horizon = std::min(extend_len, adjusted_traj.get_arclen());
+  /*double horizon = std::min(extend_len, adjusted_traj.get_arclen());*/
+  double horizon = adjusted_traj.get_arclen();
   // double traj_len = adjusted_traj.get_arclen();
   // if (horizon > traj_len) {
   //   horizon = traj_len;

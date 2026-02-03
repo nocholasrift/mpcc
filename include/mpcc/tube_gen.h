@@ -370,18 +370,18 @@ class TubeGenerator {
 
   void set_verbose(bool is_verbose) { solver_.set_verbose(is_verbose); }
 
-  void shift_tube_domain(double len_start, double horizon,
-                         types::Polynomial& abv, types::Polynomial& blw) {
-    Eigen::VectorXd domain = Eigen::VectorXd::LinSpaced(num_samples_, len_start,
-                                                        len_start + horizon);
-    abv = types::Polynomial::polyfit(domain.array() - len_start, abv_(domain),
-                                     degree_);
-    blw = types::Polynomial::polyfit(domain.array() - len_start, blw_(domain),
-                                     degree_);
-
-    shifted_abv_ = abv;
-    shifted_blw_ = blw;
-  }
+  /*void shift_tube_domain(double len_start, double horizon,*/
+  /*                       types::Polynomial& abv, types::Polynomial& blw) {*/
+  /*  Eigen::VectorXd domain = Eigen::VectorXd::LinSpaced(num_samples_, len_start,*/
+  /*                                                      len_start + horizon);*/
+  /*  abv = types::Polynomial::polyfit(domain.array() - len_start, abv_(domain),*/
+  /*                                   degree_);*/
+  /*  blw = types::Polynomial::polyfit(domain.array() - len_start, blw_(domain),*/
+  /*                                   degree_);*/
+  /**/
+  /*  shifted_abv_ = abv;*/
+  /*  shifted_blw_ = blw;*/
+  /*}*/
 
   [[nodiscard]] bool get_distances(const map_util::IGrid& grid_map,
                                    const Trajectory& traj, double start,

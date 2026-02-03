@@ -134,6 +134,8 @@ class MPCBase {
 
   std::array<double, 2> solve(const Eigen::VectorXd& state,
                               types::Corridor& corridor, bool is_reverse) {
+    _trajectory = corridor.get_trajectory();
+
     MPCImpl& impl  = static_cast<MPCImpl&>(*this);
     _solve_success = false;
 
@@ -195,6 +197,7 @@ class MPCBase {
 
     return cmd;
   }
+
 
  protected:
   bool is_solver_ready(const Eigen::VectorXd& state,
@@ -376,6 +379,7 @@ class MPCBase {
   using SolverTraits = types::SolverTraits<MPCImpl>;
   AcadosInterface<SolverTraits> _acados_solver;
 
+  types::Trajectory _trajectory;
   Eigen::VectorXd _state;
   Eigen::VectorXd _odom;
 

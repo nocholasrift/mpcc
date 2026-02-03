@@ -237,24 +237,28 @@ bool MPCCROS::toggleBackup(std_srvs::Empty::Request& req,
 }
 
 void MPCCROS::visualizeTubes() {
-  using Side                         = mpcc::types::Corridor::Side;
-  const mpcc::types::Trajectory& ref = _mpc_core->get_trajectory();
-  double len_start                   = ref.get_closest_s(_odom.head(2));
+  using Side = mpcc::types::Corridor::Side;
+  /*const mpcc::types::Trajectory& ref = _mpc_core->get_trajectory();*/
+  /*double len_start                   = ref.get_closest_s(_odom.head(2));*/
+  /*mpcc::types::Corridor corridor = _mpc_core->get_corridor(len_start);*/
+  mpcc::types::Corridor corridor     = _mpc_core->get_corridor(_odom.head(2));
+  const mpcc::types::Trajectory& ref = corridor.get_trajectory();
 
-  mpcc::types::Corridor corridor = _mpc_core->get_corridor(len_start);
+  double len_start = ref.get_closest_s(_odom.head(2));
   ROS_INFO("CURRENT S: %.2f", len_start);
 
-  double max_view_horizon = 4.0;
-  double true_ref_len     = ref.get_true_length();
-  double horizon          = true_ref_len;  //2 * _max_linvel * _dt * _mpc_steps;
+  /*double max_view_horizon = 4.0;*/
+  /*double true_ref_len     = ref.get_arclen();*/
+  /*double horizon          = true_ref_len;  //2 * _max_linvel * _dt * _mpc_steps;*/
+  double horizon = ref.get_arclen();
 
-  if (len_start > true_ref_len)
-    return;
+  /*if (len_start > true_ref_len)*/
+  /*  return;*/
+  /**/
+  /*if (len_start + horizon > true_ref_len)*/
+  /*  horizon = true_ref_len - len_start;*/
 
-  if (len_start + horizon > true_ref_len)
-    horizon = true_ref_len - len_start;
-
-  horizon = std::min(horizon, max_view_horizon);
+  /*horizon = std::min(horizon, max_view_horizon);*/
 
   visualization_msgs::Marker tubemsg_a;
   tubemsg_a.header.frame_id    = _frame_id;
@@ -282,7 +286,9 @@ void MPCCROS::visualizeTubes() {
 
   ROS_WARN("LEN START + HORIZON IS: %.2f", len_start + horizon);
   for (double s = 0; s < horizon; s += .05) {
+    std::cout << "getting sample at " << s << "\n";
     mpcc::types::Corridor::Sample corr_sample = corridor.get_at(s);
+    std::cout << "done\n";
 
     geometry_msgs::Point& pt_a = tubemsg_a.points.emplace_back();
     pt_a.x                     = corr_sample.above(0);
@@ -311,6 +317,7 @@ void MPCCROS::visualizeTubes() {
     tubemsg_b.colors.push_back(color_msg_blw);
   }
 
+  ROS_WARN("done...");
   visualization_msgs::MarkerArray tube_ma;
   tube_ma.markers.reserve(2);
   tube_ma.markers.push_back(std::move(tubemsg_a));
@@ -331,7 +338,7 @@ void MPCCROS::visualizeTraj() {
   traj.pose.orientation.w = 1;
 
   const auto& reference = _mpc_core->get_trajectory();
-  double true_ref_len   = reference.get_true_length();
+  double true_ref_len   = reference.get_arclen();
   for (double s = 0; s < true_ref_len; s += .05) {
     Eigen::Vector2d point = reference(s);
 
@@ -452,7 +459,7 @@ void MPCCROS::trajectorycb(
 
   ROS_INFO("**********************************************************");
   ROS_INFO("MPC received trajectory! Length: %.2f",
-           _mpc_core->get_trajectory().get_true_length());
+           _mpc_core->get_trajectory().get_arclen());
   ROS_INFO("**********************************************************");
 }
 
@@ -466,7 +473,7 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
     return;
 
   const mpcc::types::Trajectory& trajectory = _mpc_core->get_trajectory();
-  double true_ref_len                       = trajectory.get_true_length();
+  double true_ref_len                       = trajectory.get_arclen();
   double len_start = trajectory.get_closest_s(_odom.head(2));
 
   ROS_INFO("len_start is: %.2f / %.2f", len_start, true_ref_len);
@@ -598,7 +605,7 @@ void MPCCROS::publishMPCTrajectory() {
   pathMsg.header.stamp    = ros::Time::now();
 
   const mpcc::types::Trajectory& reference = _mpc_core->get_trajectory();
-  double true_ref_len                      = reference.get_true_length();
+  double true_ref_len                      = reference.get_arclen();
 
   for (int step = 0; step < horizon_steps; ++step) {
     // don't visualize mpc horizon past end of reference trajectory
