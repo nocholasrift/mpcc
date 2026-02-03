@@ -157,7 +157,7 @@ def export_mpcc_ode_model_spline_param() -> AcadosModel:
     return model
 
 
-def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
+def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
 
     model_name = "unicycle_model_mpcc"
 
@@ -180,37 +180,17 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     v = MX.sym("v")
     x_coeff = MX.sym("x_coeffs", params["mpc_ref_samples"])
     y_coeff = MX.sym("y_coeffs", params["mpc_ref_samples"])
-    # d_abv_coeff = MX.sym("d_above_coeffs", 11)
-    # d_blw_coeff = MX.sym("d_below_coeffs", 11)
+
     d_abv_coeff = MX.sym("d_above_coeffs", params["tube_poly_degree"] + 1)
     d_blw_coeff = MX.sym("d_below_coeffs", params["tube_poly_degree"] + 1)
 
-    arc_len_knots = np.linspace(0, params["ref_length_size"], params["mpc_ref_samples"])
-    # arc_len_knots = np.linspace(0, 17.0385372, 11)
-    # arc_len_knots = np.concatenate(
-    #     (
-    #         np.ones((4,)) * arc_len_knots[0],
-    #         arc_len_knots[2:-2],
-    #         np.ones((4,)) * arc_len_knots[-1],
-    #     )
-    # )
+    L_path = MX.sym("L_path", 1)
 
-    # 1 denotes the multiplicity of the knots at the ends
-    # don't need clamped so leave as 1
-    # x_spline_mx = bspline(v, x_coeff, [list(arc_len_knots)], [3], 1, {})
-    # y_spline_mx = bspline(v, y_coeff, [list(arc_len_knots)], [3], 1, {})
+    # arc_len_knots = np.linspace(0, params["ref_length_size"], params["mpc_ref_samples"])
+    arc_len_knots = np.linspace(0, 1, params["mpc_ref_samples"])
 
-    # spline_x = Function("xr", [v, x_coeff], [x_spline_mx], {})
-    # spline_y = Function("yr", [v, y_coeff], [y_spline_mx], {})
-    #
-    # xr = spline_x(s1, x_coeff)
-    # yr = spline_y(s1, y_coeff)
-    #
-    # xr_dot = jacobian(xr, s1)
-    # yr_dot = jacobian(yr, s1)
-
-    xspl = MX.sym('x', 1, 1)
-    yspl = MX.sym('y', 1, 1)
+    xspl = MX.sym('xspl', 1, 1)
+    yspl = MX.sym('yspl', 1, 1)
 
     interp_x = interpolant("interp_x", "bspline", [arc_len_knots.tolist()])
     interp_exp_x = interp_x(xspl, x_coeff)
@@ -220,17 +200,21 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
     interp_exp_y = interp_y(yspl, y_coeff)
     yr_func = Function('yr', [yspl, y_coeff], [interp_exp_y])
 
-    xr = xr_func(s1, x_coeff)
-    yr = yr_func(s1, y_coeff)
+    s_norm = s1 / L_path
+    xr = xr_func(s_norm, x_coeff)
+    yr = yr_func(s_norm, y_coeff)
 
+    # dont need to multiply by L_path.
     xr_dot = jacobian(xr, s1)
     yr_dot = jacobian(yr, s1)
 
     d_abv = 0
     d_blw = 0
     for i in range(params["tube_poly_degree"] + 1):
-        d_abv = d_abv + (d_abv_coeff[i] * s1**i)
-        d_blw = d_blw + (d_blw_coeff[i] * s1**i)
+        # d_abv = d_abv + (d_abv_coeff[i] * s1**i)
+        # d_blw = d_blw + (d_blw_coeff[i] * s1**i)
+        d_abv = d_abv + (d_abv_coeff[i] * s_norm**i)
+        d_blw = d_blw + (d_blw_coeff[i] * s_norm**i)
 
 
     # phi_r = atan2(xr_dot, yr_dot)
@@ -368,6 +352,7 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
         Ql_c,
         Ql_l,
         gamma,
+        L_path,
     )
 
     model = AcadosModel()
@@ -444,18 +429,28 @@ def export_mpcc_ode_model_spline_tube_cbf(params) -> AcadosModel:
         Ql_c,
         Ql_l,
         gamma,
+        L_path,
     ]
 
-    folder = "cpp_generated_code"
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    dir_name = os.path.join(script_dir, folder)
-    if not os.path.exists(dir_name):
-        os.mkdir(dir_name)
+    # folder = "cpp_generated_code"
+    if output_dir == "":
+        output_dir = "cpp_generated_code"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        dir_name = os.path.join(script_dir, folder)
+
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+    else:
+        dir_name = os.path.join(output_dir)
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
 
     current_dir = os.getcwd()
     os.chdir(dir_name)
 
-    debug.generate_c("mpcc_casadi_unicycle_internals.cpp", debug_inputs)
+    fname = "mpcc_casadi_unicycle_internals"
+    debug.generate_c(fname, debug_inputs)
+    os.system(f"gcc -fPIC -shared {fname}.cpp -o {fname}.so")
 
     os.chdir(current_dir)
 

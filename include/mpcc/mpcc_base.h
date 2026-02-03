@@ -60,7 +60,7 @@ class MPCBase {
 
     int N_tube_coeffs = corridor.get_above_poly().get_coeffs().size();
     int provided_params =
-        ctrls_x.size() + ctrls_y.size() + 2 * N_tube_coeffs + 8;
+        ctrls_x.size() + ctrls_y.size() + 2 * N_tube_coeffs + 9;
     if (provided_params != num_params) {
       std::cerr << termcolor::yellow << "[MPCC] provided param count"
                 << provided_params << " does not match acados parameter size "
@@ -69,14 +69,15 @@ class MPCBase {
       return false;
     }
 
-    params[num_params - 8] = _w_qc;
-    params[num_params - 7] = _w_ql;
-    params[num_params - 6] = _w_q_speed;
-    params[num_params - 5] = _alpha_abv;
-    params[num_params - 4] = _alpha_blw;
-    params[num_params - 3] = _w_qc_lyap;
-    params[num_params - 2] = _w_ql_lyap;
-    params[num_params - 1] = _gamma;
+    params[num_params - 9] = _w_qc;
+    params[num_params - 8] = _w_ql;
+    params[num_params - 7] = _w_q_speed;
+    params[num_params - 6] = _alpha_abv;
+    params[num_params - 5] = _alpha_blw;
+    params[num_params - 4] = _w_qc_lyap;
+    params[num_params - 3] = _w_ql_lyap;
+    params[num_params - 2] = _gamma;
+    params[num_params - 1] = traj_view.arclen;
 
     int N_ctrls = ctrls_x.size();
     for (int i = 0; i < N_ctrls; ++i) {
@@ -132,8 +133,7 @@ class MPCBase {
   }
 
   std::array<double, 2> solve(const Eigen::VectorXd& state,
-                              const types::Corridor& corridor,
-                              bool is_reverse) {
+                              types::Corridor& corridor, bool is_reverse) {
     MPCImpl& impl  = static_cast<MPCImpl&>(*this);
     _solve_success = false;
 
@@ -157,6 +157,7 @@ class MPCBase {
     /*************************************
   ********* INITIALIZE SOLUTION ********
   **************************************/
+    std::cout << "warm starting with init state: " << x0.transpose() << "\n";
     warm_start_mpc(x0);
 
     /*************************************
@@ -165,7 +166,6 @@ class MPCBase {
     if (!set_solver_parameters(corridor, MPCImpl::kNP)) {
       return {0, 0};
     }
-
 
     /*************************************
   ************* RUN SOLVER *************
@@ -208,7 +208,7 @@ class MPCBase {
     }
 
     const auto& above_coeffs = corridor.get_tube_coeffs(Side::kAbove);
-    const auto& below_coeffs = corridor.get_tube_coeffs(Side::kAbove);
+    const auto& below_coeffs = corridor.get_tube_coeffs(Side::kBelow);
     if (above_coeffs.size() == 0 || below_coeffs.size() == 0) {
       std::cerr << "[MPCC] tubes are not set yet, mpc cannot run" << std::endl;
       return false;
@@ -240,6 +240,10 @@ class MPCBase {
 
     Eigen::Vector2d prev_pos = _prev_x0.segment(MPCImpl::kNX, 2);
     Eigen::Vector2d curr_pos = initial_state.head(2);
+
+    std::cout << termcolor::yellow << "previous state: "
+              << _prev_x0.segment(MPCImpl::kNX, MPCImpl::kNX).transpose()
+              << termcolor::reset << "\n";
 
     if (!_is_shift_warm) {
       std::cout << "using no u warm start\n";
@@ -287,20 +291,37 @@ class MPCBase {
 
         _acados_solver.set_output(step, "x", warm_state.data());
         _acados_solver.set_output(step, "u", &_prev_u0[step * MPCImpl::kNU]);
+        // std::cout << "x " << step << "\t" << warm_state.transpose() << "\n";
+        // std::cout
+        //     << "u " << step << "\t"
+        //     << _prev_u0.segment(step * MPCImpl::kNU, MPCImpl::kNU).transpose()
+        //     << "\n";
       }
 
       Eigen::VectorXd xN_prev = _prev_x0.tail(MPCImpl::kNX);
       xN_prev(MPCImpl::kIndS) -= starting_s;
 
-      _acados_solver.set_output(_mpc_steps - 1, "x", xN_prev.data());
-      _acados_solver.set_output(_mpc_steps - 1, "u",
-                                &_prev_u0[(_mpc_steps - 1) * MPCImpl::kNU]);
+      _acados_solver.set_output(_mpc_steps, "x", xN_prev.data());
+      // Eigen::VectorXd zero_u = Eigen::VectorXd::Zero(MPCImpl::kNU);
+      _acados_solver.set_output(_mpc_steps, "u",
+                                _prev_u0.tail(MPCImpl::kNU).data());
+      // _acados_solver.set_output(_mpc_steps, "u", zero_u.data());
+
+      // std::cout << "x " << _mpc_steps << "\t" << xN_prev.transpose() << "\n";
+      // std::cout << "u " << _mpc_steps << "\t"
+      //           << _prev_u0.tail(MPCImpl::kNU).transpose() << "\n";
+      // std::cout << "u " << _mpc_steps << "\t" << zero_u.transpose() << "\n";
 
       Eigen::VectorXd uN_prev = _prev_u0.tail(MPCImpl::kNU);
       Eigen::VectorXd xN =
           static_cast<MPCImpl*>(this)->next_state(xN_prev, uN_prev);
 
-      _acados_solver.set_output(_mpc_steps, "x", xN.data());
+      // std::cout << "x " << _mpc_steps + 1 << "\t" << xN.transpose() << "\n";
+      // std::cout << "x " << _mpc_steps + 1 << "\t" << xN_prev.transpose()
+      //           << "\n";
+
+      _acados_solver.set_output(_mpc_steps + 1, "x", xN.data());
+      // _acados_solver.set_output(_mpc_steps + 1, "x", xN_prev.data());
     }
   }
 
