@@ -13,6 +13,7 @@ namespace mpcc {
 enum class MPCType { kDoubleIntegrator, kUnicycle };
 
 class MPCCore {
+
  public:
   using AnyHorizon = std::variant<UnicycleMPCC::MPCHorizon, DIMPCC::MPCHorizon>;
   MPCCore();
@@ -81,18 +82,21 @@ class MPCCore {
   Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
                                const Eigen::VectorXd& control,
                                bool is_abv) const;
-  const types::Trajectory& get_trajectory() { return _trajectory; }
+  /*const types::Trajectory& get_trajectory() { return _trajectory; }*/
+  const types::Trajectory& get_trajectory() { 
+    return _trajectory;
+  }
 
   // Corridor holds a reference to trajectory, so _trajectory must persist
   // while corridor is live. A corridor should only ever be used as a view
   // and never stored permanently
   types::Corridor get_corridor(const Eigen::Vector2d& position) const {
     double current_s = _trajectory.get_closest_s(position);
-    return types::Corridor(_trajectory, _mpc_tube[0], _mpc_tube[1], current_s);
+    return types::Corridor(_trajectory, _tube_generator.get_side_poly(tube::TubeGenerator::Side::kAbove), _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow), current_s);
   }
 
   types::Corridor get_corridor(double current_s) const {
-    return types::Corridor(_trajectory, _mpc_tube[0], _mpc_tube[1], current_s);
+    return types::Corridor(_trajectory, _tube_generator.get_side_poly(tube::TubeGenerator::Side::kAbove), _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow), current_s);
   }
 
  private:
@@ -111,6 +115,7 @@ class MPCCore {
     return std::visit(
         [&](const auto& impl) -> decltype(auto) { return func(impl); }, _mpc);
   }
+
 
  private:
   double _dt{0.1};
