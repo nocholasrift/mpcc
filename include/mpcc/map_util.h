@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mpcc/types.h>
+
 #include <Eigen/Core>
 #include <iostream>
 #include <unordered_set>
@@ -8,8 +10,8 @@
 namespace map_util {
 // struct mimicing nav_msgs::OccupancyGrid
 //
-class IGrid{
-protected:
+class IGrid {
+ protected:
   int width{0};
   int height{0};
   double resolution{0};
@@ -21,10 +23,16 @@ protected:
   int reset_counter{0};
 
   std::unordered_set<uint64_t> known_occupied_inds;
-public:
+
+ public:
   IGrid() = default;
 
-  IGrid(int w, int h, double res, const Eigen::Vector2d& origin) : width(w), height(h), resolution(res), origin_x(origin[0]), origin_y(origin[1]){}
+  IGrid(int w, int h, double res, const Eigen::Vector2d& origin)
+      : width(w),
+        height(h),
+        resolution(res),
+        origin_x(origin[0]),
+        origin_y(origin[1]) {}
   virtual ~IGrid() = default;
 
   std::vector<double> clamp_point_to_bounds(const std::vector<double>& current,
@@ -71,7 +79,7 @@ public:
 
     return {current[0] + (t_max)*dx, current[1] + (t_max)*dy};
   }
-  
+
   // define these functions with vectors so we can pybind them more easily
   std::vector<unsigned int> world_to_map(double x, double y) const {
     if (x < origin_x || y < origin_y) {
@@ -147,16 +155,53 @@ public:
     return is_occupied(cells_to_index(mx, my), layer);
   }
 
-  virtual bool is_occupied(unsigned int index, const std::string& layer) const = 0;
+  virtual bool is_occupied(unsigned int index,
+                           const std::string& layer) const = 0;
+
+  bool get_distances(const mpcc::types::Trajectory& traj, int n_samples,
+                     double start, double end, double max_dist,
+                     mpcc::types::Trajectory::Side side, double& min_dist,
+                     std::vector<double>& dists) const {
+    using Point = mpcc::types::Trajectory::Point;
+    dists.resize(n_samples);
+    double ds = (end - start) / (n_samples - 1);
+    min_dist  = 1e6;
+
+    for (int i = 0; i < n_samples; ++i) {
+      double s      = start + i * ds;
+      Point s_point = traj(s);
+      Point normal  = traj.get_unit_normal(s, side);
+
+      Point end;
+      Point max_end = s_point + normal * max_dist;
+
+      // return negative distance since inside obstacle
+      // let the user decide what should be done in this case...
+      if (is_occupied(s_point(0), s_point(1), "inflated")) {
+        dists[i] = -1;
+      } else {
+        raycast(s_point, max_end, end, "inflated");
+        double dist_sample = std::min((s_point - end).norm(), max_dist);
+        dists[i]           = dist_sample;
+        min_dist           = std::min(min_dist, dist_sample);
+      }
+      // if (dist_sample < 0.2) {
+      //   std::cout << "dist_sample: " << dist_sample << "\n";
+      // }
+    }
+
+    return true;
+  }
 
   // convenience function to use is_occupied if no custom function is passed in
   bool raycast(const Eigen::Vector2d& start, const Eigen::Vector2d& end,
                Eigen::Vector2d& true_end, const std::string& layer,
-               unsigned int max_range                     = 1e6) const {
+               unsigned int max_range = 1e6) const {
     std::vector<unsigned int> start_m = world_to_map(start(0), start(1));
     std::vector<unsigned int> end_m   = world_to_map(end(0), end(1));
 
-    auto test_func = [this](unsigned int mx, unsigned int my, const std::string& layer){
+    auto test_func = [this](unsigned int mx, unsigned int my,
+                            const std::string& layer) {
       return this->is_occupied(mx, my, layer);
     };
 
@@ -171,8 +216,7 @@ public:
   template <typename Callable>
   bool raycast(const Eigen::Vector2d& start, const Eigen::Vector2d& end,
                Eigen::Vector2d& true_end, const std::string& layer,
-               Callable&& test_func,
-               unsigned int max_range                     = 1e6) const {
+               Callable&& test_func, unsigned int max_range = 1e6) const {
     std::vector<unsigned int> start_m = world_to_map(start(0), start(1));
     std::vector<unsigned int> end_m   = world_to_map(end(0), end(1));
 
@@ -187,8 +231,7 @@ public:
   template <typename Callable>
   bool raycast(unsigned int sx, unsigned int sy, unsigned int ex,
                unsigned int ey, double& x, double& y, const std::string& layer,
-               Callable&& test_func,
-               unsigned int max_range                     = 1e6) const {
+               Callable&& test_func, unsigned int max_range = 1e6) const {
 
     bool ray_hit        = false;
     unsigned int size_x = width;
@@ -239,8 +282,7 @@ public:
   bool bresenham(unsigned int abs_da, unsigned int abs_db, int error_b,
                  int offset_a, int offset_b, unsigned int offset,
                  unsigned int max_range, unsigned int& term,
-                 const std::string layer,
-                 Callable&& test_func) const {
+                 const std::string layer, Callable&& test_func) const {
     bool ray_hit     = false;
     unsigned int end = std::min(max_range, abs_da);
     unsigned int mx, my;
@@ -370,8 +412,7 @@ class OccupancyGrid : public IGrid {
   }
 
   void update(int w, int h, double res, double ox, double oy,
-              const std::vector<T>& d,
-              const std::vector<T>& ov,
+              const std::vector<T>& d, const std::vector<T>& ov,
               const std::vector<T>& niv) {
     if (w != width || h != height || origin_x != ox || origin_y != oy ||
         reset_counter++ > 10) {
@@ -396,8 +437,7 @@ class OccupancyGrid : public IGrid {
   }
 
   void update(int w, int h, double res, double ox, double oy, T* d,
-              const std::vector<T>& ov,
-              const std::vector<T>& niv) {
+              const std::vector<T>& ov, const std::vector<T>& niv) {
     if (w != width || h != height || origin_x != ox || origin_y != oy ||
         reset_counter++ > 10) {
       std::cout
@@ -427,8 +467,7 @@ class OccupancyGrid : public IGrid {
     return get_cost(cells[0], cells[1], layer);
   }
 
-  T get_cost(unsigned int mx, unsigned int my,
-                         const std::string& layer) const {
+  T get_cost(unsigned int mx, unsigned int my, const std::string& layer) const {
     return get_cost(cells_to_index(mx, my), layer);
   }
 
@@ -462,19 +501,16 @@ class OccupancyGrid : public IGrid {
     return data[index];
   }
 
-  virtual bool is_occupied(unsigned int index, const std::string& layer) const override {
+  virtual bool is_occupied(unsigned int index,
+                           const std::string& layer) const override {
     T cost = get_cost(index, layer);
     return std::find(occupied_values.begin(), occupied_values.end(), cost) !=
            occupied_values.end();
   }
 
-  std::vector<T> get_occupied_values() const {
-    return occupied_values;
-  }
+  std::vector<T> get_occupied_values() const { return occupied_values; }
 
-  std::vector<T> get_no_info_values() const {
-    return no_information_values;
-  }
+  std::vector<T> get_no_info_values() const { return no_information_values; }
 };
 
 }  // end namespace map_util

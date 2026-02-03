@@ -3,6 +3,7 @@
 #include <mpcc/map_util.h>
 #include <mpcc/mpcc_acados.h>
 #include <mpcc/mpcc_di_acados.h>
+#include <mpcc/tube_gen.h>
 #include <mpcc/types.h>
 
 #include <map>
@@ -55,7 +56,7 @@ class MPCCore {
   // compiler was giving me linker errrors so I had to implement the fn here :(
   template <typename T>
   void set_map(const typename map_util::OccupancyGrid<T>::MapConfig& config,
-               const std::vector<T>& d){
+               const std::vector<T>& d) {
     _map_util        = std::make_unique<map_util::OccupancyGrid<T>>(config, d);
     _is_map_util_set = true;
   }
@@ -68,7 +69,11 @@ class MPCCore {
   const bool get_solver_status() const;
   const double get_true_ref_len() const;
   const Eigen::VectorXd& get_state() const;
-  const std::array<types::Polynomial, 2>& get_tube() const { return _mpc_tube; }
+
+  std::array<types::Polynomial, 2> get_tube() const {
+    return _tube_generator.get_boundary();
+  }
+
   const std::array<Eigen::VectorXd, 2> get_state_limits() const;
   const std::array<Eigen::VectorXd, 2> get_input_limits() const;
   AnyHorizon get_horizon() const;
@@ -115,17 +120,17 @@ class MPCCore {
   double _curr_angvel{0.};
   double _max_vel{2.0};
   double _max_angvel{M_PI / 2.};
-  double _ref_length{0.};
-  double _true_ref_length{0.};
 
   int _tube_degree{0};
   int _tube_samples{0};
   double _max_tube_width{0};
+  double _tube_horizon{0};
 
   double _prop_gain{1.0};
   double _prop_angle_thresh{0.5};
   double _prev_s{0.};
 
+  bool _is_tube_generated{false};
   bool _is_traj_set{false};
   bool _is_map_util_set{false};
 
@@ -134,6 +139,7 @@ class MPCCore {
   bool _has_run{false};
 
   types::Trajectory _trajectory;
+  types::Trajectory _prev_traj;
   std::array<types::Polynomial, 2> _mpc_tube;
 
   std::unique_ptr<map_util::IGrid> _map_util;
@@ -144,6 +150,8 @@ class MPCCore {
   Eigen::Vector2d _goal{0., 0.};
 
   std::map<std::string, double> _params;
+
+  tube::TubeGenerator _tube_generator;
 
   // std::unique_ptr<MPCBase> _mpc;
   std::variant<UnicycleMPCC, DIMPCC> _mpc;

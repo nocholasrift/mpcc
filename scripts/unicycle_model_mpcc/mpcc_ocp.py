@@ -83,7 +83,7 @@ def create_ocp():
 
     # theta can be whatever
     ocp.constraints.lbx = np.array([-1e6, -1e6, -1e6, 0, 0, 0])
-    ocp.constraints.ubx = np.array([1e6, 1e6, 1e6, 2, max_s, 2])
+    ocp.constraints.ubx = np.array([1e6, 1e6, 1e6, 4, max_s, 4])
     ocp.constraints.idxbx = np.array(range(nx))  # Covers all state indices
 
     ocp.constraints.x0 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
@@ -112,7 +112,7 @@ def create_ocp():
     return ocp
 
 
-def create_ocp_tube_cbf(yaml_file):
+def create_ocp_tube_cbf(yaml_file, casadi_dir):
 
     ocp = AcadosOcp()
 
@@ -133,7 +133,7 @@ def create_ocp_tube_cbf(yaml_file):
 
     # set model
     # model = export_mpcc_ode_model(list(ss), list(xs), list(ys))
-    model = export_mpcc_ode_model_spline_tube_cbf(params)
+    model = export_mpcc_ode_model_spline_tube_cbf(params, casadi_dir)
     ocp.model = model
 
     Tf = 1.0
@@ -153,8 +153,8 @@ def create_ocp_tube_cbf(yaml_file):
     ocp.model.cost_expr_ext_cost = model.cost_expr_ext_cost
     ocp.model.cost_expr_ext_cost_e = model.cost_expr_ext_cost_e
 
-    ocp.constraints.lbu = np.array([-3, -np.pi / 2, -3])
-    ocp.constraints.ubu = np.array([3, np.pi / 2, 3])
+    ocp.constraints.lbu = np.array([-3, -np.pi/2, -3])
+    ocp.constraints.ubu = np.array([3, np.pi/2, 3])
     ocp.constraints.idxbu = np.array([0, 1, 2])
 
     # constraint bounds
@@ -177,7 +177,9 @@ def create_ocp_tube_cbf(yaml_file):
     # ocp.constraints.idxsh = np.array([0])
 
     con_upper_bounds = np.array([1e6, 1e6, 0])
-    con_lower_bounds = np.array([0, 0, 1e-6])
+    con_lower_bounds = np.array([0, 0, -1e6])
+    # con_upper_bounds = np.array([1e6, 1e6, 0])
+    # con_lower_bounds = np.array([-1e6, -1e6, -1e6])
     #
     # con_upper_bounds = np.array([1e6, 1e6])
     # con_lower_bounds = np.array([0, 0])
@@ -188,6 +190,9 @@ def create_ocp_tube_cbf(yaml_file):
     ocp.constraints.uh = con_upper_bounds
     ocp.constraints.lh = con_lower_bounds
 
+    # ocp.constraints.uh_e = np.array([0])
+    # ocp.constraints.lh_e = np.array([-1e9])
+
     # soft constraint
     ocp.constraints.lsh_0 = np.zeros((1,))
     ocp.constraints.ush_0 = np.zeros((1,))
@@ -196,6 +201,10 @@ def create_ocp_tube_cbf(yaml_file):
     ocp.constraints.lsh = np.zeros((1,))
     ocp.constraints.ush = np.zeros((1,))
     ocp.constraints.idxsh = np.array([2])
+
+    # ocp.constraints.lsh_e = np.zeros((1,))
+    # ocp.constraints.ush_e = np.zeros((1,))
+    # ocp.constraints.idxsh_e = np.array([0])
 
     grad_cost = 100
     hess_cost = 1
@@ -210,9 +219,14 @@ def create_ocp_tube_cbf(yaml_file):
     ocp.cost.zl = grad_cost * np.ones((1,))
     ocp.cost.zu = grad_cost * np.ones((1,))
 
+    # ocp.cost.Zl_e = hess_cost * np.ones((1,))
+    # ocp.cost.Zu_e = hess_cost * np.ones((1,))
+    # ocp.cost.zl_e = grad_cost * np.ones((1,))
+    # ocp.cost.zu_e = grad_cost * np.ones((1,))
+
     # theta can be whatever
-    ocp.constraints.lbx = np.array([-1e6, -1e6, -1e6, 0, 0, 0])
-    ocp.constraints.ubx = np.array([1e6, 1e6, 1e6, 2, max_s, 2])
+    ocp.constraints.lbx = np.array([-1e6, -1e6, -1e6, 0, 0, -1e6])
+    ocp.constraints.ubx = np.array([1e6, 1e6, 1e6, 4, 1e6, 4])
     ocp.constraints.idxbx = np.array(range(nx))  # Covers all state indices
 
     ocp.constraints.x0 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
@@ -409,10 +423,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="test BARN navigation challenge")
     parser.add_argument("--yaml", type=str, default="")
+    parser.add_argument("--output_dir", type=str, default="")
+    parser.add_argument("--casadi_dir", type=str, default="")
 
     args = parser.parse_args()
 
-    ocp = create_ocp_tube_cbf(args.yaml)
+    ocp = create_ocp_tube_cbf(args.yaml, args.casadi_dir)
+    if args.output_dir != "":
+        ocp.code_export_directory=args.output_dir
+
     # ocp = create_ocp_dyna_obs(args.yaml)
     acados_ocp_solver = AcadosOcpSolver(ocp)
     acados_integrator = AcadosSimSolver(ocp)

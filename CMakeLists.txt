@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5.0)
 project(mpcc C CXX)
 
 # add cmake module path
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(AcadosUtils)
 
 
@@ -118,17 +118,28 @@ set(ACADOS_OUTPUT_HEADERS "")
 set(ACADOS_OUTPUT_LIBS "")
 set(ACADOS_TARGETS "")
 
+set(ACADOS_CODE_DIR
+    ${CMAKE_BINARY_DIR}/acados_code_gen/
+)
+set(CASADI_GEN_DIR
+  ${ACADOS_CODE_DIR}/casadi
+)
+
 foreach(model ${ACADOS_MODELS})
   set(${model}_SCRIPTS 
-    ${CMAKE_SOURCE_DIR}/scripts/${model}/mpcc_model.py
-    ${CMAKE_SOURCE_DIR}/scripts/${model}/mpcc_ocp.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${model}/mpcc_model.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${model}/mpcc_ocp.py
   )
-  list(APPEND ACADOS_OUTPUT_DIRS 
-    ${CMAKE_SOURCE_DIR}/scripts/${model}/c_generated_code 
-    ${CMAKE_SOURCE_DIR}/scripts/${model}/cpp_generated_code
+  set(ACADOS_GEN_DIR
+    ${ACADOS_CODE_DIR}/${model}
+  )
+  list(APPEND ACADOS_OUTPUT_DIRS
+    # ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${model}/c_generated_code 
+    # ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${model}/cpp_generated_code
+    ${ACADOS_GEN_DIR}
   )
 
-  collect_acados_generated_code(${model})
+  collect_acados_generated_code(${model} ${ACADOS_GEN_DIR})
   list(APPEND ACADOS_OUTPUT_SRC_CXX ${${model}_SRC_CXX})
   list(APPEND ACADOS_OUTPUT_SRC ${${model}_SRC})
   list(APPEND ACADOS_OUTPUT_HEADERS ${${model}_HEADERS})
@@ -136,16 +147,16 @@ foreach(model ${ACADOS_MODELS})
 
   add_custom_command(
     OUTPUT ${${model}_OUTPUT_FILES}
-    COMMAND echo "y" | ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/${model}/mpcc_ocp.py --yaml ${CMAKE_SOURCE_DIR}/params/${model}.yaml
-    DEPENDS ${ACADOS_SCRIPTS} ${CMAKE_SOURCE_DIR}/params/${model}.yaml
+    COMMAND echo "y" | ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${model}/mpcc_ocp.py --yaml ${CMAKE_CURRENT_SOURCE_DIR}/params/${model}.yaml --output_dir ${ACADOS_GEN_DIR} --casadi_dir ${CASADI_GEN_DIR}
+    DEPENDS ${ACADOS_SCRIPTS} ${CMAKE_CURRENT_SOURCE_DIR}/params/${model}.yaml
     COMMENT "Building MPC code with Acados"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/scripts/${model}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${model}
     VERBATIM
   )
 
   add_custom_target(
     GenerateAcadosCode_${model}
-    DEPENDS ${${model}_OUTPUT_FILES} ${${model}_SCRIPTS} ${CMAKE_SOURCE_DIR}/params/${model}.yaml
+    DEPENDS ${${model}_OUTPUT_FILES} ${${model}_SCRIPTS} ${CMAKE_CURRENT_SOURCE_DIR}/params/${model}.yaml
   )
   list(APPEND ACADOS_TARGETS GenerateAcadosCode_${model})
 endforeach()

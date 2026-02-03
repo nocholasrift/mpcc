@@ -226,8 +226,8 @@ void UnicycleMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
   }
 }
 
-Eigen::VectorXd UnicycleMPCC::prepare_initial_state(const Eigen::VectorXd& state,
-                                              const types::Corridor& corridor) {
+Eigen::VectorXd UnicycleMPCC::prepare_initial_state(
+    const Eigen::VectorXd& state, const types::Corridor& corridor) {
   Eigen::VectorXd x0 = state;
   if (_has_run) {
     Eigen::VectorXd prev_x0 = _prev_x0.head(kNX);
@@ -237,6 +237,9 @@ Eigen::VectorXd UnicycleMPCC::prepare_initial_state(const Eigen::VectorXd& state
     if (etheta < -M_PI)
       x0(kIndTheta) += 2 * M_PI;
   }
+
+  // x0(kIndSDot) = x0(kIndV);
+  x0(kIndSDot) = _prev_x0(kNX + kIndSDot);
 
   return x0;
 }
@@ -331,8 +334,7 @@ UnicycleMPCC::MPCHorizon UnicycleMPCC::get_horizon() const {
 // before
 std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
     const Eigen::VectorXd& state, const types::Corridor& corridor) const {
-  double min_meaningful_len = .1;
-  double eps_s              = .05;
+  double eps_s = .05;
 
   const auto& reference = corridor.get_trajectory();
   double current_s      = reference.get_closest_s(state.head(2));
@@ -340,8 +342,7 @@ std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
   // only attempt to align if we are near beginning of trajectory, otherwise just let robot
   // run. Otherwise we will be stopping a lot along the trajectory whenever we are off, even
   // if CBF is engaged to go off course of trajectory.
-  if (current_s > min_meaningful_len ||
-      reference.get_true_length() < min_meaningful_len) {
+  if (current_s > eps_s || reference.get_arclen() < eps_s) {
     return std::nullopt;
   }
 

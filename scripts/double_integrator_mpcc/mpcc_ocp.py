@@ -15,7 +15,7 @@ from mpcc_model import mpcc_ode_model
 from acados_template import AcadosOcp, AcadosOcpSolver, AcadosSimSolver
 
 
-def create_ocp(yaml_file):
+def create_ocp(yaml_file, casadi_dir):
     ocp = AcadosOcp()
 
     params = None
@@ -39,7 +39,7 @@ def create_ocp(yaml_file):
     # set model
     # model = export_mpcc_ode_model(list(ss), list(xs), list(ys))
     mpcc_model = mpcc_ode_model()
-    model = mpcc_model.create_model(params)
+    model = mpcc_model.create_model(params, casadi_dir)
     ocp.model = model
 
     Tf = 1.0
@@ -78,7 +78,7 @@ def create_ocp(yaml_file):
     # ocp.constraints.lsh = np.zeros((1,))
     # ocp.constraints.ush = np.zeros((1,))
     # ocp.constraints.idxsh = np.array([0])
-
+    #
     # grad_cost = 100
     # hess_cost = 1
     #
@@ -176,11 +176,16 @@ def create_ocp(yaml_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Double integrator mpcc")
     parser.add_argument("--yaml", type=str, default="")
+    parser.add_argument("--output_dir", type=str, default="")
+    parser.add_argument("--casadi_dir", type=str, default="")
 
     args = parser.parse_args()
 
     # ocp = create_ocp_tube_cbf(args.yaml)
-    ocp = create_ocp(args.yaml)
+    ocp = create_ocp(args.yaml, args.casadi_dir)
+    if args.output_dir != "":
+        ocp.code_export_directory=args.output_dir
+
     acados_ocp_solver = AcadosOcpSolver(ocp)
     acados_integrator = AcadosSimSolver(ocp)
 

@@ -45,7 +45,7 @@ class mpcc_ode_model:
     def __init__(self):
         self.model_name = "double_integrator_mpcc"
 
-    def create_model(self, params) -> AcadosModel:
+    def create_model(self, params, output_dir) -> AcadosModel:
         self.init_x_and_u()
 
         self.setup_mpcc(params)
@@ -90,6 +90,7 @@ class mpcc_ode_model:
             self.Ql_c,
             self.Ql_l,
             self.gamma,
+            self.L_path,
         )
 
         self.model = AcadosModel()
@@ -127,7 +128,7 @@ class mpcc_ode_model:
         self.model.u_labels = ["$ax$", "$ay$", "$sddot$"]
         self.model.t_label = "$t$ [s]"
 
-        self.add_debugs()
+        self.add_debugs(output_dir)
 
         return self.model
 
@@ -158,46 +159,23 @@ class mpcc_ode_model:
         # arc_len_knots = DM([1.0] * 11)
         # arc_len_knots = MX.sym("knots", 11)
 
-        self.arc_len_knots = np.linspace(0, params["ref_length_size"], n_knots)
-        # arc_len_knots = np.linspace(0, 17.0385372, 11)
+        self.arc_len_knots = np.linspace(0, 1, params["mpc_ref_samples"])
+        xspl = MX.sym('xspl', 1, 1)
+        yspl = MX.sym('yspl', 1, 1)
 
-        # self.arc_len_knots = np.concatenate(
-        #     (
-        #         np.ones((4,)) * self.arc_len_knots[0],
-        #         self.arc_len_knots[2:-2],
-        #         np.ones((4,)) * self.arc_len_knots[-1],
-        #     )
-        # )
-
-        # 1 denotes the multiplicity of the knots at the ends
-        # don't need clamped so leave as 1
-        # self.x_spline_mx = bspline(
-        #     v, self.x_coeff, [list(self.arc_len_knots)], [degree], 1, {}
-        # )
-        # self.y_spline_mx = bspline(
-        #     v, self.y_coeff, [list(self.arc_len_knots)], [degree], 1, {}
-        # )
-
-
-        # self.spline_x = Function("xr", [v, self.x_coeff], [self.x_spline_mx], {})
-        # self.spline_y = Function("yr", [v, self.y_coeff], [self.y_spline_mx], {})
-
-        # self.xr = self.spline_x(self.s1, self.x_coeff)
-        # self.yr = self.spline_y(self.s1, self.y_coeff)
-
-        x = MX.sym('x', 1, 1)
-        y = MX.sym('y', 1, 1)
+        self.L_path = MX.sym("L_path", 1)
 
         self.interp_x = interpolant("interp_x", "bspline", [self.arc_len_knots.tolist()])
-        self.interp_exp_x = self.interp_x(x, self.x_coeff)
-        self.xr_func = Function('xr', [x, self.x_coeff], [self.interp_exp_x])
+        self.interp_exp_x = self.interp_x(xspl, self.x_coeff)
+        self.xr_func = Function('xr', [xspl, self.x_coeff], [self.interp_exp_x])
         
         self.interp_y = interpolant("interp_y", "bspline", [self.arc_len_knots.tolist()])
-        self.interp_exp_y = self.interp_y(y, self.y_coeff)
-        self.yr_func = Function('yr', [y, self.y_coeff], [self.interp_exp_y])
+        self.interp_exp_y = self.interp_y(yspl, self.y_coeff)
+        self.yr_func = Function('yr', [yspl, self.y_coeff], [self.interp_exp_y])
 
-        self.xr = self.xr_func(self.s1, self.x_coeff)
-        self.yr = self.yr_func(self.s1, self.y_coeff)
+        s_norm = self.s1 / self.L_path
+        self.xr = self.xr_func(s_norm, self.x_coeff)
+        self.yr = self.yr_func(s_norm, self.y_coeff)
 
         self.xr_dot = jacobian(self.xr, self.s1)
         self.yr_dot = jacobian(self.yr, self.s1)
@@ -258,21 +236,24 @@ class mpcc_ode_model:
         )
 
         self.v = self.Ql_c * self.e_c**2 + self.Ql_l * self.e_l**2
-        self.lfv = jacobian(self.v, self.x) @ self.f
-        self.lfv2 = jacobian(self.lfv, self.x) @ self.f
-        self.lglfv = jacobian(self.lfv, self.x) @ self.g[:, :-1]
-
         # self.lfv = jacobian(self.v, self.x) @ self.f
-        # self.v_dot = self.lfv + self.lgvu
+        # self.lfv2 = jacobian(self.lfv, self.x) @ self.f
+        # self.lglfv = jacobian(self.lfv, self.x) @ self.g[:, :-1]
 
-        lambda1 = 2.0
-        lambda2 = 2.0
-        # self.psi1 = self.lfv + lambda1 * self.v
-        # self.psi2 = self.lfv2 + self.lglfv @ self.u + lambda1 * self.lfv + lambda2 * self.psi1
-        self.psi2 = self.lfv2 + self.lglfv @ self.u[:-1] + (lambda1 + lambda2) * self.lfv + lambda1*lambda2*self.v
-        self.lgvu = self.lglfv @ self.u[:-1]
-        self.lgv = self.lglfv
-        self.lyap_con = self.psi2
+        self.lfv = jacobian(self.v, self.x) @ self.f
+        self.lgv = jacobian(self.v, self.x) @ self.g
+        self.lgvu = self.lgv @ self.u
+        self.v_dot = self.lfv + self.lgvu
+        self.lyap_con = self.v_dot + self.gamma * self.v
+
+        # lambda1 = 2.0
+        # lambda2 = 2.0
+        # # self.psi1 = self.lfv + lambda1 * self.v
+        # # self.psi2 = self.lfv2 + self.lglfv @ self.u + lambda1 * self.lfv + lambda2 * self.psi1
+        # self.psi2 = self.lfv2 + self.lglfv @ self.u[:-1] + (lambda1 + lambda2) * self.lfv + lambda1*lambda2*self.v
+        # self.lgvu = self.lglfv @ self.u[:-1]
+        # self.lgv = self.lglfv
+        # self.lyap_con = self.psi2
 
     def cbf(self, params):
         self.d_abv_coeff = MX.sym("d_above_coeffs", params["tube_poly_degree"] + 1)
@@ -280,9 +261,10 @@ class mpcc_ode_model:
 
         self.d_abv = 0
         self.d_blw = 0
+        s_norm = self.s1 / self.L_path
         for i in range(params["tube_poly_degree"] + 1):
-            self.d_abv = self.d_abv + (self.d_abv_coeff[i] * self.s1**i)
-            self.d_blw = self.d_blw + (self.d_blw_coeff[i] * self.s1**i)
+            self.d_abv = self.d_abv + (self.d_abv_coeff[i] * s_norm**i)
+            self.d_blw = self.d_blw + (self.d_blw_coeff[i] * s_norm**i)
 
         self.alpha_abv = MX.sym("alpha_abv")
         self.alpha_blw = MX.sym("alpha_blw")
@@ -334,7 +316,7 @@ class mpcc_ode_model:
             + self.alpha_blw * self.h_blw
         )
 
-    def add_debugs(self):
+    def add_debugs(self, output_dir):
         self.debug = DebugRegistry()
 
         self.debug.add("xr", self.xr)
@@ -377,18 +359,27 @@ class mpcc_ode_model:
             self.Ql_c,
             self.Ql_l,
             self.gamma,
+            self.L_path,
         ]
 
-        folder = "cpp_generated_code"
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        dir_name = os.path.join(script_dir, folder)
-        if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+        if output_dir == "":
+            output_dir = "cpp_generated_code"
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            dir_name = os.path.join(script_dir, folder)
+
+            if not os.path.exists(dir_name):
+                os.mkdir(dir_name)
+        else:
+            dir_name = os.path.join(output_dir)
+            if not os.path.exists(dir_name):
+                os.makedirs(dir_name, exist_ok=True)
 
         current_dir = os.getcwd()
         os.chdir(dir_name)
 
-        self.debug.generate_c("mpcc_casadi_double_integrator_internals.cpp", debug_inputs)
+        fname = "mpcc_casadi_double_integrator_internals"
+        self.debug.generate_c(f"{fname}.cpp", debug_inputs)
+        os.system(f"gcc -fPIC -shared {fname}.cpp -o {fname}.so")
 
         os.chdir(current_dir)
 

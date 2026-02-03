@@ -4,6 +4,8 @@
 
 #include <iostream>
 #include <stdexcept>
+
+#include <Eigen/SVD>
 #include <unsupported/Eigen/Splines>
 
 namespace mpcc {
@@ -79,6 +81,11 @@ class Polynomial {
   Polynomial(const Coeffs& coeffs)
       : coeffs_(coeffs), degree_(coeffs.size() - 1) {}
 
+  Polynomial(const std::vector<double>& coeffs)
+      : coeffs_(Eigen::Map<Coeffs>(const_cast<double*>(coeffs.data()),
+                                   coeffs.size())),
+        degree_(coeffs.size() - 1) {}
+
   ~Polynomial() = default;
 
   double pos(double t) const {
@@ -109,6 +116,15 @@ class Polynomial {
     return derivative(t, order);
   }
 
+  Eigen::VectorXd operator()(const Eigen::VectorXd& ts) const {
+    Eigen::VectorXd vals(ts.size());
+    for (int i = 0; i < ts.size(); ++i) {
+      vals[i] = (*this)(ts[i]);
+    }
+
+    return vals;
+  }
+
   const Coeffs& get_coeffs() const { return coeffs_; }
 
   // there are N+1 coefficients for an N degree polynomial
@@ -120,9 +136,57 @@ class Polynomial {
     coeffs_ = coeffs;
     degree_ = coeffs.size() - 1;
   }
+
   void set_coeffs(Coeffs&& coeffs) {
     coeffs_ = coeffs;
     degree_ = coeffs.size() - 1;
+  }
+
+  // thanks to Patrick Löber
+  // https://github.com/patLoeber/Polyfit/blob/master/PolyfitEigen.hpp
+  static Polynomial polyfit(
+      const Eigen::VectorXd& x_coeffs, const Eigen::VectorXd& y_coeffs,
+      const int degree,
+      const std::vector<double>& weights = std::vector<double>(),
+      bool useJacobi                     = true) {
+    using namespace Eigen;
+
+    bool useWeights = weights.size() > 0 && weights.size() == x_coeffs.size();
+
+    int numCoefficients = degree + 1;
+    size_t nCount       = x_coeffs.size();
+
+    MatrixXd X(nCount, numCoefficients);
+    MatrixXd Y(nCount, 1);
+
+    // fill Y matrix
+    for (size_t i = 0; i < nCount; i++) {
+      if (useWeights)
+        Y(i, 0) = y_coeffs[i] * weights[i];
+      else
+        Y(i, 0) = y_coeffs[i];
+    }
+
+    // fill X matrix (Vandermonde matrix)
+    for (size_t nRow = 0; nRow < nCount; nRow++) {
+      double nVal = 1.0f;
+      for (int nCol = 0; nCol < numCoefficients; nCol++) {
+        if (useWeights)
+          X(nRow, nCol) = nVal * weights[nRow];
+        else
+          X(nRow, nCol) = nVal;
+        nVal *= x_coeffs[nRow];
+      }
+    }
+
+    VectorXd coefficients;
+    if (useJacobi) {
+      coefficients = X.jacobiSvd<ComputeThinU | ComputeThinV>().solve(Y);
+    } else {
+      coefficients = X.colPivHouseholderQr().solve(Y);
+    }
+
+    return Polynomial(coefficients);
   }
 
   // some static expressions for common orders, anything after 3,
@@ -254,6 +318,9 @@ class Trajectory {
   using Point = Eigen::Vector2d;
   using Row   = Eigen::RowVectorXd;
 
+  enum class Side { kAbove, kBelow };
+  enum class Indexing { Start, End };
+
   struct View {
     Row knots;
     Row xs;
@@ -263,59 +330,30 @@ class Trajectory {
 
   Trajectory() = default;
 
-  Trajectory(const Row& knots, const Row& xs, const Row& ys) {
-    spline_x_         = Spline(knots, xs);
-    spline_y_         = Spline(knots, ys);
-    true_arc_len_     = knots(knots.size() - 1);
-    extended_arc_len_ = true_arc_len_;
-  }
+  Trajectory(const Row& knots, const Row& xs, const Row& ys)
+      : spline_x_(Spline(knots, xs)),
+        spline_y_(Spline(knots, ys)),
+        arclen_(knots(knots.size() - 1)) {}
 
   Trajectory(const Spline& x, const Spline& y)
       : spline_x_(x),
         spline_y_(y),
-        true_arc_len_(y.get_knots()(y.get_knots().size() - 1)),
-        extended_arc_len_(true_arc_len_) {}
+        arclen_(y.get_knots()(y.get_knots().size() - 1)) {}
 
-  // extension length is the new full arc length of the traj
-  void extend_to_length(double extension_length) {
-
-    if (true_arc_len_ >= extension_length)
-      return;
-
-    int step_size = spline_x_.get_knots().size();
-
-    double epsilon = 0.1;
-    double ds      = extension_length / (step_size - 1);
-
-    double end      = true_arc_len_ - epsilon;
-    Point end_point = (*this)(end);
-    Point end_der   = (*this)(end, kFirstOrder);
-
-    Row knots(step_size), xs(step_size), ys(step_size);
-    for (int i = 0; i < step_size; ++i) {
-      double s = ds * i;
-      knots(i) = s;
-
-      if (s < true_arc_len_) {
-        xs(i) = spline_x_(s);
-        ys(i) = spline_y_(s);
-      } else {
-        xs(i) = end_der(kX) * (s - true_arc_len_) + end_point(kX);
-        ys(i) = end_der(kY) * (s - true_arc_len_) + end_point(kY);
-      }
-    }
-
-    spline_x_ = Spline(knots, xs);
-    spline_y_ = Spline(knots, ys);
-
-    extended_arc_len_ = extension_length;
-  }
-
-  double get_extended_length() const { return extended_arc_len_; }
-
-  double get_true_length() const { return true_arc_len_; }
+  double get_arclen() const { return arclen_; }
 
   Point operator()(double s) const { return {spline_x_(s), spline_y_(s)}; }
+
+  Point operator()(Indexing index) const {
+    switch (index) {
+      case Indexing::Start:
+        return (*this)(0);
+      case Indexing::End:
+        return (*this)(arclen_);
+      default:
+        throw std::runtime_error("invalid index passed to trajectory.");
+    }
+  }
 
   // derivative
   Point operator()(double s, unsigned int order) const {
@@ -323,8 +361,16 @@ class Trajectory {
   }
 
   Trajectory get_adjusted_traj(double s, unsigned int step_count = 0) const {
-    if (step_count == 0)
+    if (s > arclen_) {
+      throw std::runtime_error(
+          "[Trajectory] start length passed to adjusted traj " +
+          std::to_string(s) + " is larger than arc length" +
+          std::to_string(arclen_));
+    }
+
+    if (step_count == 0) {
       step_count = spline_x_.get_knots().size();
+    }
 
     Row knots, xs, ys;  //, abvs, blws;
     knots.resize(step_count);
@@ -332,23 +378,23 @@ class Trajectory {
     ys.resize(step_count);
 
     // get true end point of trajectory
-    double epsilon  = 0.1;
-    Point end_point = (*this)(true_arc_len_ - epsilon);
+    double epsilon  = 0.05;
+    Point end_point = (*this)(arclen_ - epsilon);
 
     // capture reference at each sample
+    double ds = (arclen_ - s) / (step_count - 1);
     for (int i = 0; i < step_count; ++i) {
-      knots(i) = ((double)i) * extended_arc_len_ / (step_count - 1);
+      knots(i) = ((double)i) * ds;
 
-      // if sample domain exceeds trajectory, duplicate final point
-      if (knots(i) + s <= extended_arc_len_) {
-        Point p = (*this)(knots(i) + s);
-        xs(i)   = p(kX);
-        ys(i)   = p(kY);
-      } else {
-        xs(i) = end_point(kX);
-        ys(i) = end_point(kY);
-      }
+      Point p = (*this)(knots(i) + s);
+      xs(i)   = p(kX);
+      ys(i)   = p(kY);
+
+      // std::cout << "p @ s=" << knots(i) + s << ": " << p.transpose() << "\n";
     }
+
+    // std::cout << "[adjusted] xs[-1]=" << xs(step_count - 1) << "\n";
+    // std::cout << "[adjusted] ys[-1]=" << ys(step_count - 1) << "\n";
 
     Spline x(knots, xs);
     Spline y(knots, ys);
@@ -359,7 +405,7 @@ class Trajectory {
     double s        = 0;
     double min_dist = 1e6;
     Point pos{state(0), state(1)};
-    for (double i = 0.0; i < extended_arc_len_; i += .01) {
+    for (double i = 0.0; i < arclen_; i += .01) {
       Point p  = (*this)(i);
       double d = (pos - p).squaredNorm();
       if (d < min_dist) {
@@ -373,7 +419,7 @@ class Trajectory {
 
   double distance_from(const Point& pt) const {
     double min_dist = 1e6;
-    for (double i = 0.0; i < extended_arc_len_; i += .01) {
+    for (double i = 0.0; i < arclen_; i += .01) {
       double d = (pt - (*this)(i)).squaredNorm();
       if (d < min_dist) {
         min_dist = d;
@@ -383,12 +429,25 @@ class Trajectory {
     return min_dist;
   }
 
+  Point get_unit_normal(double s, Side side = Side::kAbove) const {
+    Point tangent = (*this)(s, kFirstOrder);
+    tangent.normalize();
+
+    switch (side) {
+      case Side::kAbove:
+        return Point(-tangent[kY], tangent[kX]);
+      case Side::kBelow:
+      default:
+        return Point(tangent[kY], -tangent[kX]);
+    }
+  }
+
   View view() const {
     // x and y are forced to have same knots
     return {.knots  = spline_x_.get_knots(),
             .xs     = evaluate_axis_at_knots(kX),
             .ys     = evaluate_axis_at_knots(kY),
-            .arclen = extended_arc_len_};
+            .arclen = arclen_};
   }
 
   const Row& get_ctrls_x() { return spline_x_.get_ctrls(); }
@@ -401,8 +460,7 @@ class Trajectory {
   static constexpr unsigned int kSecondOrder = 2;
 
  private:
-  double true_arc_len_{0};
-  double extended_arc_len_{0};
+  double arclen_{0};
   Spline spline_x_;
   Spline spline_y_;
 
