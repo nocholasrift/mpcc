@@ -1,5 +1,5 @@
 # Helper to collect acados generated code
-function(collect_acados_generated_code model_prefix output_dir)
+function(collect_acados_generated_code model_prefix output_dir cxx_output_dir)
   # set(output_dir_c ${PROJECT_SOURCE_DIR}/scripts/${model}/c_generated_code)
   # set(output_dir_cpp ${PROJECT_SOURCE_DIR}/scripts/${model}/cpp_generated_code)
 
@@ -27,15 +27,13 @@ function(collect_acados_generated_code model_prefix output_dir)
     ${output_dir}/${model}_cost/${model}_cost_ext_cost_e_fun_jac_hess.c
   )
 
-  # set(${model_prefix}_SRC_CPP
-  #   ${output_dir_cpp}/compute_cbf_abv.cpp
-  #   ${output_dir_cpp}/compute_lfh_abv.cpp
-  #   ${output_dir_cpp}/compute_lgh_abv.cpp
-  #
-  #   ${output_dir_cpp}/compute_cbf_blw.cpp
-  #   ${output_dir_cpp}/compute_lfh_blw.cpp
-  #   ${output_dir_cpp}/compute_lgh_blw.cpp
-  # )
+  set(${model_prefix}_SRC_CPP
+    ${cxx_output_dir}/casadi_${model_prefix}_internals.cpp
+  )
+
+  set(${model_prefix}_HEADERS_CPP
+    ${cxx_output_dir}/casadi_${model_prefix}_internals.h
+  )
 
   set(${model_prefix}_HEADERS
     ${output_dir}/acados_solver_${model}.h
@@ -47,6 +45,9 @@ function(collect_acados_generated_code model_prefix output_dir)
   set(${model_prefix}_LIBS
     ${output_dir}/libacados_ocp_solver_${model}.${lib_ext}
     ${output_dir}/libacados_sim_solver_${model}.${lib_ext}
+    # these cpp libraries are always .so
+    ${cxx_output_dir}/libcasadi_${model_prefix}_internals.so
+    # ${cxx_output_dir}/libacados_sim_solver_${model}.so
   )
 
   set(${model_prefix}_OUTPUT_FILES 
@@ -62,6 +63,7 @@ function(collect_acados_generated_code model_prefix output_dir)
   set(${model_prefix}_LIBS "${${model_prefix}_LIBS}" PARENT_SCOPE)
 
   set(${model_prefix}_SRC_CXX "${${model_prefix}_SRC_CPP}" PARENT_SCOPE)
+  set(${model_prefix}_HEADERS_CXX "${${model_prefix}_HEADERS_CPP}" PARENT_SCOPE)
 
 endfunction()
 
