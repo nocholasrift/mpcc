@@ -150,7 +150,7 @@ class MPCCore {
   bool _has_run{false};
 
   types::Trajectory _trajectory;
-  types::Trajectory _prev_traj;
+  types::Trajectory _non_extended_trajectory;
   std::array<types::Polynomial, 2> _mpc_tube;
 
   std::unique_ptr<map_util::IGrid> _map_util;
