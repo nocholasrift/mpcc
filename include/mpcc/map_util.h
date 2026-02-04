@@ -4,6 +4,7 @@
 
 #include <Eigen/Core>
 #include <iostream>
+#include <stdexcept>
 #include <unordered_set>
 #include <vector>
 
@@ -186,10 +187,15 @@ class IGrid {
       if (occupied) {
         dists[i] = -1;
       } else {
-        raycast(s_point, max_end, end, "inflated");
-        double dist_sample = std::min((s_point - end).norm(), max_dist);
-        dists[i]           = dist_sample;
-        min_dist           = std::min(min_dist, dist_sample);
+        double dist_sample;
+        try {
+          raycast(s_point, max_end, end, "inflated");
+          dist_sample = std::min((s_point - end).norm(), max_dist);
+          min_dist    = std::min(min_dist, dist_sample);
+        } catch (const std::invalid_argument& e) {
+          dist_sample = -1;
+        }
+        dists[i] = dist_sample;
       }
       // if (dist_sample < 0.2) {
       //   std::cout << "dist_sample: " << dist_sample << "\n";
