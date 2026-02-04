@@ -177,7 +177,13 @@ class IGrid {
 
       // return negative distance since inside obstacle
       // let the user decide what should be done in this case...
-      if (is_occupied(s_point(0), s_point(1), "inflated")) {
+      bool occupied;
+      try {
+        occupied = is_occupied(s_point(0), s_point(1), "inflated");
+      } catch (const std::invalid_argument& e) {
+        occupied = true;
+      }
+      if (occupied) {
         dists[i] = -1;
       } else {
         raycast(s_point, max_end, end, "inflated");
