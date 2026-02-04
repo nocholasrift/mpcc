@@ -6,7 +6,7 @@
 
 using namespace mpcc;
 
-#ifdef FOUND_PYBIND11
+// #ifdef FOUND_PYBIND11
 // the declarations in the header cannot be referenced by pybind...
 // need to define them
 const uint16_t DIMPCC::kNX;
@@ -14,7 +14,7 @@ const uint16_t DIMPCC::kNS;
 const uint16_t DIMPCC::kNP;
 const uint16_t DIMPCC::kNU;
 const uint16_t DIMPCC::kNBX0;
-#endif
+// #endif
 
 DIMPCC::DIMPCC() {
   _dt         = -1;

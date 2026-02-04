@@ -18,7 +18,7 @@ find_package(catkin QUIET COMPONENTS
   amrl_logging
 )
 
-find_package(pybind11 QUIET)
+# find_package(pybind11 QUIET)
 find_package(Python3 REQUIRED)
 find_package(ACADOS REQUIRED)
 find_package(BLASFEO REQUIRED)
@@ -27,6 +27,7 @@ find_package(Eigen3 REQUIRED)
 
 
 add_subdirectory(third_party/HiGHS)
+add_subdirectory(third_party/pybind11)
 
 message(STATUS "ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
 
@@ -177,11 +178,12 @@ message(WARNING "include dir: ${EIGEN3_INCLUDE_DIRS}")
 ########################
 # Python bindings
 ########################
-if (pybind11_FOUND)
-  message(STATUS "Pybind11 found, building mpcc python bindings")
+# if (pybind11_FOUND)
+  message(STATUS "Pybind11 v${pybind11_VERSION} found, building mpcc python bindings")
   add_definitions(-DFOUND_PYBIND11)
 
-  find_package(PythonLibs REQUIRED)
+  # find_package(PythonLibs REQUIRED)
+  find_package(Python3 COMPONENTS Development REQUIRED)
   include_directories(${PYTHON_INCLUDE_DIRS})
 
   pybind11_add_module(py_mpcc
@@ -209,9 +211,9 @@ if (pybind11_FOUND)
     ${ACADOS_OUTPUT_LIBS}
     ${BLASFEO_LIBRARIES}
   )
-else()
-  message(STATUS "Pybind11 not found, mpcc python bindings will not be built")
-endif()
+# else()
+  # message(STATUS "Pybind11 not found, mpcc python bindings will not be built")
+# endif()
 
 ########################
 # ROS executables (only if catkin)
