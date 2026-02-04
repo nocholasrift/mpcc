@@ -8,14 +8,14 @@
 
 using namespace mpcc;
 
-#ifdef FOUND_PYBIND11
+// #ifdef FOUND_PYBIND11
 // the declarations in the header cannot be referenced by pybind...
 // need to define them
 const uint16_t UnicycleMPCC::kNX;
 const uint16_t UnicycleMPCC::kNP;
 const uint16_t UnicycleMPCC::kNU;
 const uint16_t UnicycleMPCC::kNBX0;
-#endif
+// #endif
 
 UnicycleMPCC::UnicycleMPCC() {
   // Set default value
