@@ -4,7 +4,7 @@ You can install the package either with or without docker. Since there are sever
 To build the image, run the following command in the top level directory of this repository:
 
 ```bash
-docker build --tag=mpcc . # this will take a while :)
+docker build --tag=mpcc . 
 ```
 
 If you'd like to install it onto your machine, you can do so through `catkin build`
