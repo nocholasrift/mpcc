@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <map>
 #include <vector>
+#include <optional>
 
 #include <Eigen/Dense>
 

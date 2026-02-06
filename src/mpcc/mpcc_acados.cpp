@@ -1,9 +1,10 @@
 #include <mpcc/mpcc_acados.h>
+#include <mpcc/termcolor.hpp>
 
 #include <array>
+#include <optional>
 #include <csignal>
 #include <iostream>
-#include <mpcc/termcolor.hpp>
 #include <stdexcept>
 
 using namespace mpcc;

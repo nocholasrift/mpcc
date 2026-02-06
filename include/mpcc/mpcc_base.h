@@ -9,6 +9,7 @@
 // acados
 #include <mpcc/acados_interface.h>
 
+#include <optional>
 #include <cmath>
 #include <map>
 
