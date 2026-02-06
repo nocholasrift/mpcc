@@ -240,10 +240,16 @@ class mpcc_ode_model:
             horzcat(0, 0, 1),
         )
 
+        # self.v = self.Ql_c * self.e_c**2 + self.Ql_l * self.e_l**2
+        xdot = self.f + self.g @ self.u
+        self.e_cdot = jacobian(self.e_c, self.x) @ self.f
+        self.e_ldot = jacobian(self.e_l, self.x) @ self.f
+
         self.v = self.Ql_c * self.e_c**2 + self.Ql_l * self.e_l**2
         # self.lfv = jacobian(self.v, self.x) @ self.f
         # self.lfv2 = jacobian(self.lfv, self.x) @ self.f
-        # self.lglfv = jacobian(self.lfv, self.x) @ self.g[:, :-1]
+        # # self.lglfv = jacobian(self.lfv, self.x) @ self.g[:, :-1]
+        # self.lglfv = jacobian(self.lfv, self.x) @ self.g
 
         self.lfv = jacobian(self.v, self.x) @ self.f
         self.lgv = jacobian(self.v, self.x) @ self.g
@@ -251,12 +257,14 @@ class mpcc_ode_model:
         self.v_dot = self.lfv + self.lgvu
         self.lyap_con = self.v_dot + self.gamma * self.v
 
-        # lambda1 = 2.0
-        # lambda2 = 2.0
-        # # self.psi1 = self.lfv + lambda1 * self.v
-        # # self.psi2 = self.lfv2 + self.lglfv @ self.u + lambda1 * self.lfv + lambda2 * self.psi1
+        # lambda1 = 10.0
+        # lambda2 = 10.0
+        # self.psi1 = self.lfv + lambda1 * self.v
+        # self.psi2 = self.lfv2 + self.lglfv @ self.u + lambda1 * self.lfv + lambda2 * self.psi1
         # self.psi2 = self.lfv2 + self.lglfv @ self.u[:-1] + (lambda1 + lambda2) * self.lfv + lambda1*lambda2*self.v
+        # self.psi2 = self.lfv2 + self.lglfv @ self.u + (lambda1 + lambda2) * self.lfv + lambda1*lambda2*self.v
         # self.lgvu = self.lglfv @ self.u[:-1]
+        # self.lgvu = self.lglfv @ self.u
         # self.lgv = self.lglfv
         # self.lyap_con = self.psi2
 

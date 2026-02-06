@@ -401,11 +401,11 @@ class TubeGenerator {
       }
     }
 
-    std::cout << "d_abv:\n";
-    for (auto& dist : dists_abv) {
-      std::cout << dist << " ";
-    }
-    std::cout << "\n";
+    // std::cout << "d_abv:\n";
+    // for (auto& dist : dists_abv) {
+    //   std::cout << dist << " ";
+    // }
+    // std::cout << "\n";
 
     dist_status =
         grid_map.get_distances(traj, num_samples_, start, end, max_distance_,

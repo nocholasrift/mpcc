@@ -152,6 +152,9 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
     }
   }
 
+  std::cout << "non extended traj length: "
+            << _non_extended_trajectory.get_arclen() << "\n";
+
   /*double extend_len = _trajectory.get_arclen() + 2.0;*/
   /*types::Trajectory extended_trajectory =*/
   /*    utils::extend_trajectory(_trajectory, extend_len);*/

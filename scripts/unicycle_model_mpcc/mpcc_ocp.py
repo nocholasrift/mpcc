@@ -80,6 +80,7 @@ def create_ocp_tube_cbf(yaml_file, casadi_dir):
     # ocp.constraints.ush = np.zeros((1,))
     # ocp.constraints.idxsh = np.array([0])
 
+    nsh = 3
     con_upper_bounds = np.array([1e6, 1e6, 0])
     con_lower_bounds = np.array([0, 0, -1e6])
     # con_upper_bounds = np.array([1e6, 1e6, 0])
@@ -98,13 +99,13 @@ def create_ocp_tube_cbf(yaml_file, casadi_dir):
     # ocp.constraints.lh_e = np.array([-1e9])
 
     # soft constraint
-    ocp.constraints.lsh_0 = np.zeros((1,))
-    ocp.constraints.ush_0 = np.zeros((1,))
-    ocp.constraints.idxsh_0 = np.array([2])
+    ocp.constraints.lsh_0 = np.zeros((nsh,))
+    ocp.constraints.ush_0 = np.zeros((nsh,))
+    ocp.constraints.idxsh_0 = np.array([0, 1, 2])
 
-    ocp.constraints.lsh = np.zeros((1,))
-    ocp.constraints.ush = np.zeros((1,))
-    ocp.constraints.idxsh = np.array([2])
+    ocp.constraints.lsh = np.zeros((nsh,))
+    ocp.constraints.ush = np.zeros((nsh,))
+    ocp.constraints.idxsh = np.array([0, 1, 2])
 
     # ocp.constraints.lsh_e = np.zeros((1,))
     # ocp.constraints.ush_e = np.zeros((1,))
@@ -113,15 +114,28 @@ def create_ocp_tube_cbf(yaml_file, casadi_dir):
     grad_cost = 100
     hess_cost = 1
 
-    ocp.cost.Zl_0 = hess_cost * np.ones((1,))
-    ocp.cost.Zu_0 = hess_cost * np.ones((1,))
-    ocp.cost.zl_0 = grad_cost * np.ones((1,))
-    ocp.cost.zu_0 = grad_cost * np.ones((1,))
+    ocp.cost.Zl_0 = hess_cost * np.ones((nsh,))
+    ocp.cost.Zu_0 = hess_cost * np.ones((nsh,))
+    ocp.cost.zl_0 = grad_cost * np.ones((nsh,))
+    ocp.cost.zu_0 = grad_cost * np.ones((nsh,))
 
-    ocp.cost.Zl = hess_cost * np.ones((1,))
-    ocp.cost.Zu = hess_cost * np.ones((1,))
-    ocp.cost.zl = grad_cost * np.ones((1,))
-    ocp.cost.zu = grad_cost * np.ones((1,))
+    ocp.cost.Zl = hess_cost * np.ones((nsh,))
+    ocp.cost.Zu = hess_cost * np.ones((nsh,))
+    ocp.cost.zl = grad_cost * np.ones((nsh,))
+    ocp.cost.zu = grad_cost * np.ones((nsh,))
+
+    grad_cost = 1e4
+    hess_cost = 1e2
+    num_cbfs = nsh - 1
+    ocp.cost.Zl_0[:num_cbfs] = hess_cost * np.ones((num_cbfs,))
+    ocp.cost.Zu_0[:num_cbfs] = hess_cost * np.ones((num_cbfs,))
+    ocp.cost.zl_0[:num_cbfs] = grad_cost * np.ones((num_cbfs,))
+    ocp.cost.zu_0[:num_cbfs] = grad_cost * np.ones((num_cbfs,))
+
+    ocp.cost.Zl[:num_cbfs] = hess_cost * np.ones((num_cbfs,))
+    ocp.cost.Zu[:num_cbfs] = hess_cost * np.ones((num_cbfs,))
+    ocp.cost.zl[:num_cbfs] = grad_cost * np.ones((num_cbfs,))
+    ocp.cost.zu[:num_cbfs] = grad_cost * np.ones((num_cbfs,))
 
     # ocp.cost.Zl_e = hess_cost * np.ones((1,))
     # ocp.cost.Zu_e = hess_cost * np.ones((1,))

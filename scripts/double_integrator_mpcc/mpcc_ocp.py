@@ -72,27 +72,43 @@ def create_ocp(yaml_file, casadi_dir):
     ocp.constraints.uh = con_upper_bounds
     ocp.constraints.lh = con_lower_bounds
 
-    # set clf soft constraint
-    # ocp.constraints.lsh_0 = np.zeros((1,))
-    # ocp.constraints.ush_0 = np.zeros((1,))
-    # ocp.constraints.idxsh_0 = np.array([0])
+    # set soft constraint
+    nsh = 2
+    ocp.constraints.lsh_0 = np.zeros((nsh,))
+    ocp.constraints.ush_0 = np.zeros((nsh,))
+    ocp.constraints.idxsh_0 = np.array([0, 1])
+
+    ocp.constraints.lsh = np.zeros((nsh,))
+    ocp.constraints.ush = np.zeros((nsh,))
+    ocp.constraints.idxsh = np.array([0, 1])
     #
-    # ocp.constraints.lsh = np.zeros((1,))
-    # ocp.constraints.ush = np.zeros((1,))
-    # ocp.constraints.idxsh = np.array([0])
-    #
+
     # grad_cost = 100
     # hess_cost = 1
     #
-    # ocp.cost.Zl_0 = hess_cost * np.ones((1,))
-    # ocp.cost.Zu_0 = hess_cost * np.ones((1,))
-    # ocp.cost.zl_0 = grad_cost * np.ones((1,))
-    # ocp.cost.zu_0 = grad_cost * np.ones((1,))
+    # ocp.cost.Zl_0 = hess_cost * np.ones((nsh,))
+    # ocp.cost.Zu_0 = hess_cost * np.ones((nsh,))
+    # ocp.cost.zl_0 = grad_cost * np.ones((nsh,))
+    # ocp.cost.zu_0 = grad_cost * np.ones((nsh,))
     #
-    # ocp.cost.Zl = hess_cost * np.ones((1,))
-    # ocp.cost.Zu = hess_cost * np.ones((1,))
-    # ocp.cost.zl = grad_cost * np.ones((1,))
-    # ocp.cost.zu = grad_cost * np.ones((1,))
+    # ocp.cost.Zl = hess_cost * np.ones((nsh,))
+    # ocp.cost.Zu = hess_cost * np.ones((nsh,))
+    # ocp.cost.zl = grad_cost * np.ones((nsh,))
+    # ocp.cost.zu = grad_cost * np.ones((nsh,))
+
+    grad_cost = 1e4
+    hess_cost = 1e2
+
+    num_cbf = nsh
+    ocp.cost.Zl_0 = hess_cost * np.ones((num_cbf,))
+    ocp.cost.Zu_0 = hess_cost * np.ones((num_cbf,))
+    ocp.cost.zl_0 = grad_cost * np.ones((num_cbf,))
+    ocp.cost.zu_0 = grad_cost * np.ones((num_cbf,))
+
+    ocp.cost.Zl = hess_cost * np.ones((num_cbf,))
+    ocp.cost.Zu = hess_cost * np.ones((num_cbf,))
+    ocp.cost.zl = grad_cost * np.ones((num_cbf,))
+    ocp.cost.zu = grad_cost * np.ones((num_cbf,))
 
     max_acc = 3.0
     ocp.constraints.lbu = np.array([-max_acc, -max_acc, -max_acc])
@@ -103,7 +119,7 @@ def create_ocp(yaml_file, casadi_dir):
     max_vel = 10.0
     max_sdot = np.sqrt(2 * max_vel**2)
     ocp.constraints.lbx = np.array([-1e6, -1e6, -max_vel, -max_vel, 0, 0])
-    ocp.constraints.ubx = np.array([1e6, 1e6, max_vel, max_vel, max_s, max_sdot])
+    ocp.constraints.ubx = np.array([1e6, 1e6, max_vel, max_vel, 1e6, max_sdot])
     ocp.constraints.idxbx = np.array(range(nx))  # Covers all state indices
 
     ocp.constraints.x0 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])

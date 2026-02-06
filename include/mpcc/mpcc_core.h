@@ -84,6 +84,9 @@ class MPCCore {
                                bool is_abv) const;
   /*const types::Trajectory& get_trajectory() { return _trajectory; }*/
   const types::Trajectory& get_trajectory() { return _trajectory; }
+  const types::Trajectory& get_non_extended_trajectory() {
+    return _non_extended_trajectory;
+  }
 
   // Corridor holds a reference to trajectory, so _trajectory must persist
   // while corridor is live. A corridor should only ever be used as a view

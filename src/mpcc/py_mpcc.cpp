@@ -127,6 +127,7 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def("get_horizon", &MPCCore::get_horizon)
       .def("solve", &MPCCore::solve)
       .def("get_trajectory", &MPCCore::get_trajectory)
+      .def("get_non_extended_trajectory", &MPCCore::get_non_extended_trajectory)
       .def("get_solver_status", &MPCCore::get_solver_status)
       .def("get_cbf_data", &MPCCore::get_cbf_data)
       .def("get_input_limits", &MPCCore::get_input_limits)
