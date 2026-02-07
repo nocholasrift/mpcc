@@ -107,15 +107,15 @@ class mpcc_ode_model:
         self.model.cost_expr_ext_cost = self.cost_expr
         self.model.cost_expr_ext_cost_e = self.cost_expr_e
 
-        self.model.con_h_expr_0 = vertcat(self.cbf_con_abv, self.cbf_con_blw)
-        self.model.con_h_expr = vertcat(self.cbf_con_abv, self.cbf_con_blw)
+        # self.model.con_h_expr_0 = vertcat(self.cbf_con_abv, self.cbf_con_blw)
+        # self.model.con_h_expr = vertcat(self.cbf_con_abv, self.cbf_con_blw)
 
-        # self.model.con_h_expr_0 = vertcat(
-        #     self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
-        # )
-        # self.model.con_h_expr = vertcat(
-        #     self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
-        # )
+        self.model.con_h_expr_0 = vertcat(
+            self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
+        )
+        self.model.con_h_expr = vertcat(
+            self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
+        )
 
         # store meta information
         self.model.x_labels = [
@@ -245,7 +245,11 @@ class mpcc_ode_model:
         self.e_cdot = jacobian(self.e_c, self.x) @ self.f
         self.e_ldot = jacobian(self.e_l, self.x) @ self.f
 
-        self.v = self.Ql_c * self.e_c**2 + self.Ql_l * self.e_l**2
+        sc = self.e_cdot + 10 * self.e_c
+        sl = self.e_ldot + 10 * self.e_l
+        self.v = self.Ql_c * sc**2 + self.Ql_l * sl**2
+
+        # self.v = self.Ql_c * self.e_c**2 + self.Ql_l * self.e_l**2
         # self.lfv = jacobian(self.v, self.x) @ self.f
         # self.lfv2 = jacobian(self.lfv, self.x) @ self.f
         # # self.lglfv = jacobian(self.lfv, self.x) @ self.g[:, :-1]
