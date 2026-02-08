@@ -14,6 +14,8 @@
 // acados
 #include "acados_solver_unicycle_model_mpcc.h"
 
+#include <casadi_unicycle_model_mpcc_internals.h>
+
 namespace mpcc {
 using TrajectoryView = types::Trajectory::View;
 
@@ -174,11 +176,8 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
    ***********************/
   virtual void reset_horizon() override;
 
-  Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
-                               const Eigen::VectorXd& control,
-                               bool is_abv) const override;
+  Eigen::VectorXd get_cbf_data(const types::Corridor& corridor, size_t horizon_idx) const;
 
-  virtual const Eigen::VectorXd& get_state() const override { return _state; };
   virtual const std::array<Eigen::VectorXd, 2> get_state_limits()
       const override;
   virtual const std::array<Eigen::VectorXd, 2> get_input_limits()

@@ -98,7 +98,6 @@ include_directories(
   ${EIGEN3_INCLUDE_DIRS}
   ${ACADOS_INCLUDE_DIRS}
   ${BLASFEO_INCLUDE_DIRS}
-  ${cpg_include}
 )
 
 if(catkin_FOUND)
@@ -166,15 +165,6 @@ foreach(model ${ACADOS_MODELS})
   list(APPEND ACADOS_TARGETS GenerateAcadosCode_${model})
 endforeach()
 
-message(WARNING "include dir: ${EIGEN3_INCLUDE_DIRS}")
-
-########################
-# Core MPCC library
-########################
-# add_library(cvxpy_lib STATIC ${cpg_src})
-# target_compile_options(cvxpy_lib PRIVATE -O3 -w)
-# target_include_directories(cvxpy_lib PRIVATE ${cpg_include})
-
 ########################
 # Python bindings
 ########################
@@ -184,32 +174,56 @@ message(WARNING "include dir: ${EIGEN3_INCLUDE_DIRS}")
 
   # find_package(PythonLibs REQUIRED)
   find_package(Python3 COMPONENTS Development REQUIRED)
-  include_directories(${PYTHON_INCLUDE_DIRS})
+  # include_directories(${PYTHON_INCLUDE_DIRS})
 
-  pybind11_add_module(py_mpcc
+  add_library(mpcc_core
     src/mpcc/mpcc_core.cpp
     src/mpcc/mpcc_acados.cpp
     src/mpcc/mpcc_di_acados.cpp
+    src/mpcc/casadi_unicycle_interface.cpp
+    ${ACADOS_OUTPUT_SRC_CXX}
+  )
+  target_compile_options(mpcc_core PRIVATE -std=c++17 -O2)
+  target_include_directories(mpcc_core PRIVATE 
+    ${CASADI_GEN_DIR}
+    ${ACADOS_OUTPUT_DIRS} 
+    ${HiGHS_INCLUDE_DIRS}
+  )
+  add_dependencies(mpcc_core ${ACADOS_TARGETS})
+
+  # message(${ACADOS_OUTPUT_LIBS})
+  target_link_libraries(mpcc_core
+    ${HPIPM_LIBRARIES}
+    ${ACADOS_LIBRARIES}
+    ${EIGEN3_LIBRARIES}
+    ${ACADOS_OUTPUT_LIBS}
+    ${CASADI_OUTPUT_LIBS}
+    ${BLASFEO_LIBRARIES}
+    highs
+  )
+
+  pybind11_add_module(py_mpcc
     src/mpcc/py_mpcc.cpp
-    # ${double_integrator_SRC_CXX}
   )
   add_dependencies(py_mpcc ${ACADOS_TARGETS})
 
   target_include_directories(py_mpcc PRIVATE 
     ${ACADOS_OUTPUT_DIRS} 
-    ${cpg_include}
     ${HiGHS_INCLUDE_DIRS}
+    ${PYTHON_INCLUDE_DIRS}
   )
 
-  target_compile_options(py_mpcc PRIVATE -std=c++17 -O3)
+  target_compile_options(py_mpcc PRIVATE -std=c++17 -O2)
   target_link_libraries(py_mpcc
     PRIVATE
-    highs
-    ${HPIPM_LIBRARIES}
-    ${ACADOS_LIBRARIES}
-    ${EIGEN3_LIBRARIES}
-    ${ACADOS_OUTPUT_LIBS}
-    ${BLASFEO_LIBRARIES}
+    # highs
+    mpcc_core
+    ${CASADI_OUTPUT_LIBS}
+    # ${HPIPM_LIBRARIES}
+    # ${ACADOS_LIBRARIES}
+    # ${EIGEN3_LIBRARIES}
+    # ${ACADOS_OUTPUT_LIBS}
+    # ${BLASFEO_LIBRARIES}
   )
 # else()
   # message(STATUS "Pybind11 not found, mpcc python bindings will not be built")
@@ -222,9 +236,9 @@ if(catkin_FOUND)
   set(MPCC_SRCS
     src/mpcc/logger.cpp
     src/mpcc/mpcc_ros.cpp
-    src/mpcc/mpcc_core.cpp
-    src/mpcc/mpcc_acados.cpp
-    src/mpcc/mpcc_di_acados.cpp
+    # src/mpcc/mpcc_core.cpp
+    # src/mpcc/mpcc_acados.cpp
+    # src/mpcc/mpcc_di_acados.cpp
   )
 
   add_executable(mpcc_ros 
@@ -232,18 +246,19 @@ if(catkin_FOUND)
     src/mpcc/mpcc_node.cpp
   )
   target_link_libraries(mpcc_ros
-    ${HPIPM_LIBRARIES}
+    # ${HPIPM_LIBRARIES}
     ${catkin_LIBRARIES}
-    ${ACADOS_LIBRARIES}
-    ${EIGEN3_LIBRARIES}
-    ${ACADOS_OUTPUT_LIBS}
-    ${CASADI_OUTPUT_LIBS}
-    ${BLASFEO_LIBRARIES}
-    highs
+    # ${ACADOS_LIBRARIES}
+    # ${EIGEN3_LIBRARIES}
+    # ${ACADOS_OUTPUT_LIBS}
+    # ${CASADI_OUTPUT_LIBS}
+    # ${BLASFEO_LIBRARIES}
+    # highs
+    mpcc_core
   )
   add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages ${ACADOS_TARGETS})
-  target_compile_options(mpcc_ros PRIVATE -std=c++17 -O3)
-  target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${cpg_include} ${HiGHS_INCLUDE_DIRS})
+  target_compile_options(mpcc_ros PRIVATE -std=c++17 -O2)
+  target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${HiGHS_INCLUDE_DIRS})
 
   add_executable(publish_pf_pose src/utils/publish_pf_pose.cpp)
   target_link_libraries(publish_pf_pose ${catkin_LIBRARIES})

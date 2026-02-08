@@ -12,7 +12,7 @@ from std_msgs.msg import Float32
 from mpcc.srv import QuerySAC, QuerySACResponse
 
 from gym import spaces
-from oyster.RobotEnv import RobotEnv
+from oyster.CBFEnv import CBFEnv
 from oyster.ParamLoader import ParameterLoader
 from oyster.rlkit.torch.sac.policies import TanhGaussianPolicy
 from oyster.rlkit.torch.networks import FlattenMlp, MlpEncoder, RecurrentEncoder
@@ -26,13 +26,23 @@ from oyster.rlkit.samplers.util import rollout
 class ModelServer:
     def __init__(self, variant):
 
-        self.n_obs = 11
+        self.n_obs = 14
         self.n_actions = 2
 
-        low = np.array(np.zeros(self.n_obs), dtype=np.float64)
-        high = np.array(np.ones(self.n_obs), dtype=np.float64)
+        self.N_alpha = self.n_actions
+        self.N_horizon = 3
 
-        observation_space = spaces.Box(low, high, dtype=np.float64)
+        self.low = np.array(
+            -10 * np.ones(self.n_obs),
+            dtype=np.float64,
+        )
+
+        self.high = np.array(
+            10 * np.ones(self.n_obs),
+            dtype=np.float64,
+        )
+
+        observation_space = spaces.Box(self.low, self.high, dtype=np.float64)
         action_space = spaces.Box(
             low=np.zeros(self.n_actions),
             high=np.ones(self.n_actions),
@@ -53,9 +63,15 @@ class ModelServer:
         recurrent = variant["algo_params"]["recurrent"]
         encoder_model = RecurrentEncoder if recurrent else MlpEncoder
 
-        config_path = os.getenv("PEARL_CONFIG_PATH")
-        param_fname = str(rospy.get_param("model_server/mpc_type")) + ".yaml"
-        param_loader = ParameterLoader([os.path.join(config_path, param_fname)])
+        config_path = os.getenv("MPCC_CONFIG_PATH")
+        if not config_path or not config_path.strip():
+            rospy.loginfo("CONFIG PATH ENV VARIABLE 'MPCC_CONFIG_PATH' NOT SET!!")
+            exit(-1)
+
+        param_fname = str(rospy.get_param("pearl_server/param_file")) + ".yaml"
+        fname = os.path.join(config_path, param_fname)
+        rospy.loginfo("LOADING PARAM FILE: %s", fname)
+        param_loader = ParameterLoader([fname])
         self.params = param_loader[0]
 
         self.context_encoder = encoder_model(
@@ -81,13 +97,24 @@ class ModelServer:
         self.agent.clear_z()
 
         path_to_exp = os.getenv("PEARL_MODEL_PATH")
+        if not path_to_exp or not path_to_exp.strip():
+            rospy.loginfo("CONFIG PATH ENV VARIABLE 'PEARL_CONFIG_PATH' NOT SET!!")
+            exit(-1)
+
+        itr = 68
         self.context_encoder.load_state_dict(
-            torch.load(os.path.join(path_to_exp, "context_encoder.pth"))
+            torch.load(os.path.join(path_to_exp, f"context_encoder_itr_{itr}.pth"))
         )
-        self.policy.load_state_dict(torch.load(os.path.join(path_to_exp, "policy.pth")))
+        self.policy.load_state_dict(
+            torch.load(os.path.join(path_to_exp, f"policy_itr_{itr}.pth"))
+        )
 
         self.context_encoder.eval().to(ptu.device)
         self.policy.eval().to(ptu.device)
+
+        self.obs_mu, self.obs_std = CBFEnv.get_mu_and_std(
+            self.N_horizon, self.N_alpha, self.params
+        )
 
         self.prev_obs = None
         self.prev_action = None
@@ -103,6 +130,12 @@ class ModelServer:
         self.alpha_dot_abv_pub = rospy.Publisher("alpha_dot_abv", Float32, queue_size=1)
         self.alpha_dot_blw_pub = rospy.Publisher("alpha_dot_blw", Float32, queue_size=1)
 
+    def normalize_obs(self, obs):
+        # 95% of observed data will be within -1 to 1
+        z = (obs - self.obs_mu) / (2 * self.obs_std)
+        z = np.clip(z, self.low, self.high)
+        return z
+
     def spin(self):
         rospy.spin()
 
@@ -112,19 +145,19 @@ class ModelServer:
     def query_sac(self, req):
 
         obs = list(req.state.state)
-        obs = np.array(obs[: self.n_obs])
+        unormalized_obs = np.array(obs)
+
+        obs = self.normalize_obs(unormalized_obs)
 
         # obs = torch.FloatTensor(obs).to(ptu.device)
-
-        print(obs)
         raw_act, _ = self.agent.get_action(obs)
 
         action = self.unnormalize(
             raw_act, self.params["MIN_ALPHA_DOT"], self.params["MAX_ALPHA_DOT"]
         )
 
-        alpha_abv = obs[9] + action[0] * self.params["DT"]
-        alpha_blw = obs[10] + action[1] * self.params["DT"]
+        alpha_abv = unormalized_obs[-2] + action[0] * self.params["DT"]
+        alpha_blw = unormalized_obs[-1] + action[1] * self.params["DT"]
 
         exceed_count = 0
         if alpha_abv < self.params["MIN_ALPHA"] or alpha_abv > self.params["MAX_ALPHA"]:
@@ -133,32 +166,14 @@ class ModelServer:
         if alpha_blw < self.params["MIN_ALPHA"] or alpha_blw > self.params["MAX_ALPHA"]:
             exceed_count += 1
 
-        # self.params["CBF_ALPHA_ABV"] = np.clip(
-        #     alpha_abv, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
-        # )
-        # self.params["CBF_ALPHA_BLW"] = np.clip(
-        #     alpha_blw, self.params["MIN_ALPHA"], self.params["MAX_ALPHA"]
-        # )
-
-        if self.prev_obs is not None:
-            v_max = self.params["LINVEL"]
-            v_prog = req.state.state[self.n_obs]
-            v_prog /= np.sqrt(2 * v_max**2)
-            r = RobotEnv.get_reward(
-                obs,
-                req.state.solver_status,
-                v_prog,
-                action,
-                exceed_count,
-                False,
-                self.params,
-            )
+        if self.prev_obs is not None and self.prev_action is not None:
+            r = CBFEnv.get_reward(obs, False, self.params, 3)
             self.agent.update_context(
                 [self.prev_obs, self.prev_action, r, obs, False, {}]
             )
 
-            if self.posterior_counter > 50:
-                self.agent.infer_posterior(self.agent.context)
+        if self.posterior_counter > 50:
+            self.agent.infer_posterior(self.agent.context)
 
         self.prev_obs = obs
         self.prev_action = action

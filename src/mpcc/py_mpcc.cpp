@@ -123,13 +123,11 @@ PYBIND11_MODULE(py_mpcc, m) {
            (void (MPCCore::*)(const Eigen::VectorXd&, const Eigen::VectorXd&,
                               const Eigen::VectorXd&))&MPCCore::set_trajectory)
       .def("get_tube", &MPCCore::get_tube)
-      .def("get_cbf_data", &MPCCore::get_cbf_data)
       .def("get_horizon", &MPCCore::get_horizon)
       .def("solve", &MPCCore::solve)
       .def("get_trajectory", &MPCCore::get_trajectory)
       .def("get_non_extended_trajectory", &MPCCore::get_non_extended_trajectory)
       .def("get_solver_status", &MPCCore::get_solver_status)
-      .def("get_cbf_data", &MPCCore::get_cbf_data)
       .def("get_input_limits", &MPCCore::get_input_limits)
       .def("get_state_limits", &MPCCore::get_state_limits)
       .def("get_state", &MPCCore::get_state);

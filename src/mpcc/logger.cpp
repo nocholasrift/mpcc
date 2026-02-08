@@ -4,9 +4,8 @@
 
 #include <Eigen/Core>
 #include <string>
+#include "mpcc/mpcc_core.h"
 
-#include <casadi_double_integrator_mpcc_internals.h>
-#include <casadi_unicycle_model_mpcc_internals.h>
 
 
 namespace logger {
@@ -39,6 +38,7 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
   _min_alpha_dot = -1.0;
   _max_alpha_dot = 1.0;
   _max_obs_dist  = 1.0;
+  _mpc_steps = 0;
 
   load_params(params);
 
@@ -54,7 +54,6 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
   _is_first_iter = true;
   _is_colliding  = false;
 
-  _exceeded_bounds = 0;
 
   _alpha_dot_abv = 0.;
   _alpha_dot_blw = 0.;
@@ -64,6 +63,7 @@ RLLogger::~RLLogger() {}
 
 void RLLogger::load_params(
     const std::unordered_map<std::string, double>& params) {
+  _mpc_steps = params.find("STEPS") != params.end() ? params.at("STEPS") : _mpc_steps;
   _min_alpha = params.find("MIN_ALPHA") != params.end() ? params.at("MIN_ALPHA")
                                                         : _min_alpha;
 
@@ -142,18 +142,13 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
   _alpha_dot_blw =
       scale(req.response.alpha_dot[1], _min_alpha_dot, _max_alpha_dot);
 
-  // integrate alpha_dot into CBF_ALPHA
-  // clip alpha to ensure it's within bounds
-  std::map<std::string, double> mpc_params = mpc_core.get_params();
+  // copying instead of using const auto& becuase we will modify this
+  // map...
+  auto mpc_params = mpc_core.get_params();
   double dt                                = mpc_params.at("DT");
 
   double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv * dt;
   double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw * dt;
-
-  if (alpha_abv < _min_alpha || alpha_abv > _max_alpha)
-    _exceeded_bounds++;
-  if (alpha_blw < _min_alpha || alpha_blw > _max_alpha)
-    _exceeded_bounds++;
 
   alpha_abv = std::max(_min_alpha, std::min(_max_alpha, alpha_abv));
   alpha_blw = std::max(_min_alpha, std::min(_max_alpha, alpha_blw));
@@ -174,31 +169,22 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
 }
 
 void RLLogger::fill_state(const mpcc::MPCCore& mpc_core, mpcc::RLState& state) {
-  state.state.resize(6);
-  state.state.emplace_back(0.);
-  state.state.emplace_back(0.);
-  state.state.emplace_back(0.);
-  state.state.emplace_back(0.);
-  state.state.emplace_back(0.);
-  state.state.emplace_back(0.);
-}
+  
+  int N = 3;
+  double step = (_mpc_steps) / (N-1);
+  state.state.reserve(4 * N + 2);
 
-double normalize(double val, double min, double max) {
-  if (fabs(min - max) < 1e-8) {
-    std::cerr << "[Logger] Warning: min (" << min << ") and max (" << max
-              << ") are too close for proper "
-                 "normalization!"
-              << std::endl;
-    return 0.;
+  for(size_t i = 0; i < N; ++i){
+    size_t idx = static_cast<size_t>(i * step);
+    Eigen::VectorXd cbf_data = mpc_core.get_cbf_data(idx);
+    state.state.emplace_back(cbf_data(0));
+    state.state.emplace_back(cbf_data(1));
+    state.state.emplace_back(cbf_data(2));
+    state.state.emplace_back(cbf_data(3));
   }
 
-  if (val < min) {
-    std::cerr << "[Logger] Warning: value " << val << " is less than min "
-              << min << "!" << std::endl;
-    val = min;
-  }
-
-  return (val - min) / (max - min);
+  state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_ABV"));
+  state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_BLW"));
 }
 
 }  // namespace logger

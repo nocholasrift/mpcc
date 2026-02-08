@@ -273,34 +273,34 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
 
     debug = DebugRegistry()
 
-    debug.add("xr", xr)
-    debug.add("yr", yr)
-    debug.add("xr_dot", xr_dot)
-    debug.add("yr_dot", yr_dot)
-    debug.add("phi_r", phi_r)
+    debug.add("unicycle_model_xr", xr)
+    debug.add("unicycle_model_yr", yr)
+    debug.add("unicycle_model_xr_dot", xr_dot)
+    debug.add("unicycle_model_yr_dot", yr_dot)
+    debug.add("unicycle_model_phi_r", phi_r)
 
-    debug.add("e_c", e_c)
-    debug.add("e_l", e_l)
+    debug.add("unicycle_model_e_c", e_c)
+    debug.add("unicycle_model_e_l", e_l)
 
-    debug.add("signed_d", signed_d)
-    debug.add("p_abv", p_abv)
-    debug.add("p_blw", p_blw)
+    debug.add("unicycle_model_signed_d", signed_d)
+    debug.add("unicycle_model_p_abv", p_abv)
+    debug.add("unicycle_model_p_blw", p_blw)
 
-    debug.add("d_abv", d_abv)
-    debug.add("d_blw", d_blw)
+    debug.add("unicycle_model_d_abv", d_abv)
+    debug.add("unicycle_model_d_blw", d_blw)
 
-    debug.add("h_abv", h_abv)
-    debug.add("h_blw", h_blw)
-    debug.add("Lfh_abv", Lfh_abv)
-    debug.add("Lfh_blw", Lfh_blw)
+    debug.add("unicycle_model_h_abv", h_abv)
+    debug.add("unicycle_model_h_blw", h_blw)
+    debug.add("unicycle_model_Lfh_abv", Lfh_abv)
+    debug.add("unicycle_model_Lfh_blw", Lfh_blw)
 
-    debug.add("Lghu_abv", h_dot_abv @ g @ u)
-    debug.add("Lghu_blw", h_dot_blw @ g @ u)
+    debug.add("unicycle_model_Lghu_abv", h_dot_abv @ g @ u)
+    debug.add("unicycle_model_Lghu_blw", h_dot_blw @ g @ u)
 
-    debug.add("Lfv", lfv)
-    debug.add("Lgv", lgv)
-    debug.add("Lgvu", lgvu)
-    debug.add("lyap_const", lyap_con)
+    debug.add("unicycle_model_Lfv", lfv)
+    debug.add("unicycle_model_Lgv", lgv)
+    debug.add("unicycle_model_Lgvu", lgvu)
+    debug.add("unicycle_model_lyap_const", lyap_con)
 
     debug_inputs = [
         x,
@@ -319,7 +319,7 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
     if output_dir == "":
         output_dir = "cpp_generated_code"
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        dir_name = os.path.join(script_dir, folder)
+        dir_name = os.path.join(script_dir, output_dir)
 
         if not os.path.exists(dir_name):
             os.mkdir(dir_name)

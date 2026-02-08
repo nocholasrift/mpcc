@@ -162,9 +162,7 @@ void DIMPCC::reset_horizon() {
   }
 }
 
-Eigen::VectorXd DIMPCC::get_cbf_data(const Eigen::VectorXd& state,
-                                     const Eigen::VectorXd& control,
-                                     bool is_abv) const {
+Eigen::VectorXd DIMPCC::get_cbf_data(const types::Corridor& corridor, size_t horizon_idx) const {
   return Eigen::Vector3d(0., 0., 0.);
 }
 

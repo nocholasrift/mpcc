@@ -336,35 +336,34 @@ class mpcc_ode_model:
     def add_debugs(self, output_dir):
         self.debug = DebugRegistry()
 
-        self.debug.add("xr", self.xr)
-        self.debug.add("yr", self.yr)
-        self.debug.add("xr_dot", self.xr_dot)
-        self.debug.add("yr_dot", self.yr_dot)
-        self.debug.add("phi_r", self.phi_r)
+        self.debug.add("double_integrator_xr", self.xr)
+        self.debug.add("double_integrator_yr", self.yr)
+        self.debug.add("double_integrator_xr_dot", self.xr_dot)
+        self.debug.add("double_integrator_yr_dot", self.yr_dot)
+        self.debug.add("double_integrator_phi_r", self.phi_r)
 
-        self.debug.add("e_c", self.e_c)
-        self.debug.add("e_l", self.e_l)
+        self.debug.add("double_integrator_e_c", self.e_c)
+        self.debug.add("double_integrator_e_l", self.e_l)
 
-        self.debug.add("signed_d", self.signed_d)
-        self.debug.add("p_abv", self.p_abv)
-        self.debug.add("p_blw", self.p_blw)
+        self.debug.add("double_integrator_signed_d", self.signed_d)
+        self.debug.add("double_integrator_p_abv", self.p_abv)
+        self.debug.add("double_integrator_p_blw", self.p_blw)
 
-        self.debug.add("d_abv", self.d_abv)
-        self.debug.add("d_blw", self.d_blw)
+        self.debug.add("double_integrator_d_abv", self.d_abv)
+        self.debug.add("double_integrator_d_blw", self.d_blw)
 
-        self.debug.add("h_abv", self.h_abv)
-        self.debug.add("h_blw", self.h_blw)
-        self.debug.add("Lfh_abv", self.Lfh_abv)
-        self.debug.add("Lfh_blw", self.Lfh_blw)
+        self.debug.add("double_integrator_h_abv", self.h_abv)
+        self.debug.add("double_integrator_h_blw", self.h_blw)
+        self.debug.add("double_integrator_Lfh_abv", self.Lfh_abv)
+        self.debug.add("double_integrator_Lfh_blw", self.Lfh_blw)
 
-        self.debug.add("Lghu_abv", self.h_dot_abv @ self.g @ self.u)
-        self.debug.add("Lghu_blw", self.h_dot_blw @ self.g @ self.u)
+        self.debug.add("double_integrator_Lghu_abv", self.h_dot_abv @ self.g @ self.u)
+        self.debug.add("double_integrator_Lghu_blw", self.h_dot_blw @ self.g @ self.u)
 
-        self.debug.add("Lfv", self.lfv)
-        self.debug.add("Lgv", self.lgv)
-        self.debug.add("Lgvu", self.lgvu)
-        # self.debug.add("lyap_dot", self.v_dot)
-        self.debug.add("lyap_const", self.lyap_con)
+        self.debug.add("double_integrator_Lfv", self.lfv)
+        self.debug.add("double_integrator_Lgv", self.lgv)
+        self.debug.add("double_integrator_Lgvu", self.lgvu)
+        self.debug.add("double_integrator_lyap_const", self.lyap_con)
 
         debug_inputs = [
             self.x,
@@ -382,7 +381,7 @@ class mpcc_ode_model:
         if output_dir == "":
             output_dir = "cpp_generated_code"
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            dir_name = os.path.join(script_dir, folder)
+            dir_name = os.path.join(script_dir, output_dir)
 
             if not os.path.exists(dir_name):
                 os.mkdir(dir_name)

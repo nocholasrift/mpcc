@@ -2,6 +2,7 @@
 #include <mpcc/termcolor.hpp>
 
 #include <chrono>
+#include <stdexcept>
 #include "mpcc/utils.h"
 
 using namespace mpcc;
@@ -252,12 +253,52 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   return mpc_command;
 }
 
-Eigen::VectorXd MPCCore::get_cbf_data(const Eigen::VectorXd& state,
-                                      const Eigen::VectorXd& control,
-                                      bool is_abv) const {
+Eigen::VectorXd MPCCore::get_cbf_data(size_t horizon_idx) const {
   // return _mpc->get_cbf_data(state, control, is_abv);
+  if (!_has_run) {
+    std::cout << "has not run, returning 0s for cbf get data\n";
+    return Eigen::VectorXd::Zero(4);
+  }
+
+  std::cout << "getting horizon\n";
+  MPCCore::AnyHorizon horizon = get_horizon();
+  std::cout << "done\n";
+
+  size_t horizon_steps =
+      std::visit([](const auto& arg) { return arg.length; }, horizon);
+
+  std::cout << "checking horizon steps\n";
+
+  if (horizon_idx >= horizon_steps) {
+    throw std::invalid_argument(
+        "[get_cbf_data] passed in horizon_idx exceeds total number of horizon "
+        "steps!");
+  }
+
+  Eigen::VectorXd init_state = std::visit(
+      [&](const auto& arg) { return arg.get_state_at_step(0); }, horizon);
+
+  std::cout << "bulding adjusted traj\n";
+  double current_s = std::max(_trajectory.get_closest_s(init_state), 1e-6);
+  unsigned int num_samples =
+      static_cast<unsigned int>(_params.at("REF_SAMPLES"));
+  std::cout << "adjusted traj\n";
+  types::Trajectory adjusted_traj =
+      _trajectory.get_adjusted_traj(current_s, num_samples);
+  std::cout << "done\n";
+
+  std::cout << adjusted_traj.get_ctrls_x() << "\n";
+  std::cout << adjusted_traj.get_ctrls_y() << "\n";
+
+  types::Corridor corridor(
+      adjusted_traj,
+      _tube_generator.get_side_poly(tube::TubeGenerator::Side::kAbove),
+      _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow),
+      current_s);
+  std::cout << "finished corridor\n";
+
   return call_mpc(
-      [&](auto& mpc) { return mpc.get_cbf_data(state, control, is_abv); });
+      [&](auto& mpc) { return mpc.get_cbf_data(corridor, horizon_idx); });
 }
 
 const bool MPCCore::get_solver_status() const {

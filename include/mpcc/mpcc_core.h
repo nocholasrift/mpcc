@@ -71,6 +71,8 @@ class MPCCore {
   const double get_true_ref_len() const;
   const Eigen::VectorXd& get_state() const;
 
+  MPCType get_mpc_type() const { return _mpc_input_type; }
+
   std::array<types::Polynomial, 2> get_tube() const {
     return _tube_generator.get_boundary();
   }
@@ -79,9 +81,7 @@ class MPCCore {
   const std::array<Eigen::VectorXd, 2> get_input_limits() const;
   AnyHorizon get_horizon() const;
   const std::map<std::string, double>& get_params() const;
-  Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
-                               const Eigen::VectorXd& control,
-                               bool is_abv) const;
+  Eigen::VectorXd get_cbf_data(size_t horizon_idx) const;
   /*const types::Trajectory& get_trajectory() { return _trajectory; }*/
   const types::Trajectory& get_trajectory() { return _trajectory; }
   const types::Trajectory& get_non_extended_trajectory() {

@@ -30,20 +30,22 @@ clf_gamma: .5
 
 # CBF params
 use_cbf: true
-cbf_alpha_abv: 1.25
-cbf_alpha_blw: 1.25
+cbf_alpha_abv: 0.5
+cbf_alpha_blw: 0.5
 # cbf_alpha_abv: 1.0
 # cbf_alpha_blw: 1.0
 cbf_colinear: .05
 cbf_padding: .05
 
+is_eval: true
+
 # rl training params
 min_alpha: 0.025
-max_alpha: 2.5
+max_alpha: 5.0
 
 # cbf adaptation params
-min_alpha_dot: -0.1
-max_alpha_dot: 0.1
+min_alpha_dot: -3
+max_alpha_dot: 3
 min_h_val: -10.
 max_h_val: 100.
 
@@ -54,10 +56,11 @@ prop_gain_thresh: .5
 max_tube_width: .75
 
 # recompile after changing all params from here on
-ref_length_size: 4
+ref_length_size: 6
 mpc_ref_samples: 11
 
 # there will be d+1 variables in the LP formulation
 tube_poly_degree: 6
 tube_num_samples: 100
+
 

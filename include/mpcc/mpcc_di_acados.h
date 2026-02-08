@@ -151,11 +151,8 @@ class DIMPCC : public MPCBase<DIMPCC> {
 
   void reset_horizon() override;
 
-  Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
-                               const Eigen::VectorXd& control,
-                               bool is_abv) const override;
+  Eigen::VectorXd get_cbf_data(const types::Corridor& corridor, size_t horizon_idx) const;
 
-  virtual const Eigen::VectorXd& get_state() const override { return _state; }
   virtual const std::array<Eigen::VectorXd, 2> get_state_limits()
       const override;
   virtual const std::array<Eigen::VectorXd, 2> get_input_limits()

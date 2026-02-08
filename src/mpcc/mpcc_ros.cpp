@@ -195,7 +195,7 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _backup_srv =
       nh.advertiseService("/mpc_backup", &MPCCROS::toggleBackup, this);
 
-  if (_is_logging) {
+  if (_is_eval) {
     ROS_WARN("******************");
     ROS_WARN("LOGGING IS ENABLED");
     ROS_WARN("******************");
@@ -530,6 +530,7 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
 
   // log data back to db if logging enabled
   /*if (_is_logging || _is_eval)*/
+  _mpc_core->get_cbf_data(0);
 
   ROS_WARN("runtime: %.3f", (ros::Time::now() - now).toSec());
 

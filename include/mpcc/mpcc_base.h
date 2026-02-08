@@ -101,17 +101,13 @@ class MPCBase {
     return true;
   }
 
-  virtual const Eigen::VectorXd& get_state() const                      = 0;
+  const Eigen::VectorXd& get_state() const {return _state;}
   virtual const std::array<Eigen::VectorXd, 2> get_state_limits() const = 0;
   virtual const std::array<Eigen::VectorXd, 2> get_input_limits() const = 0;
 
   decltype(auto) get_horizon() const {
     return static_cast<MPCImpl*>(this)->get_horizon();
   }
-
-  virtual Eigen::VectorXd get_cbf_data(const Eigen::VectorXd& state,
-                                       const Eigen::VectorXd& control,
-                                       bool is_abv) const = 0;
 
   std::optional<std::array<double, 2>> presolve_hook(
       const Eigen::VectorXd& state, const types::Corridor& reference) const {
@@ -135,7 +131,6 @@ class MPCBase {
 
   std::array<double, 2> solve(const Eigen::VectorXd& state,
                               types::Corridor& corridor, bool is_reverse) {
-    _trajectory = corridor.get_trajectory();
 
     MPCImpl& impl  = static_cast<MPCImpl&>(*this);
     _solve_success = false;
@@ -155,6 +150,8 @@ class MPCBase {
     }
 
     Eigen::VectorXd x0 = impl.prepare_initial_state(state, corridor);
+    _state = x0;
+
     set_acados_initial_constraints(x0);
 
     /*************************************
@@ -380,7 +377,6 @@ class MPCBase {
   using SolverTraits = types::SolverTraits<MPCImpl>;
   AcadosInterface<SolverTraits> _acados_solver;
 
-  types::Trajectory _trajectory;
   Eigen::VectorXd _state;
   Eigen::VectorXd _odom;
 

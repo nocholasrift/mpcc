@@ -1,7 +1,7 @@
 # Helper to collect acados generated code
 function(collect_acados_generated_code model_prefix output_dir cxx_output_dir)
-  # set(output_dir_c ${PROJECT_SOURCE_DIR}/scripts/${model}/c_generated_code)
-  # set(output_dir_cpp ${PROJECT_SOURCE_DIR}/scripts/${model}/cpp_generated_code)
+  # set(output_dir_c ${PROJECT_SOURCE_DIR}/scripts/${model_prefix}/c_generated_code)
+  # set(output_dir_cpp ${PROJECT_SOURCE_DIR}/scripts/${model_prefix}/cpp_generated_code)
 
   if(APPLE)
       set(lib_ext "dylib")
@@ -10,21 +10,21 @@ function(collect_acados_generated_code model_prefix output_dir cxx_output_dir)
   endif()
 
   set(${model_prefix}_SRC
-    ${output_dir}/acados_solver_${model}_mpcc.c
-    ${output_dir}/acados_sim_solver_${model}_mpcc.c
-    ${output_dir}/${model}_model/${model}_expl_ode_fun.c
-    ${output_dir}/${model}_model/${model}_expl_vde_adj.c
-    ${output_dir}/${model}_model/${model}_expl_vde_forw.c
-    ${output_dir}/${model}_model/${model}_expl_ode_hess.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_fun.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_0_fun.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_e_fun.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_fun_jac.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_0_fun_jac.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_e_fun_jac.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_fun_jac_hess.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_0_fun_jac_hess.c
-    ${output_dir}/${model}_cost/${model}_cost_ext_cost_e_fun_jac_hess.c
+    ${output_dir}/acados_solver_${model_prefix}_mpcc.c
+    ${output_dir}/acados_sim_solver_${model_prefix}_mpcc.c
+    ${output_dir}/${model_prefix}_model/${model_prefix}_expl_ode_fun.c
+    ${output_dir}/${model_prefix}_model/${model_prefix}_expl_vde_adj.c
+    ${output_dir}/${model_prefix}_model/${model_prefix}_expl_vde_forw.c
+    ${output_dir}/${model_prefix}_model/${model_prefix}_expl_ode_hess.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_fun.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_0_fun.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_e_fun.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_fun_jac.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_0_fun_jac.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_e_fun_jac.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_fun_jac_hess.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_0_fun_jac_hess.c
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost_ext_cost_e_fun_jac_hess.c
   )
 
   set(${model_prefix}_SRC_CPP
@@ -36,22 +36,22 @@ function(collect_acados_generated_code model_prefix output_dir cxx_output_dir)
   )
 
   set(${model_prefix}_HEADERS
-    ${output_dir}/acados_solver_${model}.h
-    ${output_dir}/acados_sim_solver_${model}.h
-    ${output_dir}/${model}_cost/${model}_cost.h
-    ${output_dir}/${model}_model/${model}_model.h
+    ${output_dir}/acados_solver_${model_prefix}.h
+    ${output_dir}/acados_sim_solver_${model_prefix}.h
+    ${output_dir}/${model_prefix}_cost/${model_prefix}_cost.h
+    ${output_dir}/${model_prefix}_model/${model_prefix}_model.h
   )
 
   set(${model_prefix}_LIBS
-    ${output_dir}/libacados_ocp_solver_${model}.${lib_ext}
-    ${output_dir}/libacados_sim_solver_${model}.${lib_ext}
+    ${output_dir}/libacados_ocp_solver_${model_prefix}.${lib_ext}
+    ${output_dir}/libacados_sim_solver_${model_prefix}.${lib_ext}
   )
 
   set(${model_prefix}_CASADI_LIBS
     # these casadi libraries are always .so
     ${cxx_output_dir}/libcasadi_${model_prefix}_internals.so
   )
-
+  
   set(${model_prefix}_OUTPUT_FILES 
     ${${model_prefix}_SRC_CPP} 
     ${${model_prefix}_SRC} 

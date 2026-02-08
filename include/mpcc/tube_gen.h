@@ -252,11 +252,15 @@ class TubeGenerator {
     double max_distance{0};
   };
 
-  TubeGenerator() = default;
+  // degree already set to 0 by default...
+  TubeGenerator() : abv_(degree_), blw_(degree_) {}
+
   TubeGenerator(const Settings& settings)
       : degree_(settings.degree),
         num_samples_(settings.num_samples),
-        max_distance_(settings.max_distance) {}
+        max_distance_(settings.max_distance),
+        abv_(settings.degree), 
+        blw_(settings.degree) {}
 
   void update_settings(const Settings& settings) {
     degree_       = settings.degree;
@@ -328,6 +332,8 @@ class TubeGenerator {
     Eigen::VectorXd negative_coeffs_blw =
         -1 * Eigen::Map<Eigen::VectorXd>(coeffs_blw.data(), coeffs_blw.size());
 
+    std::cout << "abv coeffs: " << eigen_coeffs_abv.transpose() << "\n";
+    std::cout << "blw coeffs: " << negative_coeffs_blw.transpose() << "\n";
     // negative_coeffs_blw = negative_coeffs_blw.cwiseQuotient(horizon_scale);
 
     // dont love using two different constructors here but dont hate it enough to
@@ -340,27 +346,24 @@ class TubeGenerator {
     // abv_                = types::Polynomial(cof);
     // blw_                = types::Polynomial(-1 * cof);
 
-    shifted_abv_ = abv_;
-    shifted_blw_ = blw_;
-
     return true;
   }
 
   const types::Polynomial& get_side_poly(Side side) const {
     switch (side) {
       case Side::kAbove:
-        return shifted_abv_;
+        return abv_;
 
       // Side can only be one of the two...
       case Side::kBelow:
       default:
-        return shifted_blw_;
+        return blw_;
     }
   }
 
   // std::array<types::Polynomial, 2> get_boundary() const { return {abv_, blw_}; }
   std::array<types::Polynomial, 2> get_boundary() const {
-    return {shifted_abv_, shifted_blw_};
+    return {abv_, blw_};
   }
 
   void set_tubes(const types::Polynomial& abv, const types::Polynomial& blw) {
@@ -481,7 +484,6 @@ class TubeGenerator {
 
   HighsSolver solver_;
   types::Polynomial abv_, blw_;
-  types::Polynomial shifted_abv_, shifted_blw_;
 };
 
 }  // namespace mpcc::tube

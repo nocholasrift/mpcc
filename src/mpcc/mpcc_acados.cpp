@@ -1,10 +1,11 @@
+#include <mpcc/casadi_unicycle_interface.h>
 #include <mpcc/mpcc_acados.h>
 #include <mpcc/termcolor.hpp>
 
 #include <array>
-#include <optional>
 #include <csignal>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 
 using namespace mpcc;
@@ -294,10 +295,30 @@ const std::array<Eigen::VectorXd, 2> UnicycleMPCC::get_input_limits() const {
   return {umin, umax};
 }
 
-Eigen::VectorXd UnicycleMPCC::get_cbf_data(const Eigen::VectorXd& state,
-                                           const Eigen::VectorXd& control,
-                                           bool is_abv) const {
-  return Eigen::Vector3d(0., 0., 0.);
+Eigen::VectorXd UnicycleMPCC::get_cbf_data(
+    const types::Corridor& corridor, size_t horizon_idx) const {
+  Eigen::VectorXd state = _prev_x0.segment(horizon_idx * kNX, kNX);
+  Eigen::VectorXd input = _prev_u0.segment(horizon_idx * kNU, kNU);
+
+
+  CasadiUnicycleInterface::Params params;
+  params.qc_lyap    = _w_qc_lyap;
+  params.ql_lyap    = _w_ql_lyap;
+  params.gamma_lyap = _gamma;
+
+  CasadiUnicycleInterface casadi_interface;
+  double h_abv = casadi_interface.get_h_abv(state, input, corridor, params);
+  double hdot_abv = casadi_interface.get_h_dot_abv(state, input, corridor, params);
+  
+  double h_blw = casadi_interface.get_h_blw(state, input, corridor, params);
+  double hdot_blw = casadi_interface.get_h_dot_blw(state, input, corridor, params);
+
+  std::cout << "h_abv is: " << h_abv << "\n";
+  std::cout << "h_dot_abv is: " << hdot_abv << "\n";
+  std::cout << "h_blw is: " << h_blw << "\n";
+  std::cout << "h_dot_blw is: " << hdot_blw << "\n";
+
+  return Eigen::Vector4d(h_abv, hdot_abv, h_blw, hdot_blw);
 }
 
 UnicycleMPCC::MPCHorizon UnicycleMPCC::get_horizon() const {

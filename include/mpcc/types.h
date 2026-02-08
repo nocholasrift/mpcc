@@ -78,6 +78,9 @@ class Polynomial {
 
   Polynomial() = default;
 
+  Polynomial(unsigned int degree)
+      : coeffs_(Eigen::VectorXd::Zero(degree + 1)), degree_(degree) {}
+
   Polynomial(const Coeffs& coeffs)
       : coeffs_(coeffs), degree_(coeffs.size() - 1) {}
 
@@ -450,8 +453,8 @@ class Trajectory {
             .arclen = arclen_};
   }
 
-  const Row& get_ctrls_x() { return spline_x_.get_ctrls(); }
-  const Row& get_ctrls_y() { return spline_y_.get_ctrls(); }
+  const Row& get_ctrls_x() const { return spline_x_.get_ctrls(); }
+  const Row& get_ctrls_y() const { return spline_y_.get_ctrls(); }
 
   static constexpr unsigned int kX = 0;
   static constexpr unsigned int kY = 1;
