@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mpcc/mpcc_base.h>
+#include <mpcc/common/mpcc_base.h>
 #include <cstdlib>
 
 #include <Eigen/Dense>
@@ -8,7 +8,6 @@
 #include <vector>
 
 // acados
-#include "acados_sim_solver_double_integrator_mpcc.h"
 #include "acados_solver_double_integrator_mpcc.h"
 
 namespace mpcc {
@@ -151,7 +150,8 @@ class DIMPCC : public MPCBase<DIMPCC> {
 
   void reset_horizon() override;
 
-  Eigen::VectorXd get_cbf_data(const types::Corridor& corridor, size_t horizon_idx) const;
+  Eigen::VectorXd get_cbf_data(const types::Corridor& corridor,
+                               size_t horizon_idx) const;
 
   virtual const std::array<Eigen::VectorXd, 2> get_state_limits()
       const override;

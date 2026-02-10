@@ -3,12 +3,11 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 
-#include <mpcc/map_util.h>
-#include <mpcc/mpcc_core.h>
-#include <mpcc/utils.h>
-
-#include <mpcc/tube_gen.h>
-#include "mpcc/types.h"
+#include <mpcc/common/map_util.h>
+#include <mpcc/common/mpcc_core.h>
+#include <mpcc/common/tube_gen.h>
+#include <mpcc/common/utils.h>
+#include "mpcc/common/types.h"
 
 using namespace mpcc;
 

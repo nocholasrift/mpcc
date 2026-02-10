@@ -1,8 +1,9 @@
-#include <mpcc/mpcc_di_acados.h>
+#include <mpcc/double_integrator/casadi_double_integrator_interface.h>
+#include <mpcc/double_integrator/mpcc_di_acados.h>
+#include "mpcc/common/types.h"
 
 #include <cmath>
 #include <stdexcept>
-#include "mpcc/types.h"
 
 using namespace mpcc;
 
@@ -162,8 +163,31 @@ void DIMPCC::reset_horizon() {
   }
 }
 
-Eigen::VectorXd DIMPCC::get_cbf_data(const types::Corridor& corridor, size_t horizon_idx) const {
-  return Eigen::Vector3d(0., 0., 0.);
+Eigen::VectorXd DIMPCC::get_cbf_data(const types::Corridor& corridor,
+                                     size_t horizon_idx) const {
+  Eigen::VectorXd state = _prev_x0.segment(horizon_idx * kNX, kNX);
+  Eigen::VectorXd input = _prev_u0.segment(horizon_idx * kNU, kNU);
+
+  CasadiDoubleIntegratorInterface::Params params;
+  params.qc_lyap    = _w_qc_lyap;
+  params.ql_lyap    = _w_ql_lyap;
+  params.gamma_lyap = _gamma;
+
+  CasadiDoubleIntegratorInterface casadi_interface;
+  double h_abv = casadi_interface.get_h_abv(state, input, corridor, params);
+  double hdot_abv =
+      casadi_interface.get_h_dot_abv(state, input, corridor, params);
+
+  double h_blw = casadi_interface.get_h_blw(state, input, corridor, params);
+  double hdot_blw =
+      casadi_interface.get_h_dot_blw(state, input, corridor, params);
+
+  std::cout << "h_abv is: " << h_abv << "\n";
+  std::cout << "h_dot_abv is: " << hdot_abv << "\n";
+  std::cout << "h_blw is: " << h_blw << "\n";
+  std::cout << "h_dot_blw is: " << hdot_blw << "\n";
+
+  return Eigen::Vector4d(h_abv, hdot_abv, h_blw, hdot_blw);
 }
 
 Eigen::VectorXd DIMPCC::next_state(const Eigen::VectorXd& current_state,

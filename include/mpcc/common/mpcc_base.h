@@ -1,17 +1,14 @@
 #pragma once
 
-#include <mpcc/types.h>
-#include <mpcc/utils.h>
-#include <mpcc/termcolor.hpp>
+#include <mpcc/common/acados_interface.h>
+#include <mpcc/common/types.h>
+#include <mpcc/common/utils.h>
+#include <mpcc/common/termcolor.hpp>
 
 #include <Eigen/Core>
-//
-// acados
-#include <mpcc/acados_interface.h>
 
-#include <optional>
 #include <cmath>
-#include <map>
+#include <optional>
 
 namespace mpcc {
 using TrajectoryView = types::Trajectory::View;
@@ -101,7 +98,7 @@ class MPCBase {
     return true;
   }
 
-  const Eigen::VectorXd& get_state() const {return _state;}
+  const Eigen::VectorXd& get_state() const { return _state; }
   virtual const std::array<Eigen::VectorXd, 2> get_state_limits() const = 0;
   virtual const std::array<Eigen::VectorXd, 2> get_input_limits() const = 0;
 
@@ -150,7 +147,7 @@ class MPCBase {
     }
 
     Eigen::VectorXd x0 = impl.prepare_initial_state(state, corridor);
-    _state = x0;
+    _state             = x0;
 
     set_acados_initial_constraints(x0);
 
@@ -195,7 +192,6 @@ class MPCBase {
 
     return cmd;
   }
-
 
  protected:
   bool is_solver_ready(const Eigen::VectorXd& state,

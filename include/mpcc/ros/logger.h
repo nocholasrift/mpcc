@@ -3,7 +3,7 @@
 #include <mpcc/QuerySAC.h>
 #include <mpcc/QuerySACDI.h>
 #include <mpcc/RLState.h>
-#include <mpcc/mpcc_core.h>
+#include <mpcc/common/mpcc_core.h>
 
 #include <ros/ros.h>
 #include <std_msgs/Bool.h>

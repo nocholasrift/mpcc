@@ -1,10 +1,10 @@
 #ifndef MPCC_TUBE_GEN_H
 #define MPCC_TUBE_GEN_H
 
-#include <mpcc/types.h>
-#include <mpcc/utils.h>
+#include <mpcc/common/map_util.h>
+#include <mpcc/common/types.h>
+#include <mpcc/common/utils.h>
 
-#include <mpcc/map_util.h>
 #include <Eigen/Core>
 
 #include <iostream>
@@ -259,7 +259,7 @@ class TubeGenerator {
       : degree_(settings.degree),
         num_samples_(settings.num_samples),
         max_distance_(settings.max_distance),
-        abv_(settings.degree), 
+        abv_(settings.degree),
         blw_(settings.degree) {}
 
   void update_settings(const Settings& settings) {
@@ -362,9 +362,7 @@ class TubeGenerator {
   }
 
   // std::array<types::Polynomial, 2> get_boundary() const { return {abv_, blw_}; }
-  std::array<types::Polynomial, 2> get_boundary() const {
-    return {abv_, blw_};
-  }
+  std::array<types::Polynomial, 2> get_boundary() const { return {abv_, blw_}; }
 
   void set_tubes(const types::Polynomial& abv, const types::Polynomial& blw) {
     abv_ = abv;

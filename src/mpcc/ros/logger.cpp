@@ -1,12 +1,10 @@
-#include <mpcc/logger.h>
-#include <mpcc/utils.h>
+#include <mpcc/common/utils.h>
+#include <mpcc/ros/logger.h>
 #include <std_msgs/Float64.h>
+#include "mpcc/common/mpcc_core.h"
 
 #include <Eigen/Core>
 #include <string>
-#include "mpcc/mpcc_core.h"
-
-
 
 namespace logger {
 
@@ -38,7 +36,7 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
   _min_alpha_dot = -1.0;
   _max_alpha_dot = 1.0;
   _max_obs_dist  = 1.0;
-  _mpc_steps = 0;
+  _mpc_steps     = 0;
 
   load_params(params);
 
@@ -54,7 +52,6 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
   _is_first_iter = true;
   _is_colliding  = false;
 
-
   _alpha_dot_abv = 0.;
   _alpha_dot_blw = 0.;
 }
@@ -63,7 +60,8 @@ RLLogger::~RLLogger() {}
 
 void RLLogger::load_params(
     const std::unordered_map<std::string, double>& params) {
-  _mpc_steps = params.find("STEPS") != params.end() ? params.at("STEPS") : _mpc_steps;
+  _mpc_steps =
+      params.find("STEPS") != params.end() ? params.at("STEPS") : _mpc_steps;
   _min_alpha = params.find("MIN_ALPHA") != params.end() ? params.at("MIN_ALPHA")
                                                         : _min_alpha;
 
@@ -145,7 +143,7 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
   // copying instead of using const auto& becuase we will modify this
   // map...
   auto mpc_params = mpc_core.get_params();
-  double dt                                = mpc_params.at("DT");
+  double dt       = mpc_params.at("DT");
 
   double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv * dt;
   double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw * dt;
@@ -169,13 +167,13 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
 }
 
 void RLLogger::fill_state(const mpcc::MPCCore& mpc_core, mpcc::RLState& state) {
-  
-  int N = 3;
-  double step = (_mpc_steps) / (N-1);
+
+  int N       = 3;
+  double step = (_mpc_steps) / (N - 1);
   state.state.reserve(4 * N + 2);
 
-  for(size_t i = 0; i < N; ++i){
-    size_t idx = static_cast<size_t>(i * step);
+  for (size_t i = 0; i < N; ++i) {
+    size_t idx               = static_cast<size_t>(i * step);
     Eigen::VectorXd cbf_data = mpc_core.get_cbf_data(idx);
     state.state.emplace_back(cbf_data(0));
     state.state.emplace_back(cbf_data(1));

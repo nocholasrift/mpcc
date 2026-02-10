@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mpcc/spline.h>
+#include <mpcc/common/spline.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -375,7 +375,7 @@ class Trajectory {
       step_count = spline_x_.get_knots().size();
     }
 
-    Row knots, xs, ys;  //, abvs, blws;
+    Row knots, xs, ys;
     knots.resize(step_count);
     xs.resize(step_count);
     ys.resize(step_count);

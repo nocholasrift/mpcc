@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mpcc/types.h>
+#include <mpcc/common/types.h>
 
 #include <Eigen/Core>
 #include <iostream>

@@ -1,4 +1,4 @@
-#include <mpcc/mpcc_ros.h>
+#include <mpcc/ros/mpcc_ros.h>
 #include <ros/ros.h>
 
 int main(int argc, char** argv) {

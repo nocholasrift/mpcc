@@ -1,9 +1,9 @@
-#include <mpcc/mpcc_core.h>
-#include <mpcc/termcolor.hpp>
+#include <mpcc/common/mpcc_core.h>
+#include <mpcc/common/utils.h>
+#include <mpcc/common/termcolor.hpp>
 
 #include <chrono>
 #include <stdexcept>
-#include "mpcc/utils.h"
 
 using namespace mpcc;
 

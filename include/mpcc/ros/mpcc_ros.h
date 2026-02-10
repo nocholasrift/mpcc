@@ -5,7 +5,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Twist.h>
-#include <mpcc/logger.h>
+#include <mpcc/ros/logger.h>
 #include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
@@ -19,7 +19,7 @@
 #include <string>
 #include <thread>
 
-#include "mpcc/mpcc_core.h"
+#include <mpcc/common/mpcc_core.h>
 
 class MPCCROS {
  public:

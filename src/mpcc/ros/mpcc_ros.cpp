@@ -1,4 +1,5 @@
-#include "mpcc/mpcc_ros.h"
+#include "mpcc/ros/mpcc_ros.h"
+#include "mpcc/common/mpcc_core.h"
 
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/PointStamped.h>
@@ -21,8 +22,6 @@
 #include <unordered_map>
 
 #include <grid_map_ros/GridMapRosConverter.hpp>
-#include "mpcc/mpcc_core.h"
-#include "mpcc/tube_gen.h"
 #include "nav_msgs/OccupancyGrid.h"
 #include "ros/console.h"
 

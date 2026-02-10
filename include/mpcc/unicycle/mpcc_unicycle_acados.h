@@ -1,13 +1,13 @@
 #pragma once
 
-#include <mpcc/mpcc_base.h>
-#include <mpcc/orientable.h>
-#include <mpcc/types.h>
+#include <mpcc/common/mpcc_base.h>
+#include <mpcc/common/orientable.h>
+#include <mpcc/common/types.h>
 
 #include <cstdlib>
 #include <map>
-#include <vector>
 #include <optional>
+#include <vector>
 
 #include <Eigen/Dense>
 
@@ -112,8 +112,8 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
       // some of the robots have an older eigen version so we must use
       // some older syntax :(
       Eigen::Matrix<double, kNX, 1> ret;
-      ret << xs[step], ys[step],      thetas[step],
-              vs[step], arclens[step], arclens_dot[step];
+      ret << xs[step], ys[step], thetas[step], vs[step], arclens[step],
+          arclens_dot[step];
 
       return ret;
     }
@@ -137,18 +137,20 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
     }
   };
 
-  struct MPCHorizon : public types::MPCHorizon<UnicycleMPCC>{
-      Eigen::Vector2d get_pos(unsigned int step) const{
-        return {states.xs[step], states.ys[step]};
-      }
+  struct MPCHorizon : public types::MPCHorizon<UnicycleMPCC> {
+    Eigen::Vector2d get_pos(unsigned int step) const {
+      return {states.xs[step], states.ys[step]};
+    }
 
-      Eigen::Vector2d get_vel(unsigned int step) const{
-        return {states.vs[step] * cos(states.thetas[step]), states.vs[step] * sin(states.thetas[step])};
-      }
+    Eigen::Vector2d get_vel(unsigned int step) const {
+      return {states.vs[step] * cos(states.thetas[step]),
+              states.vs[step] * sin(states.thetas[step])};
+    }
 
-      Eigen::Vector2d get_acc(unsigned int step) const{
-        return {inputs.linaccs[step] * cos(states.thetas[step]), inputs.linaccs[step] * sin(states.thetas[step])};
-      }
+    Eigen::Vector2d get_acc(unsigned int step) const {
+      return {inputs.linaccs[step] * cos(states.thetas[step]),
+              inputs.linaccs[step] * sin(states.thetas[step])};
+    }
   };
 
  public:
@@ -176,7 +178,8 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
    ***********************/
   virtual void reset_horizon() override;
 
-  Eigen::VectorXd get_cbf_data(const types::Corridor& corridor, size_t horizon_idx) const;
+  Eigen::VectorXd get_cbf_data(const types::Corridor& corridor,
+                               size_t horizon_idx) const;
 
   virtual const std::array<Eigen::VectorXd, 2> get_state_limits()
       const override;
@@ -252,7 +255,7 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
    * N/A
    **********************************************************************/
 
-  Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state, 
+  Eigen::VectorXd prepare_initial_state(const Eigen::VectorXd& state,
                                         const types::Corridor& corridor);
 
   std::array<double, 2> compute_mpc_vel_command(const Eigen::VectorXd& state,

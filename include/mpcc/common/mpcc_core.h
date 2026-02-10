@@ -1,10 +1,10 @@
 #pragma once
 
-#include <mpcc/map_util.h>
-#include <mpcc/mpcc_acados.h>
-#include <mpcc/mpcc_di_acados.h>
-#include <mpcc/tube_gen.h>
-#include <mpcc/types.h>
+#include <mpcc/common/map_util.h>
+#include <mpcc/common/tube_gen.h>
+#include <mpcc/common/types.h>
+#include <mpcc/double_integrator/mpcc_di_acados.h>
+#include <mpcc/unicycle/mpcc_unicycle_acados.h>
 
 #include <map>
 #include <variant>

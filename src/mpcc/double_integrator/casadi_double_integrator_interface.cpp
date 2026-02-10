@@ -1,35 +1,35 @@
-#include <mpcc/casadi_unicycle_interface.h>
+#include <mpcc/double_integrator/casadi_double_integrator_interface.h>
 
 namespace mpcc {
 
-std::ostream& operator<<(std::ostream& os, const Eigen::VectorXd& vector) {
-  os << "[";
-  for (int i = 0; i < vector.size(); ++i) {
-    os << vector[i];
-    if (i < vector.size() - 1) {
-      os << ", ";
-    }
-  }
-  os << "]";
-  return os;
-}
+// std::ostream& operator<<(std::ostream& os, const Eigen::VectorXd& vector) {
+//   os << "[";
+//   for (int i = 0; i < vector.size(); ++i) {
+//     os << vector[i];
+//     if (i < vector.size() - 1) {
+//       os << ", ";
+//     }
+//   }
+//   os << "]";
+//   return os;
+// }
+//
+// std::ostream& operator<<(std::ostream& os, const Eigen::RowVectorXd& vector) {
+//   os << "[";
+//   for (int i = 0; i < vector.size(); ++i) {
+//     os << vector[i];
+//     if (i < vector.size() - 1) {
+//       os << ", ";
+//     }
+//   }
+//   os << "]";
+//   return os;
+// }
 
-std::ostream& operator<<(std::ostream& os, const Eigen::RowVectorXd& vector) {
-  os << "[";
-  for (int i = 0; i < vector.size(); ++i) {
-    os << vector[i];
-    if (i < vector.size() - 1) {
-      os << ", ";
-    }
-  }
-  os << "]";
-  return os;
-}
-
-double CasadiUnicycleInterface::get_h_abv(
+double CasadiDoubleIntegratorInterface::get_h_abv(
     const Eigen::VectorXd& state, const Eigen::VectorXd& input,
     const types::Corridor& corridor,
-    const CasadiUnicycleInterface::Params& params) {
+    const CasadiDoubleIntegratorInterface::Params& params) {
   const types::Trajectory& trajectory = corridor.get_trajectory();
   double traj_length                  = trajectory.get_arclen();
 
@@ -43,15 +43,15 @@ double CasadiUnicycleInterface::get_h_abv(
   std::vector<casadi_int> iw(kH_ABV_SZ_IW);
   std::vector<double> w(kH_ABV_SZ_W);
 
-  unicycle_model_h_abv(arg, res, iw.data(), w.data(), 0);
+  double_integrator_h_abv(arg, res, iw.data(), w.data(), 0);
 
   return result;
 }
 
-double CasadiUnicycleInterface::get_h_blw(
+double CasadiDoubleIntegratorInterface::get_h_blw(
     const Eigen::VectorXd& state, const Eigen::VectorXd& input,
     const types::Corridor& corridor,
-    const CasadiUnicycleInterface::Params& params) {
+    const CasadiDoubleIntegratorInterface::Params& params) {
   const types::Trajectory& trajectory = corridor.get_trajectory();
   double traj_length                  = trajectory.get_arclen();
 
@@ -65,15 +65,15 @@ double CasadiUnicycleInterface::get_h_blw(
   std::vector<casadi_int> iw(kH_BLW_SZ_IW);
   std::vector<double> w(kH_BLW_SZ_W);
 
-  unicycle_model_h_blw(arg, res, iw.data(), w.data(), 0);
+  double_integrator_h_blw(arg, res, iw.data(), w.data(), 0);
 
   return result;
 }
 
-double CasadiUnicycleInterface::get_h_dot_abv(
+double CasadiDoubleIntegratorInterface::get_h_dot_abv(
     const Eigen::VectorXd& state, const Eigen::VectorXd& input,
     const types::Corridor& corridor,
-    const CasadiUnicycleInterface::Params& params) {
+    const CasadiDoubleIntegratorInterface::Params& params) {
   const types::Trajectory& trajectory = corridor.get_trajectory();
   double traj_length                  = trajectory.get_arclen();
 
@@ -89,7 +89,7 @@ double CasadiUnicycleInterface::get_h_dot_abv(
     std::vector<casadi_int> iw(kLFH_ABV_SZ_IW);
     std::vector<double> w(kLFH_ABV_SZ_W);
 
-    unicycle_model_Lfh_abv(arg, res, iw.data(), w.data(), 0);
+    double_integrator_Lfh_abv(arg, res, iw.data(), w.data(), 0);
   }
 
   // LGH*u
@@ -104,16 +104,16 @@ double CasadiUnicycleInterface::get_h_dot_abv(
     std::vector<casadi_int> iw(kLGHU_ABV_SZ_IW);
     std::vector<double> w(kLGHU_ABV_SZ_W);
 
-    unicycle_model_Lghu_abv(arg, res, iw.data(), w.data(), 0);
+    double_integrator_Lghu_abv(arg, res, iw.data(), w.data(), 0);
   }
 
   return lfh_abv + lghu_abv;
 }
 
-double CasadiUnicycleInterface::get_h_dot_blw(
+double CasadiDoubleIntegratorInterface::get_h_dot_blw(
     const Eigen::VectorXd& state, const Eigen::VectorXd& input,
     const types::Corridor& corridor,
-    const CasadiUnicycleInterface::Params& params) {
+    const CasadiDoubleIntegratorInterface::Params& params) {
   const types::Trajectory& trajectory = corridor.get_trajectory();
   double traj_length                  = trajectory.get_arclen();
 
@@ -129,7 +129,7 @@ double CasadiUnicycleInterface::get_h_dot_blw(
     std::vector<casadi_int> iw(kLFH_BLW_SZ_IW);
     std::vector<double> w(kLFH_BLW_SZ_W);
 
-    unicycle_model_Lfh_blw(arg, res, iw.data(), w.data(), 0);
+    double_integrator_Lfh_blw(arg, res, iw.data(), w.data(), 0);
   }
 
   // LGH*u
@@ -144,18 +144,16 @@ double CasadiUnicycleInterface::get_h_dot_blw(
     std::vector<casadi_int> iw(kLGHU_BLW_SZ_IW);
     std::vector<double> w(kLGHU_BLW_SZ_W);
 
-    unicycle_model_Lghu_blw(arg, res, iw.data(), w.data(), 0);
+    double_integrator_Lghu_blw(arg, res, iw.data(), w.data(), 0);
   }
 
   return lfh_blw + lghu_blw;
 }
 
-void CasadiUnicycleInterface::fill_arg_list(const Eigen::VectorXd& state,
-                                            const Eigen::VectorXd& input,
-                                            const types::Corridor& corridor,
-                                            const Params& params,
-                                            const double* traj_length_ptr,
-                                            const double** arg_list) {
+void CasadiDoubleIntegratorInterface::fill_arg_list(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& input,
+    const types::Corridor& corridor, const Params& params,
+    const double* traj_length_ptr, const double** arg_list) {
 
   const types::Trajectory& trajectory = corridor.get_trajectory();
 

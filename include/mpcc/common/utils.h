@@ -1,10 +1,36 @@
 #pragma once
 #include <map>
 
-#include <mpcc/types.h>
+#include <mpcc/common/types.h>
 #include <Eigen/Core>
 
 namespace utils {
+
+inline std::ostream& operator<<(std::ostream& os,
+                                const Eigen::VectorXd& vector) {
+  os << "[";
+  for (int i = 0; i < vector.size(); ++i) {
+    os << vector[i];
+    if (i < vector.size() - 1) {
+      os << ", ";
+    }
+  }
+  os << "]";
+  return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os,
+                                const Eigen::RowVectorXd& vector) {
+  os << "[";
+  for (int i = 0; i < vector.size(); ++i) {
+    os << vector[i];
+    if (i < vector.size() - 1) {
+      os << ", ";
+    }
+  }
+  os << "]";
+  return os;
+}
 
 template <typename T>
 inline Eigen::Matrix<T, Eigen::Dynamic, 1> vector_to_eigen(
