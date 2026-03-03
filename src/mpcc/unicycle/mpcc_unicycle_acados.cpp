@@ -241,7 +241,8 @@ Eigen::VectorXd UnicycleMPCC::prepare_initial_state(
   }
 
   // x0(kIndSDot) = x0(kIndV);
-  x0(kIndSDot) = _prev_x0(kNX + kIndSDot);
+  double min_sdot = 0.1;
+  x0(kIndSDot)    = std::max(_prev_x0(kNX + kIndSDot), min_sdot);
 
   return x0;
 }

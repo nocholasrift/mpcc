@@ -230,7 +230,8 @@ Eigen::VectorXd DIMPCC::prepare_initial_state(const Eigen::VectorXd& state,
     x0(kIndVy) = eps * unit_head(1);
   }
 
-  x0(kIndSDot) = x0.segment(kIndVx, 2).norm();
+  double min_sdot = 0.1;
+  x0(kIndSDot)    = std::max(x0.segment(kIndVx, 2).norm(), min_sdot);
 
   return x0;
 }

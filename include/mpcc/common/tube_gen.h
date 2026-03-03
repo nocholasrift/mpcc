@@ -390,7 +390,7 @@ class TubeGenerator {
       return false;
     }
 
-    double ds = (end - start) / (num_samples_);
+    double ds = (end - start) / (num_samples_ - 1);
 
     {
       int i = 0;
@@ -448,7 +448,7 @@ class TubeGenerator {
       cost_coeffs[i] = multiplier * -1.0 / (i + 1);
       // multiplier *= discount_factor;
     }
-    cost_coeffs[0] *= 3;
+    cost_coeffs[0] *= 8;
 
     solver_.set_cost_coeffs(cost_coeffs, ObjSense::kMinimize, offset);
   }

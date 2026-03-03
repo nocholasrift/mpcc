@@ -61,6 +61,7 @@ class MPCCore {
     _map_util        = std::make_unique<map_util::OccupancyGrid<T>>(config, d);
     _is_map_util_set = true;
   }
+
   void set_odom(const Eigen::Vector3d& odom);
   void set_goal(const Eigen::Vector2d& goal);
   void set_trajectory(const Eigen::VectorXd& x_pts,
