@@ -24,7 +24,7 @@ class MPCBase {
   virtual ~MPCBase() = default;
   // virtual void load_params(const std::map<std::string, double>& params) = 0;
   void load_params(const std::map<std::string, double>& params) {
-    static_cast<MPCImpl*>(this)->load_params();
+    static_cast<MPCImpl*>(this)->load_params(params);
   }
 
   void set_odom(const Eigen::VectorXd& odom) {
@@ -35,73 +35,25 @@ class MPCBase {
       reset_horizon();
     }
   }
-  virtual void reset_horizon() = 0;
 
-  bool set_solver_parameters(const types::Corridor& corridor,
-                             const unsigned int num_params) {
-    using Side = types::Corridor::Side;
-    std::vector<double> params;
-    params.resize(num_params);
+  void reset_horizon() { static_cast<MPCImpl*>(this)->reset_horizon(); }
 
-    const TrajectoryView& traj_view = corridor.get_trajectory().view();
-    const auto& ctrls_x             = traj_view.xs;
-    const auto& ctrls_y             = traj_view.ys;
-
-    // this shoudl never happen... but just in case.
-    if (corridor.get_above_poly().get_degree() !=
-        corridor.get_below_poly().get_degree()) {
-      std::cerr << termcolor::yellow
-                << "[MPCC] tube degrees do not match for above and below!"
-                << num_params << termcolor::reset << std::endl;
-      return false;
-    }
-
-    int N_tube_coeffs = corridor.get_above_poly().get_coeffs().size();
-    int provided_params =
-        ctrls_x.size() + ctrls_y.size() + 2 * N_tube_coeffs + 9;
-    if (provided_params != num_params) {
-      std::cerr << termcolor::yellow << "[MPCC] provided param count"
-                << provided_params << " does not match acados parameter size "
-                << num_params << termcolor::reset << std::endl;
-
-      return false;
-    }
-
-    params[num_params - 9] = _w_qc;
-    params[num_params - 8] = _w_ql;
-    params[num_params - 7] = _w_q_speed;
-    params[num_params - 6] = _alpha_abv;
-    params[num_params - 5] = _alpha_blw;
-    params[num_params - 4] = _w_qc_lyap;
-    params[num_params - 3] = _w_ql_lyap;
-    params[num_params - 2] = _gamma;
-    params[num_params - 1] = traj_view.arclen;
-
-    int N_ctrls = ctrls_x.size();
-    for (int i = 0; i < N_ctrls; ++i) {
-      params[i]           = ctrls_x[i];
-      params[i + N_ctrls] = ctrls_y[i];
-    }
-
-    const auto& above_coeffs = corridor.get_tube_coeffs(Side::kAbove);
-    const auto& below_coeffs = corridor.get_tube_coeffs(Side::kBelow);
-
-    for (int i = 0; i < N_tube_coeffs; ++i) {
-      params[i + 2 * N_ctrls]                 = above_coeffs(i);
-      params[i + 2 * N_ctrls + N_tube_coeffs] = below_coeffs(i);
-    }
-
-    for (int step = 0; step < _mpc_steps + 1; ++step) {
-      _acados_solver.update_params(step, params);
-    }
-
-    return true;
+  bool set_solver_parameters(const types::Corridor& corridor) {
+    return static_cast<MPCImpl*>(this)->set_solver_parameters(corridor);
   }
 
   const Eigen::VectorXd& get_state() const { return _state; }
-  virtual const std::array<Eigen::VectorXd, 2> get_state_limits() const = 0;
-  virtual const std::array<Eigen::VectorXd, 2> get_input_limits() const = 0;
 
+  const std::array<Eigen::VectorXd, 2> get_state_limits() const {
+    return static_cast<MPCImpl*>(this)->get_state_limits();
+  }
+
+  const std::array<Eigen::VectorXd, 2> get_input_limits() const {
+    return static_cast<MPCImpl*>(this)->get_input_limits();
+  }
+
+  // deltype auto because get_horizon could be one of
+  // several types (unicycle or di)
   decltype(auto) get_horizon() const {
     return static_cast<MPCImpl*>(this)->get_horizon();
   }
@@ -111,7 +63,7 @@ class MPCBase {
     return std::nullopt;
   }
 
-  const bool get_solver_status() const { return _solve_success; }
+  bool get_solver_status() const { return _solve_success; }
 
   double limit(double prev_val, double input, double max_rate,
                double dt) const {
@@ -160,7 +112,7 @@ class MPCBase {
     /*************************************
   ********* SET REFERENCE PARAMS *******
   **************************************/
-    if (!set_solver_parameters(corridor, MPCImpl::kNP)) {
+    if (!set_solver_parameters(corridor)) {
       return {0, 0};
     }
 
@@ -281,9 +233,9 @@ class MPCBase {
 
       _acados_solver.set_output(_mpc_steps, "x", curr.data());
     } else {
-      for (int step = 1; step < _mpc_steps; ++step) {
+      for (int step = 0; step < _mpc_steps - 1; ++step) {
         Eigen::VectorXd warm_state =
-            _prev_x0.segment(step * MPCImpl::kNX, MPCImpl::kNX);
+            _prev_x0.segment((step + 1) * MPCImpl::kNX, MPCImpl::kNX);
         warm_state(MPCImpl::kIndS) -= starting_s;
 
         _acados_solver.set_output(step, "x", warm_state.data());
@@ -323,9 +275,6 @@ class MPCBase {
   }
 
   void warm_start_no_u(const Eigen::VectorXd& initial_state) {
-    double x_init[MPCImpl::kNX];
-    memcpy(x_init, &initial_state[0], MPCImpl::kNX * sizeof(double));
-
     Eigen::VectorXd u_init = Eigen::VectorXd::Zero(MPCImpl::kNU);
 
     for (int step = 0; step < _mpc_steps; ++step) {
@@ -333,7 +282,7 @@ class MPCBase {
       _acados_solver.set_output(step, "u", u_init.data());
     }
 
-    _acados_solver.set_output(_mpc_steps, "x", x_init);
+    _acados_solver.set_output(_mpc_steps, "x", initial_state.data());
   }
 
   void process_solver_output(Eigen::VectorXd& xtraj, Eigen::VectorXd& utraj) {

@@ -2,6 +2,8 @@
 #include <mpcc/unicycle/mpcc_unicycle_acados.h>
 #include <mpcc/common/termcolor.hpp>
 
+#include <unicycle_model_mpcc_param_indices.h>
+
 #include <array>
 #include <csignal>
 #include <iostream>
@@ -177,6 +179,68 @@ void UnicycleMPCC::load_params(const std::map<std::string, double>& params) {
 
   std::cout << "!! MPC Obj parameters updated !! " << std::endl;
   std::cout << "!! ACADOS model instantiated !! " << std::endl;
+}
+
+bool UnicycleMPCC::set_solver_parameters(const types::Corridor& corridor) {
+  using Side      = types::Corridor::Side;
+  namespace Param = mpcc::unicycle_params;
+
+  std::vector<double> params;
+  params.resize(Param::kNP);
+
+  const TrajectoryView& traj_view = corridor.get_trajectory().view();
+  const auto& ctrls_x             = traj_view.xs;
+  const auto& ctrls_y             = traj_view.ys;
+
+  // this shoudl never happen... but just in case.
+  if (corridor.get_above_poly().get_degree() !=
+      corridor.get_below_poly().get_degree()) {
+    std::cerr << termcolor::yellow
+              << "[MPCC] tube degrees do not match for above and below!"
+              << Param::kNP << termcolor::reset << std::endl;
+    return false;
+  }
+
+  int N_tube_coeffs = corridor.get_above_poly().get_coeffs().size();
+  int provided_params =
+      ctrls_x.size() + ctrls_y.size() + 2 * N_tube_coeffs + Param::kNP_Scalar;
+  if (provided_params != Param::kNP) {
+    std::cerr << termcolor::yellow << "[MPCC] provided param count"
+              << provided_params << " does not match acados parameter size "
+              << Param::kNP << termcolor::reset << std::endl;
+
+    return false;
+  }
+
+  params[Param::k_Q_c]       = _w_qc;
+  params[Param::k_Q_l]       = _w_ql;
+  params[Param::k_Q_s]       = _w_q_speed;
+  params[Param::k_alpha_abv] = _alpha_abv;
+  params[Param::k_alpha_blw] = _alpha_blw;
+  params[Param::k_Ql_c]      = _w_qc_lyap;
+  params[Param::k_Ql_l]      = _w_ql_lyap;
+  params[Param::k_gamma]     = _gamma;
+  params[Param::k_L_path]    = traj_view.arclen;
+
+  int N_ctrls = ctrls_x.size();
+  for (int i = 0; i < N_ctrls; ++i) {
+    params[i]           = ctrls_x[i];
+    params[i + N_ctrls] = ctrls_y[i];
+  }
+
+  const auto& above_coeffs = corridor.get_tube_coeffs(Side::kAbove);
+  const auto& below_coeffs = corridor.get_tube_coeffs(Side::kBelow);
+
+  for (int i = 0; i < N_tube_coeffs; ++i) {
+    params[i + 2 * N_ctrls]                 = above_coeffs(i);
+    params[i + 2 * N_ctrls + N_tube_coeffs] = below_coeffs(i);
+  }
+
+  for (int step = 0; step < _mpc_steps + 1; ++step) {
+    _acados_solver.update_params(step, params);
+  }
+
+  return true;
 }
 
 Eigen::VectorXd UnicycleMPCC::next_state(const Eigen::VectorXd& current_state,

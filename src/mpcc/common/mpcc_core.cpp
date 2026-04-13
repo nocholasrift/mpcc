@@ -167,8 +167,12 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
 
   /*types::Trajectory adjusted_traj =*/
   /*    extended_trajectory.get_adjusted_traj(current_s, required_mpc_knots);*/
+
+  double adjust_start_s = 0.;
   types::Trajectory adjusted_traj =
       _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
+  // types::Trajectory adjusted_traj =
+  //     _trajectory.get_adjusted_traj(adjust_start_s, required_mpc_knots);
 
   // bool status =
   //     _tube_generator.generate(*_map_util, _trajectory, current_s, horizon);
@@ -183,11 +187,11 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   // }
 
   // passing in 0 here because, by construction, adjusted traj will start at s = 0
-  double tube_starting_s = 0;
+  // double tube_starting_s = 0;
   // bool status            = _tube_generator.generate(*_map_util, adjusted_traj,
   // tube_starting_s, horizon);
   bool status =
-      _tube_generator.generate(*_map_util, adjusted_traj, tube_starting_s,
+      _tube_generator.generate(*_map_util, adjusted_traj, adjust_start_s,
                                _non_extended_trajectory.get_arclen());
 
   // if (!_is_tube_generated) {
@@ -222,8 +226,10 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   }
 
   double mpc_s_offset = 0.;
+  // double mpc_s_offset = adjusted_traj.get_closest_s(state.head(2));
   Eigen::VectorXd mpcc_state(state.size() + N_virtual_states);
   mpcc_state << state, mpc_s_offset, s_dot;
+  // mpcc_state << state, current_s, s_dot;
 
   // types::Trajectory adjusted_traj =
   //     _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
@@ -233,8 +239,11 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
       _tube_generator.get_side_poly(tube::TubeGenerator::Side::kAbove),
       _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow),
       mpc_s_offset);
-  // types::Corridor corridor(adjusted_traj, _mpc_tube[0], _mpc_tube[1],
-  //                          mpc_s_offset);
+  // types::Corridor corridor(
+  //     adjusted_traj,
+  //     _tube_generator.get_side_poly(tube::TubeGenerator::Side::kAbove),
+  //     _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow),
+  //     current_s);
 
   auto start                        = std::chrono::high_resolution_clock::now();
   std::array<double, 2> mpc_command = call_mpc(

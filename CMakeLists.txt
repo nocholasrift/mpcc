@@ -143,6 +143,7 @@ foreach(model ${ACADOS_MODELS})
   collect_acados_generated_code(${model} ${ACADOS_GEN_DIR} ${CASADI_GEN_DIR})
   list(APPEND ACADOS_OUTPUT_SRC_CXX ${${model}_SRC_CXX})
   list(APPEND ACADOS_OUTPUT_HEADERS ${${model}_HEADERS})
+  list(APPEND ACADOS_OUTPUT_HEADERS_CXX ${${model}_HEADERS_CXX})
   list(APPEND ACADOS_OUTPUT_LIBS ${${model}_LIBS})
   list(APPEND CASADI_OUTPUT_LIBS ${${model}_CASADI_LIBS})
 

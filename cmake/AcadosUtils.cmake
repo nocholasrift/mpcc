@@ -33,6 +33,7 @@ function(collect_acados_generated_code model_prefix output_dir cxx_output_dir)
 
   set(${model_prefix}_HEADERS_CPP
     ${cxx_output_dir}/casadi_${model_prefix}_internals.h
+    ${cxx_output_dir}/${model_prefix}_param_indices.h
   )
 
   set(${model_prefix}_HEADERS
