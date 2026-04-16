@@ -168,7 +168,6 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   /*types::Trajectory adjusted_traj =*/
   /*    extended_trajectory.get_adjusted_traj(current_s, required_mpc_knots);*/
 
-  double adjust_start_s = 0.;
   types::Trajectory adjusted_traj =
       _trajectory.get_adjusted_traj(current_s, required_mpc_knots);
   // types::Trajectory adjusted_traj =
@@ -190,8 +189,9 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   // double tube_starting_s = 0;
   // bool status            = _tube_generator.generate(*_map_util, adjusted_traj,
   // tube_starting_s, horizon);
+  double tube_starting_s = 0.;
   bool status =
-      _tube_generator.generate(*_map_util, adjusted_traj, adjust_start_s,
+      _tube_generator.generate(*_map_util, adjusted_traj, tube_starting_s,
                                _non_extended_trajectory.get_arclen());
 
   // if (!_is_tube_generated) {

@@ -150,7 +150,7 @@ void DIMPCC::load_params(const std::map<std::string, double>& params) {
 
 bool DIMPCC::set_solver_parameters(const types::Corridor& corridor) {
   using Side      = types::Corridor::Side;
-  namespace Param = mpcc::double_integrator_params;
+  namespace Param = mpcc::double_integrator_param;
 
   std::vector<double> params;
   params.resize(Param::kNP);

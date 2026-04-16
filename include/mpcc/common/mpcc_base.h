@@ -45,17 +45,17 @@ class MPCBase {
   const Eigen::VectorXd& get_state() const { return _state; }
 
   const std::array<Eigen::VectorXd, 2> get_state_limits() const {
-    return static_cast<MPCImpl*>(this)->get_state_limits();
+    return static_cast<const MPCImpl*>(this)->get_state_limits();
   }
 
   const std::array<Eigen::VectorXd, 2> get_input_limits() const {
-    return static_cast<MPCImpl*>(this)->get_input_limits();
+    return static_cast<const MPCImpl*>(this)->get_input_limits();
   }
 
   // deltype auto because get_horizon could be one of
   // several types (unicycle or di)
   decltype(auto) get_horizon() const {
-    return static_cast<MPCImpl*>(this)->get_horizon();
+    return static_cast<const MPCImpl*>(this)->get_horizon();
   }
 
   std::optional<std::array<double, 2>> presolve_hook(

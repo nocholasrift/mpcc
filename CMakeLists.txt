@@ -218,33 +218,39 @@ target_link_libraries(mpcc_core
 )
 
 ########################
-# Python bindings
+# Python bindings (optional)
 ########################
-message(STATUS "Pybind11 v${pybind11_VERSION} found, building mpcc python bindings")
-add_definitions(-DFOUND_PYBIND11)
+option(BUILD_PYTHON_BINDINGS "Build pybind11 Python bindings" ON)
 
-# find_package(PythonLibs REQUIRED)
-find_package(Python3 COMPONENTS Development REQUIRED)
-# include_directories(${PYTHON_INCLUDE_DIRS})
+if(BUILD_PYTHON_BINDINGS)
+  find_package(Python3 COMPONENTS Development QUIET)
 
+  if(Python3_Development_FOUND AND TARGET pybind11::module)
+    message(STATUS "Pybind11 v${pybind11_VERSION} found, building mpcc python bindings")
+    add_definitions(-DFOUND_PYBIND11)
 
-pybind11_add_module(py_mpcc
-  src/mpcc/py_mpcc.cpp
-)
-# add_dependencies(py_mpcc ${ACADOS_TARGETS})
+    pybind11_add_module(py_mpcc
+      src/mpcc/py_mpcc.cpp
+    )
 
-target_include_directories(py_mpcc PRIVATE 
-  ${ACADOS_OUTPUT_DIRS} 
-  ${HiGHS_INCLUDE_DIRS}
-  ${PYTHON_INCLUDE_DIRS}
-)
+    target_include_directories(py_mpcc PRIVATE
+      ${ACADOS_OUTPUT_DIRS}
+      ${HiGHS_INCLUDE_DIRS}
+      ${Python3_INCLUDE_DIRS}
+    )
 
-target_compile_options(py_mpcc PRIVATE -std=c++17 -O2)
-target_link_libraries(py_mpcc
-  PRIVATE
-  mpcc_core
-  ${CASADI_OUTPUT_LIBS}
-)
+    target_compile_options(py_mpcc PRIVATE -std=c++17 -O2)
+    target_link_libraries(py_mpcc
+      PRIVATE
+      mpcc_core
+      ${CASADI_OUTPUT_LIBS}
+    )
+  else()
+    message(STATUS "Pybind11 or Python3 development headers not found, skipping Python bindings")
+  endif()
+else()
+  message(STATUS "BUILD_PYTHON_BINDINGS=OFF, skipping Python bindings")
+endif()
 
 ########################
 # ROS executables (only if catkin)
@@ -270,4 +276,3 @@ if(catkin_FOUND)
   add_executable(local_costmap src/utils/local_costmap.cpp)
   target_link_libraries(local_costmap ${catkin_LIBRARIES})
 endif()
-
