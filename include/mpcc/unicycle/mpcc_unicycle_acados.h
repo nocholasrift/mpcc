@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MPCC_UNICYCLE_MPCC_UNICYCLE_ACADOS_H
+#define MPCC_UNICYCLE_MPCC_UNICYCLE_ACADOS_H
 
 #include <mpcc/common/mpcc_base.h>
 #include <mpcc/common/orientable.h>
@@ -158,8 +159,6 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
   virtual ~UnicycleMPCC();
 
   void load_params(const std::map<std::string, double>& params);
-  // virtual void load_params(
-  //     const std::map<std::string, double>& params) override;
   /**********************************************************************
    * Function: UnicycleMPCC::load_params()
    * Description: Loads parameters for the MPC controller
@@ -176,31 +175,15 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
   /***********************
    * Setters and Getters
    ***********************/
-  virtual void reset_horizon() override;
+  void reset_horizon();
 
   Eigen::VectorXd get_cbf_data(const types::Corridor& corridor,
                                size_t horizon_idx) const;
 
-  virtual const std::array<Eigen::VectorXd, 2> get_state_limits()
-      const override;
-  virtual const std::array<Eigen::VectorXd, 2> get_input_limits()
-      const override;
+  const std::array<Eigen::VectorXd, 2> get_state_limits() const;
+  const std::array<Eigen::VectorXd, 2> get_input_limits() const;
 
   MPCHorizon get_horizon() const;
-
- public:
-  // TOOD: make getter for these
-  // Use one vector which stores a state struct...
-  std::vector<double> mpc_x;
-  std::vector<double> mpc_y;
-  std::vector<double> mpc_theta;
-  std::vector<double> mpc_linvels;
-  std::vector<double> mpc_s;
-  std::vector<double> mpc_s_dot;
-
-  std::vector<double> mpc_angvels;
-  std::vector<double> mpc_linaccs;
-  std::vector<double> mpc_s_ddots;
 
  private:
   Eigen::VectorXd next_state(const Eigen::VectorXd& current_state,
@@ -267,7 +250,20 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
   std::optional<std::array<double, 2>> presolve_hook(
       const Eigen::VectorXd& state, const types::Corridor& corridor) const;
 
+  bool set_solver_parameters(const types::Corridor& corridor);
+
  private:
+  std::vector<double> mpc_x;
+  std::vector<double> mpc_y;
+  std::vector<double> mpc_theta;
+  std::vector<double> mpc_linvels;
+  std::vector<double> mpc_s;
+  std::vector<double> mpc_s_dot;
+
+  std::vector<double> mpc_angvels;
+  std::vector<double> mpc_linaccs;
+  std::vector<double> mpc_s_ddots;
+
   Eigen::MatrixXd _dyna_obs;
 
   double _ds;
@@ -289,3 +285,5 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
   bool _use_dyna_obs;
 };
 }  // namespace mpcc
+
+#endif

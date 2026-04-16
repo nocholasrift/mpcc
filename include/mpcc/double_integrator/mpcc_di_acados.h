@@ -144,34 +144,17 @@ class DIMPCC : public MPCBase<DIMPCC> {
   DIMPCC();
   virtual ~DIMPCC();
 
-  // virtual void load_params(
-  //     const std::map<std::string, double>& params) override;
   void load_params(const std::map<std::string, double>& params);
 
-  void reset_horizon() override;
+  void reset_horizon();
 
   Eigen::VectorXd get_cbf_data(const types::Corridor& corridor,
                                size_t horizon_idx) const;
 
-  virtual const std::array<Eigen::VectorXd, 2> get_state_limits()
-      const override;
-  virtual const std::array<Eigen::VectorXd, 2> get_input_limits()
-      const override;
+  const std::array<Eigen::VectorXd, 2> get_state_limits() const;
+  const std::array<Eigen::VectorXd, 2> get_input_limits() const;
 
   MPCHorizon get_horizon() const;
-
-  // TOOD: make getter for these
-  // Use one vector which stores a state struct...
-  std::vector<double> mpc_x;
-  std::vector<double> mpc_y;
-  std::vector<double> mpc_vx;
-  std::vector<double> mpc_vy;
-  std::vector<double> mpc_s;
-  std::vector<double> mpc_s_dot;
-
-  std::vector<double> mpc_ax;
-  std::vector<double> mpc_ay;
-  std::vector<double> mpc_s_ddots;
 
  private:
   Eigen::VectorXd next_state(const Eigen::VectorXd& current_state,
@@ -183,14 +166,23 @@ class DIMPCC : public MPCBase<DIMPCC> {
   std::array<double, 2> compute_mpc_vel_command(const Eigen::VectorXd& state,
                                                 const Eigen::VectorXd& u);
 
-  // void process_solver_output();
-  // void warm_start_no_u(double* x_init);
-  // void warm_start_shifted_u(bool correct_perturb, const Eigen::VectorXd& state);
-
   void map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
                                  const Eigen::VectorXd& utraj);
 
+  bool set_solver_parameters(const types::Corridor& corridor);
+
  private:
+  std::vector<double> mpc_x;
+  std::vector<double> mpc_y;
+  std::vector<double> mpc_vx;
+  std::vector<double> mpc_vy;
+  std::vector<double> mpc_s;
+  std::vector<double> mpc_s_dot;
+
+  std::vector<double> mpc_ax;
+  std::vector<double> mpc_ay;
+  std::vector<double> mpc_s_ddots;
+
   bool _has_run;
   // bool _solve_success;
   // bool _is_shift_warm;

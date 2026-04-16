@@ -521,6 +521,8 @@ class Corridor {
     }
   }
 
+  double get_offset() const { return s_offset_; }
+
   Sample get_at(double s_local) const {
     double s_glob = s_offset_ + s_local;
 

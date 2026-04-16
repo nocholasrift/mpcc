@@ -18,6 +18,11 @@ from casadi import (
     CodeGenerator,
 )
 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from ParamVector import ParamVector
+
 
 class DebugRegistry:
     def __init__(self):
@@ -61,7 +66,6 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
 
     u = vertcat(a, w, sddot)
 
-    v = MX.sym("v")
     x_coeff = MX.sym("x_coeffs", params["mpc_ref_samples"])
     y_coeff = MX.sym("y_coeffs", params["mpc_ref_samples"])
 
@@ -222,21 +226,38 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
 
     lyap_con = v_dot + gamma * v
 
-    p = vertcat(
-        x_coeff,
-        y_coeff,
-        d_abv_coeff,
-        d_blw_coeff,
-        Q_c,
-        Q_l,
-        Q_s,
-        alpha_abv,
-        alpha_blw,
-        Ql_c,
-        Ql_l,
-        gamma,
-        L_path,
-    )
+    pv = ParamVector()
+    pv.add(str(x_coeff), x_coeff)
+    pv.add(str(y_coeff), y_coeff)
+    pv.add(str(d_abv_coeff), d_abv_coeff)
+    pv.add(str(d_blw_coeff), d_blw_coeff)
+    pv.add(str(Q_c), Q_c)
+    pv.add(str(Q_l), Q_l)
+    pv.add(str(Q_s), Q_s)
+    pv.add(str(alpha_abv), alpha_abv)
+    pv.add(str(alpha_blw), alpha_blw)
+    pv.add(str(Ql_c), Ql_c)
+    pv.add(str(Ql_l), Ql_l)
+    pv.add(str(gamma), gamma)
+    pv.add(str(L_path), L_path)
+ 
+    p = pv.as_casadi_vector()
+    
+    # p = vertcat(
+    #     x_coeff,
+    #     y_coeff,
+    #     d_abv_coeff,
+    #     d_blw_coeff,
+    #     Q_c,
+    #     Q_l,
+    #     Q_s,
+    #     alpha_abv,
+    #     alpha_blw,
+    #     Ql_c,
+    #     Ql_l,
+    #     gamma,
+    #     L_path,
+    # )
 
     model = AcadosModel()
     model.f_impl_expr = f_impl
@@ -317,23 +338,25 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
 
     # folder = "cpp_generated_code"
     if output_dir == "":
-        output_dir = "cpp_generated_code"
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        dir_name = os.path.join(script_dir, output_dir)
+        output_dir = os.path.join(script_dir, "cpp_generated_code")
 
-        if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
-    else:
-        dir_name = os.path.join(output_dir)
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name, exist_ok=True)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     current_dir = os.getcwd()
-    os.chdir(dir_name)
+    os.chdir(output_dir)
 
+    # Casadi Internals Debug
     fname = "casadi_unicycle_model_mpcc_internals"
     debug.generate_c(fname, debug_inputs)
     os.system(f"gcc -fPIC -shared {fname}.cpp -o lib{fname}.so")
+
+    # Parameter index header
+    pv.write_cpp_header(
+        "unicycle_model_mpcc_param_indices.h",
+        namespace="mpcc::unicycle_param",
+    )
 
     os.chdir(current_dir)
 

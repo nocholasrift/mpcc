@@ -19,6 +19,11 @@ from casadi import (
     DM,
 )
 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from ParamVector import ParamVector
+
 
 class DebugRegistry:
     def __init__(self):
@@ -77,22 +82,40 @@ class mpcc_ode_model:
             self.Q_c * self.e_c**2 + self.Q_l * self.e_l**2 - self.Q_s * self.sdot1
         )
 
+        self.pv = ParamVector()
+        self.pv.add(str(self.x_coeff), self.x_coeff)
+        self.pv.add(str(self.y_coeff), self.y_coeff)
+        self.pv.add(str(self.d_abv_coeff), self.d_abv_coeff)
+        self.pv.add(str(self.d_blw_coeff), self.d_blw_coeff)
+        self.pv.add(str(self.Q_c), self.Q_c)
+        self.pv.add(str(self.Q_l), self.Q_l)
+        self.pv.add(str(self.Q_s), self.Q_s)
+        self.pv.add(str(self.alpha_abv), self.alpha_abv)
+        self.pv.add(str(self.alpha_blw), self.alpha_blw)
+        self.pv.add(str(self.Ql_c), self.Ql_c)
+        self.pv.add(str(self.Ql_l), self.Ql_l)
+        self.pv.add(str(self.gamma), self.gamma)
+        self.pv.add(str(self.L_path), self.L_path)
+        # self.pv.add(str(self.s_start), self.s_start)
+
+        self.p = self.pv.as_casadi_vector()
+
         # params
-        self.p = vertcat(
-            self.x_coeff,
-            self.y_coeff,
-            self.d_abv_coeff,
-            self.d_blw_coeff,
-            self.Q_c,
-            self.Q_l,
-            self.Q_s,
-            self.alpha_abv,
-            self.alpha_blw,
-            self.Ql_c,
-            self.Ql_l,
-            self.gamma,
-            self.L_path,
-        )
+        # self.p = vertcat(
+        #     self.x_coeff,
+        #     self.y_coeff,
+        #     self.d_abv_coeff,
+        #     self.d_blw_coeff,
+        #     self.Q_c,
+        #     self.Q_l,
+        #     self.Q_s,
+        #     self.alpha_abv,
+        #     self.alpha_blw,
+        #     self.Ql_c,
+        #     self.Ql_l,
+        #     self.gamma,
+        #     self.L_path,
+        # )
 
         self.model = AcadosModel()
 
@@ -129,7 +152,7 @@ class mpcc_ode_model:
         self.model.u_labels = ["$ax$", "$ay$", "$sddot$"]
         self.model.t_label = "$t$ [s]"
 
-        self.add_debugs(output_dir)
+        self.add_debugs_and_params(output_dir)
 
         return self.model
 
@@ -164,7 +187,7 @@ class mpcc_ode_model:
         xspl = MX.sym("xspl", 1, 1)
         yspl = MX.sym("yspl", 1, 1)
 
-        self.L_path = MX.sym("L_path", 1)
+        self.L_path = MX.sym("L_path")
 
         self.interp_x = interpolant(
             "interp_x", "bspline", [self.arc_len_knots.tolist()]
@@ -178,6 +201,8 @@ class mpcc_ode_model:
         self.interp_exp_y = self.interp_y(yspl, self.y_coeff)
         self.yr_func = Function("yr", [yspl, self.y_coeff], [self.interp_exp_y])
 
+        # self.s_start = MX.sym("s_start")
+        # s_norm = (self.s1 - self.s_start) / self.L_path
         s_norm = self.s1 / self.L_path
         self.xr = self.xr_func(s_norm, self.x_coeff)
         self.yr = self.yr_func(s_norm, self.y_coeff)
@@ -278,6 +303,7 @@ class mpcc_ode_model:
 
         self.d_abv = 0
         self.d_blw = 0
+        # s_norm = (self.s1 - self.s_start) / self.L_path
         s_norm = self.s1 / self.L_path
         for i in range(params["tube_poly_degree"] + 1):
             self.d_abv = self.d_abv + (self.d_abv_coeff[i] * s_norm**i)
@@ -333,7 +359,7 @@ class mpcc_ode_model:
             + self.alpha_blw * self.h_blw
         )
 
-    def add_debugs(self, output_dir):
+    def add_debugs_and_params(self, output_dir):
         self.debug = DebugRegistry()
 
         self.debug.add("double_integrator_xr", self.xr)
@@ -376,26 +402,27 @@ class mpcc_ode_model:
             self.Ql_l,
             self.gamma,
             self.L_path,
+            # self.s_start,
         ]
 
         if output_dir == "":
-            output_dir = "cpp_generated_code"
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            dir_name = os.path.join(script_dir, output_dir)
+            output_dir = os.path.join(script_dir, "cpp_generated_code")
 
-            if not os.path.exists(dir_name):
-                os.mkdir(dir_name)
-        else:
-            dir_name = os.path.join(output_dir)
-            if not os.path.exists(dir_name):
-                os.makedirs(dir_name, exist_ok=True)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
         current_dir = os.getcwd()
-        os.chdir(dir_name)
+        os.chdir(output_dir)
 
         fname = "casadi_double_integrator_mpcc_internals"
         self.debug.generate_c(f"{fname}.cpp", debug_inputs)
         os.system(f"gcc -fPIC -shared {fname}.cpp -o lib{fname}.so")
+
+        self.pv.write_cpp_header(
+            "double_integrator_mpcc_param_indices.h",
+            namespace="mpcc::double_integrator_param",
+        )
 
         os.chdir(current_dir)
 
