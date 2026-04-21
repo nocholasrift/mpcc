@@ -12,7 +12,7 @@ from std_msgs.msg import Float32
 from mpcc.srv import QuerySAC, QuerySACResponse
 
 from gym import spaces
-from oyster.CBFEnv import CBFEnv
+from oyster.CBFEnv import CBFEnv, RLObs
 from oyster.ParamLoader import ParameterLoader
 from oyster.rlkit.torch.sac.policies import TanhGaussianPolicy
 from oyster.rlkit.torch.networks import FlattenMlp, MlpEncoder, RecurrentEncoder
@@ -26,11 +26,12 @@ from oyster.rlkit.samplers.util import rollout
 class ModelServer:
     def __init__(self, variant):
 
-        self.n_obs = 14
-        self.n_actions = 2
 
-        self.N_alpha = self.n_actions
+        self.N_alpha = 2
         self.N_horizon = 3
+
+        self.n_obs = len(RLObs) * self.N_horizon + self.N_alpha + 1
+        self.n_actions = self.N_alpha
 
         self.low = np.array(
             -10 * np.ones(self.n_obs),
@@ -90,31 +91,36 @@ class ModelServer:
             latent_dim=latent_dim,
             action_dim=action_dim,
         )
-        self.agent = PEARLAgent(
-            latent_dim, self.context_encoder, self.policy, **variant["algo_params"]
-        )
-        self.agent = MakeDeterministic(self.agent)
-        self.agent.clear_z()
 
         path_to_exp = os.getenv("PEARL_MODEL_PATH")
         if not path_to_exp or not path_to_exp.strip():
             rospy.loginfo("CONFIG PATH ENV VARIABLE 'PEARL_CONFIG_PATH' NOT SET!!")
             exit(-1)
 
-        itr = 68
+        # ptu.set_gpu_mode
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        itr = 74
         self.context_encoder.load_state_dict(
-            torch.load(os.path.join(path_to_exp, f"context_encoder_itr_{itr}.pth"))
+            torch.load(os.path.join(path_to_exp, f"context_encoder_itr_{itr}.pth"), map_location=device)
         )
         self.policy.load_state_dict(
-            torch.load(os.path.join(path_to_exp, f"policy_itr_{itr}.pth"))
+            torch.load(os.path.join(path_to_exp, f"policy_itr_{itr}.pth"), map_location=device)
         )
 
-        self.context_encoder.eval().to(ptu.device)
-        self.policy.eval().to(ptu.device)
+        self.context_encoder.eval().to(device)
+        self.policy.eval().to(device)
 
         self.obs_mu, self.obs_std = CBFEnv.get_mu_and_std(
             self.N_horizon, self.N_alpha, self.params
         )
+
+        self.agent = PEARLAgent(
+            latent_dim, self.context_encoder, self.policy, **variant["algo_params"]
+        )
+        self.agent = MakeDeterministic(self.agent)
+        self.agent.clear_z()
+
 
         self.prev_obs = None
         self.prev_action = None
@@ -167,13 +173,13 @@ class ModelServer:
             exceed_count += 1
 
         if self.prev_obs is not None and self.prev_action is not None:
-            r = CBFEnv.get_reward(obs, False, self.params, 3)
+            r = CBFEnv.get_reward(unormalized_obs, False, self.params, self.N_horizon, action)
             self.agent.update_context(
                 [self.prev_obs, self.prev_action, r, obs, False, {}]
             )
 
-        if self.posterior_counter > 50:
-            self.agent.infer_posterior(self.agent.context)
+        # if self.posterior_counter > 50:
+        #     self.agent.infer_posterior(self.agent.context)
 
         self.prev_obs = obs
         self.prev_action = action
@@ -194,7 +200,7 @@ class ModelServer:
 
 def main():
     rospy.init_node("meta_model_server")
-    ptu.set_gpu_mode(True)
+    ptu.set_gpu_mode(torch.cuda.is_available())
 
     variant = default_config
     config_path = os.getenv("PEARL_CONFIG_PATH")
