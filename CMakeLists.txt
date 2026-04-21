@@ -187,6 +187,7 @@ target_link_libraries(acados_generated_lib
     # ${ACADOS_OUTPUT_LIBS}
     # ${CASADI_OUTPUT_LIBS}
 )
+target_compile_options(acados_generated_lib PRIVATE -fPIC)
 
 
 ########################

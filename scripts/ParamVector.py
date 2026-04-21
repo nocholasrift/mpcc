@@ -1,4 +1,5 @@
 from casadi import vertcat
+from typing import Tuple, Dict, List
 
 # Full disclosure written by claude with some modifications
 class ParamVector:
@@ -16,7 +17,7 @@ class ParamVector:
     """
  
     def __init__(self):
-        self._entries: list[tuple[str, object]] = []  # (name, casadi_sym)
+        self._entries: List[Tuple[str, object]] = []  # (name, casadi_sym)
  
     def add(self, name: str, sym) -> "ParamVector":
         self._entries.append((name, sym))
@@ -25,7 +26,7 @@ class ParamVector:
     def as_casadi_vector(self):
         return vertcat(*[sym for _, sym in self._entries])
  
-    def _index_map(self) -> dict[str, tuple[int, int]]:
+    def _index_map(self) -> Dict[str, Tuple[int, int]]:
         """Returns {name: (start_index, size)}."""
         result = {}
         idx = 0

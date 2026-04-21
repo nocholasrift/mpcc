@@ -14,8 +14,6 @@
 #include <std_srvs/Empty.h>
 #include <trajectory_msgs/JointTrajectory.h>
 
-#include <grid_map_ros/GridMapRosConverter.hpp>
-#include <grid_map_ros/grid_map_ros.hpp>
 #include <string>
 #include <thread>
 
@@ -69,7 +67,6 @@ class MPCCROS {
      **********************************************************************/
   void odomcb(const nav_msgs::Odometry::ConstPtr& msg);
   void mapcb(const nav_msgs::OccupancyGrid::ConstPtr& msg);
-  /*void mapcb(const grid_map_msgs::GridMap::ConstPtr& msg);*/
   void goalcb(const geometry_msgs::PoseStamped::ConstPtr& msg);
   void trajectorycb(const trajectory_msgs::JointTrajectory::ConstPtr& msg);
 
@@ -207,8 +204,6 @@ class MPCCROS {
   int _tube_samples;
   int _max_path_length;
   int _mpc_ref_samples;
-
-  grid_map::GridMap _grid_map;
 
   Eigen::MatrixX4d _poly;
   geometry_msgs::Twist _vel_msg;

@@ -6,7 +6,6 @@
 #include <geometry_msgs/PolygonStamped.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <grid_map_msgs/GridMap.h>
 #include <math.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
@@ -21,7 +20,6 @@
 #include <algorithm>
 #include <unordered_map>
 
-#include <grid_map_ros/GridMapRosConverter.hpp>
 #include "nav_msgs/OccupancyGrid.h"
 #include "ros/console.h"
 
