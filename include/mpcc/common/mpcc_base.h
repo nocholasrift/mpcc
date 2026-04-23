@@ -239,38 +239,22 @@ class MPCBase {
         warm_state(MPCImpl::kIndS) -= starting_s;
 
         _acados_solver.set_output(step, "x", warm_state.data());
-        _acados_solver.set_output(step, "u", &_prev_u0[step * MPCImpl::kNU]);
-        // std::cout << "x " << step << "\t" << warm_state.transpose() << "\n";
-        // std::cout
-        //     << "u " << step << "\t"
-        //     << _prev_u0.segment(step * MPCImpl::kNU, MPCImpl::kNU).transpose()
-        //     << "\n";
+        _acados_solver.set_output(step, "u",
+                                  &_prev_u0[(step + 1) * MPCImpl::kNU]);
       }
 
       Eigen::VectorXd xN_prev = _prev_x0.tail(MPCImpl::kNX);
       xN_prev(MPCImpl::kIndS) -= starting_s;
 
-      _acados_solver.set_output(_mpc_steps, "x", xN_prev.data());
-      // Eigen::VectorXd zero_u = Eigen::VectorXd::Zero(MPCImpl::kNU);
-      _acados_solver.set_output(_mpc_steps, "u",
+      _acados_solver.set_output(_mpc_steps - 1, "x", xN_prev.data());
+      _acados_solver.set_output(_mpc_steps - 1, "u",
                                 _prev_u0.tail(MPCImpl::kNU).data());
-      // _acados_solver.set_output(_mpc_steps, "u", zero_u.data());
-
-      // std::cout << "x " << _mpc_steps << "\t" << xN_prev.transpose() << "\n";
-      // std::cout << "u " << _mpc_steps << "\t"
-      //           << _prev_u0.tail(MPCImpl::kNU).transpose() << "\n";
-      // std::cout << "u " << _mpc_steps << "\t" << zero_u.transpose() << "\n";
 
       Eigen::VectorXd uN_prev = _prev_u0.tail(MPCImpl::kNU);
       Eigen::VectorXd xN =
           static_cast<MPCImpl*>(this)->next_state(xN_prev, uN_prev);
 
-      // std::cout << "x " << _mpc_steps + 1 << "\t" << xN.transpose() << "\n";
-      // std::cout << "x " << _mpc_steps + 1 << "\t" << xN_prev.transpose()
-      //           << "\n";
-
-      _acados_solver.set_output(_mpc_steps + 1, "x", xN.data());
-      // _acados_solver.set_output(_mpc_steps + 1, "x", xN_prev.data());
+      _acados_solver.set_output(_mpc_steps, "x", xN.data());
     }
   }
 
