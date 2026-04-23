@@ -145,11 +145,16 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
   auto mpc_params = mpc_core.get_params();
   double dt       = mpc_params.at("DT");
 
-  double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv * dt;
-  double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw * dt;
+  // double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv * dt;
+  // double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw * dt;
+  double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv;
+  double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw;
 
-  alpha_abv = std::max(_min_alpha, std::min(_max_alpha, alpha_abv));
-  alpha_blw = std::max(_min_alpha, std::min(_max_alpha, alpha_blw));
+  ROS_WARN("ALPHA_ABV: %.2f", alpha_abv);
+  ROS_WARN("ALPHA_BLW: %.2f", alpha_blw);
+
+  // alpha_abv = std::max(_min_alpha, std::min(_max_alpha, alpha_abv));
+  // alpha_blw = std::max(_min_alpha, std::min(_max_alpha, alpha_blw));
 
   std_msgs::Float64 alpha_msg;
   alpha_msg.data = alpha_abv;
@@ -170,7 +175,7 @@ void RLLogger::fill_state(const mpcc::MPCCore& mpc_core, mpcc::RLState& state) {
 
   int N       = 3;
   double step = (_mpc_steps) / (N - 1);
-  state.state.reserve(4 * N + 2);
+  state.state.reserve(4 * N + 3);
 
   for (size_t i = 0; i < N; ++i) {
     size_t idx               = static_cast<size_t>(i * step);
@@ -181,6 +186,7 @@ void RLLogger::fill_state(const mpcc::MPCCore& mpc_core, mpcc::RLState& state) {
     state.state.emplace_back(cbf_data(3));
   }
 
+  state.state.emplace_back(mpc_core.get_state().tail(1)[0]);
   state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_ABV"));
   state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_BLW"));
 }

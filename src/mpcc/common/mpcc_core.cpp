@@ -269,14 +269,11 @@ Eigen::VectorXd MPCCore::get_cbf_data(size_t horizon_idx) const {
     return Eigen::VectorXd::Zero(4);
   }
 
-  std::cout << "getting horizon\n";
   MPCCore::AnyHorizon horizon = get_horizon();
-  std::cout << "done\n";
 
   size_t horizon_steps =
       std::visit([](const auto& arg) { return arg.length; }, horizon);
 
-  std::cout << "checking horizon steps\n";
 
   if (horizon_idx >= horizon_steps) {
     throw std::invalid_argument(
@@ -287,24 +284,20 @@ Eigen::VectorXd MPCCore::get_cbf_data(size_t horizon_idx) const {
   Eigen::VectorXd init_state = std::visit(
       [&](const auto& arg) { return arg.get_state_at_step(0); }, horizon);
 
-  std::cout << "bulding adjusted traj\n";
   double current_s = std::max(_trajectory.get_closest_s(init_state), 1e-6);
   unsigned int num_samples =
       static_cast<unsigned int>(_params.at("REF_SAMPLES"));
-  std::cout << "adjusted traj\n";
   types::Trajectory adjusted_traj =
       _trajectory.get_adjusted_traj(current_s, num_samples);
-  std::cout << "done\n";
 
-  std::cout << adjusted_traj.get_ctrls_x() << "\n";
-  std::cout << adjusted_traj.get_ctrls_y() << "\n";
+  // std::cout << adjusted_traj.get_ctrls_x() << "\n";
+  // std::cout << adjusted_traj.get_ctrls_y() << "\n";
 
   types::Corridor corridor(
       adjusted_traj,
       _tube_generator.get_side_poly(tube::TubeGenerator::Side::kAbove),
       _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow),
-      current_s);
-  std::cout << "finished corridor\n";
+      0.);
 
   return call_mpc(
       [&](auto& mpc) { return mpc.get_cbf_data(corridor, horizon_idx); });

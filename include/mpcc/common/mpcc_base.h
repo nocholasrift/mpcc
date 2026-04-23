@@ -59,7 +59,7 @@ class MPCBase {
   }
 
   std::optional<std::array<double, 2>> presolve_hook(
-      const Eigen::VectorXd& state, const types::Corridor& reference) const {
+      const Eigen::VectorXd& state, const types::Corridor& reference){
     return std::nullopt;
   }
 

@@ -162,8 +162,11 @@ class ModelServer:
             raw_act, self.params["MIN_ALPHA_DOT"], self.params["MAX_ALPHA_DOT"]
         )
 
-        alpha_abv = unormalized_obs[-2] + action[0] * self.params["DT"]
-        alpha_blw = unormalized_obs[-1] + action[1] * self.params["DT"]
+        print("RAW_ACT",raw_act)
+        print("ACTION",action)
+
+        alpha_abv = unormalized_obs[-2] + action[0]
+        alpha_blw = unormalized_obs[-1] + action[1]
 
         exceed_count = 0
         if alpha_abv < self.params["MIN_ALPHA"] or alpha_abv > self.params["MAX_ALPHA"]:
@@ -177,6 +180,9 @@ class ModelServer:
             self.agent.update_context(
                 [self.prev_obs, self.prev_action, r, obs, False, {}]
             )
+
+        print("ALPHA_ABV", alpha_abv)
+        print("ALPHA_BLW", alpha_blw)
 
         # if self.posterior_counter > 50:
         #     self.agent.infer_posterior(self.agent.context)

@@ -57,6 +57,7 @@ UnicycleMPCC::UnicycleMPCC() {
   _s_dot = 0;
 
   _state = Eigen::VectorXd::Zero(kNX);
+  _odom = Eigen::VectorXd(3);
 
   _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
   _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
@@ -72,11 +73,11 @@ UnicycleMPCC::UnicycleMPCC() {
   mpc_linaccs.resize(_mpc_steps);
   mpc_s_ddots.resize(_mpc_steps);
 
+  reset_horizon();
+
   _use_dyna_obs  = false;
   _is_shift_warm = false;
   _solve_success = false;
-
-  _odom = Eigen::VectorXd(3);
 
   _acados_solver.initialize(_mpc_steps);
 
@@ -168,6 +169,8 @@ void UnicycleMPCC::load_params(const std::map<std::string, double>& params) {
   mpc_angvels.resize(_mpc_steps);
   mpc_linaccs.resize(_mpc_steps);
   mpc_s_ddots.resize(_mpc_steps);
+
+  reset_horizon();
 
   if (_prev_x0.size() != (_mpc_steps + 1) * kNX) {
     std::cout << termcolor::yellow
@@ -327,7 +330,7 @@ std::array<double, 2> UnicycleMPCC::compute_mpc_vel_command(
 }
 
 void UnicycleMPCC::reset_horizon() {
-  for (int i = 0; i < _mpc_steps; ++i) {
+  for (int i = 0; i < _mpc_steps + 1; ++i) {
     mpc_x[i]       = _odom(0);
     mpc_y[i]       = _odom(1);
     mpc_theta[i]   = 0;
@@ -336,7 +339,7 @@ void UnicycleMPCC::reset_horizon() {
     mpc_s_dot[i]   = 0;
   }
 
-  for (int i = 0; i < _mpc_steps - 1; ++i) {
+  for (int i = 0; i < _mpc_steps; ++i) {
     mpc_angvels[i] = 0;
     mpc_linaccs[i] = 0;
     mpc_s_ddots[i] = 0;
@@ -421,7 +424,7 @@ UnicycleMPCC::MPCHorizon UnicycleMPCC::get_horizon() const {
 // object is orientable (see orientable.h), so we must check trajectory alignemnt
 // before
 std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
-    const Eigen::VectorXd& state, const types::Corridor& corridor) const {
+    const Eigen::VectorXd& state, const types::Corridor& corridor) {
   double eps_s = .05;
 
   const auto& reference = corridor.get_trajectory();
@@ -433,6 +436,13 @@ std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
   if (current_s > eps_s || reference.get_arclen() < eps_s) {
     return std::nullopt;
   }
+
+  _prev_x0[kIndX]     = state(kIndX);
+  _prev_x0[kIndY]     = state(kIndY);
+  _prev_x0[kIndTheta] = state(kIndTheta);
+  _prev_x0[kIndV]     = state(kIndV);
+  _prev_x0[kIndS]     = state(kIndS);
+  _prev_x0[kIndSDot]  = state(kIndSDot);
 
   Eigen::Vector2d point =
       reference(current_s + eps_s, types::Trajectory::kFirstOrder);
@@ -447,6 +457,10 @@ std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
         get_orient_control(traj_heading, state[kIndTheta], _alignment_p_gain,
                            -_max_angvel, _max_angvel);
     double desired_vel = 0;
+
+    _prev_u0[kIndLinAcc] = 0.;
+    _prev_u0[kIndAngVel] = 0.;
+    _prev_u0[kIndSDDot]  = 0.;
 
     return std::optional<std::array<double, 2>>({desired_vel, desired_angvel});
   }

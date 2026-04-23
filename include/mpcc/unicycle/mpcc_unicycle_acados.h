@@ -248,7 +248,7 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
                                  const Eigen::VectorXd& utraj);
 
   std::optional<std::array<double, 2>> presolve_hook(
-      const Eigen::VectorXd& state, const types::Corridor& corridor) const;
+      const Eigen::VectorXd& state, const types::Corridor& corridor);
 
   bool set_solver_parameters(const types::Corridor& corridor);
 
