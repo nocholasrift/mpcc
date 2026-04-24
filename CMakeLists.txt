@@ -31,39 +31,6 @@ add_subdirectory(third_party/pybind11)
 
 message(STATUS "ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
 
-########################
-# Catkin-specific stuff
-########################
-if(catkin_FOUND)
-  add_definitions(-DFOUND_CATKIN)
-  message(STATUS "Catkin found, building ROS nodes")
-
-  add_message_files(
-    DIRECTORY
-    FILES
-      RLState.msg
-  )
-
-  add_service_files(
-    FILES
-      QuerySAC.srv
-      QuerySACDI.srv
-  )
-
-  generate_messages(
-    DEPENDENCIES 
-      nav_msgs
-      geometry_msgs 
-      trajectory_msgs
-  )
-
-  catkin_package(
-    CATKIN_DEPENDS message_runtime
-  )
-else()
-  message(STATUS "Catkin not found, skipping ROS message/service generation")
-endif()
-
 set(HiGHS_INCLUDE_DIRS
   ${HIGHS_BINARY_DIR}
   third_party/autodiff
@@ -253,20 +220,56 @@ else()
   message(STATUS "BUILD_PYTHON_BINDINGS=OFF, skipping Python bindings")
 endif()
 
+
 ########################
 # ROS executables (only if catkin)
 ########################
 if(catkin_FOUND)
+  set(ROS1 TRUE)
+else()
+  find_package(ament_cmake QUIET)
+  if (ament_cmake_FOUND)
+    set(ROS2 TRUE)
+  endif()
+endif()
+
+if (ROS1)
+  message(STATUS "Catkin found, building ROS1 nodes")
+
+  add_message_files(
+    DIRECTORY
+    FILES
+      RLState.msg
+  )
+
+  add_service_files(
+    FILES
+      QuerySAC.srv
+      QuerySACDI.srv
+  )
+
+  generate_messages(
+    DEPENDENCIES 
+      nav_msgs
+      geometry_msgs 
+      trajectory_msgs
+  )
+
+  catkin_package(
+    CATKIN_DEPENDS message_runtime
+  )
 
   add_executable(mpcc_ros 
     src/mpcc/ros/logger.cpp
     src/mpcc/ros/mpcc_ros.cpp
     src/mpcc/ros/mpcc_node.cpp
   )
+
   target_link_libraries(mpcc_ros
     ${catkin_LIBRARIES}
     mpcc_core
   )
+
   # add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages ${ACADOS_TARGETS})
   target_compile_options(mpcc_ros PRIVATE -std=c++17 -O2)
   target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${HiGHS_INCLUDE_DIRS})
@@ -276,4 +279,48 @@ if(catkin_FOUND)
 
   add_executable(local_costmap src/utils/local_costmap.cpp)
   target_link_libraries(local_costmap ${catkin_LIBRARIES})
+elseif(ROS2)
+  message(STATUS "Catkin found, building ROS2 nodes")
+  find_package(rclcpp REQUIRED)
+  find_package(std_msgs REQUIRED)
+  find_package(geometry_msgs REQUIRED)
+  find_package(nav_msgs REQUIRED)
+  find_package(sensor_msgs REQUIRED)
+  find_package(trajectory_msgs REQUIRED)
+  find_package(std_srvs REQUIRED)
+
+  find_package(rosidl_default_generators REQUIRED)
+
+  # ------------------------
+  # Messages / Services
+  # ------------------------
+  rosidl_generate_interfaces(${PROJECT_NAME}
+    "msg/RLState.msg"
+    "srv/QuerySAC.srv"
+    "srv/QuerySACDI.srv"
+    DEPENDENCIES geometry_msgs trajectory_msgs nav_msgs
+  )
+
+  add_executable(mpcc_ros 
+    src/mpcc/ros/logger.cpp
+    src/mpcc/ros/mpcc_ros.cpp
+    src/mpcc/ros/mpcc_node.cpp
+  )
+
+  target_compile_options(mpcc_ros PRIVATE -std=c++17 -O2)
+
+  target_link_libraries(mpcc_ros
+    mpcc_core
+  )
+
+  rosidl_target_interfaces(mpcc_ros
+    ${PROJECT_NAME} "rosidl_typesupport_cpp"
+  )
+
+  install(TARGETS mpcc_ros
+    DESTINATION lib/${PROJECT_NAME}
+  )
+else()
+
 endif()
+
