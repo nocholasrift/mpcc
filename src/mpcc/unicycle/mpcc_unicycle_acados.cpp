@@ -57,7 +57,7 @@ UnicycleMPCC::UnicycleMPCC() {
   _s_dot = 0;
 
   _state = Eigen::VectorXd::Zero(kNX);
-  _odom = Eigen::VectorXd(3);
+  _odom  = Eigen::VectorXd(3);
 
   _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
   _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
@@ -331,11 +331,11 @@ std::array<double, 2> UnicycleMPCC::compute_mpc_vel_command(
 
 void UnicycleMPCC::reset_horizon() {
   for (int i = 0; i < _mpc_steps + 1; ++i) {
-    mpc_x[i]       = _odom(0);
-    mpc_y[i]       = _odom(1);
+    mpc_x[i]       = _state(kIndX);
+    mpc_y[i]       = _state(kIndY);
     mpc_theta[i]   = 0;
     mpc_linvels[i] = 0;
-    mpc_s[i]       = 0;
+    mpc_s[i]       = 1e-2;
     mpc_s_dot[i]   = 0;
   }
 
@@ -443,6 +443,8 @@ std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
   _prev_x0[kIndV]     = state(kIndV);
   _prev_x0[kIndS]     = state(kIndS);
   _prev_x0[kIndSDot]  = state(kIndSDot);
+
+  reset_horizon();
 
   Eigen::Vector2d point =
       reference(current_s + eps_s, types::Trajectory::kFirstOrder);

@@ -114,13 +114,15 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
   _traj_reset  = true;
 }
 
-std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
-                                     bool is_reverse) {
+MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
 
+  MPCResult result;
   if (!_is_traj_set || !_is_map_util_set) {
     std::cout << termcolor::yellow << "[MPC Core] trajectory or map not set!"
               << termcolor::reset << std::endl;
-    return {0, 0};
+    result.status  = SolverStatus::kSolverNotReady;
+    result.command = {0, 0};
+    return result;
   }
 
   // get s value on taj closest to robot position
@@ -225,7 +227,8 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
     _traj_reset = false;
   }
 
-  double mpc_s_offset = 0.;
+  // double mpc_s_offset = 0.;
+  double mpc_s_offset = 1e-2;
   // double mpc_s_offset = adjusted_traj.get_closest_s(state.head(2));
   Eigen::VectorXd mpcc_state(state.size() + N_virtual_states);
   mpcc_state << state, mpc_s_offset, s_dot;
@@ -245,8 +248,8 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
   //     _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow),
   //     current_s);
 
-  auto start                        = std::chrono::high_resolution_clock::now();
-  std::array<double, 2> mpc_command = call_mpc(
+  auto start = std::chrono::high_resolution_clock::now();
+  result     = call_mpc(
       [&](auto& mpc) { return mpc.solve(mpcc_state, corridor, is_reverse); });
 
   auto end = std::chrono::high_resolution_clock::now();
@@ -256,10 +259,10 @@ std::array<double, 2> MPCCore::solve(const Eigen::VectorXd& state,
           .count();
 
   _has_run     = true;
-  _curr_vel    = mpc_command[0];
-  _curr_angvel = mpc_command[1];
+  _curr_vel    = result.command[0];
+  _curr_angvel = result.command[1];
 
-  return mpc_command;
+  return result;
 }
 
 Eigen::VectorXd MPCCore::get_cbf_data(size_t horizon_idx) const {
@@ -273,7 +276,6 @@ Eigen::VectorXd MPCCore::get_cbf_data(size_t horizon_idx) const {
 
   size_t horizon_steps =
       std::visit([](const auto& arg) { return arg.length; }, horizon);
-
 
   if (horizon_idx >= horizon_steps) {
     throw std::invalid_argument(
@@ -296,8 +298,7 @@ Eigen::VectorXd MPCCore::get_cbf_data(size_t horizon_idx) const {
   types::Corridor corridor(
       adjusted_traj,
       _tube_generator.get_side_poly(tube::TubeGenerator::Side::kAbove),
-      _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow),
-      0.);
+      _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow), 0.);
 
   return call_mpc(
       [&](auto& mpc) { return mpc.get_cbf_data(corridor, horizon_idx); });

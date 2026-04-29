@@ -36,8 +36,7 @@ class MPCCore {
    * vel, and prop controller gains and thresholds
    **********************************************************************/
 
-  std::array<double, 2> solve(const Eigen::VectorXd& state,
-                              bool is_reverse = false);
+  MPCResult solve(const Eigen::VectorXd& state, bool is_reverse = false);
   /**********************************************************************
    * Function: MPCCore::solve()
    * Description: Solves the MPC problem for the current timestep

@@ -13,6 +13,17 @@
 namespace mpcc {
 using TrajectoryView = types::Trajectory::View;
 
+enum class SolverStatus {
+  kSuccess,
+  kPresolve,
+  kParamMismatch,
+  kSolverNotReady
+};
+struct MPCResult {
+  SolverStatus status;
+  std::array<double, 2> command;
+};
+
 // Interface assumes the use of acados
 // Using CRTP so MPCBase gets access to derived class members.
 // Downside is it is unclear what each MPCImpl needs to implement.
@@ -59,7 +70,7 @@ class MPCBase {
   }
 
   std::optional<std::array<double, 2>> presolve_hook(
-      const Eigen::VectorXd& state, const types::Corridor& reference){
+      const Eigen::VectorXd& state, const types::Corridor& reference) {
     return std::nullopt;
   }
 
@@ -78,42 +89,50 @@ class MPCBase {
     return ret;
   }
 
-  std::array<double, 2> solve(const Eigen::VectorXd& state,
-                              types::Corridor& corridor, bool is_reverse) {
+  MPCResult solve(const Eigen::VectorXd& state, types::Corridor& corridor,
+                  bool is_reverse) {
 
     MPCImpl& impl  = static_cast<MPCImpl&>(*this);
     _solve_success = false;
 
+    Eigen::VectorXd x0 = impl.prepare_initial_state(state, corridor);
+    _state             = x0;
+
     std::optional<std::array<double, 2>> pre_cmd =
         impl.presolve_hook(state, corridor);
 
+    MPCResult result;
     if (pre_cmd) {
-      return *pre_cmd;
+      result.status  = SolverStatus::kPresolve;
+      result.command = std::move(*pre_cmd);
+      return result;
     }
 
     /*************************************
   ********** INITIAL CONDITION *********
   **************************************/
     if (!is_solver_ready(state, corridor)) {
-      return {0, 0};
+      std::cout << termcolor::yellow << "Solver not yet ready!\n";
+      result.status  = SolverStatus::kSolverNotReady;
+      result.command = {0, 0};
+      return result;
     }
-
-    Eigen::VectorXd x0 = impl.prepare_initial_state(state, corridor);
-    _state             = x0;
 
     set_acados_initial_constraints(x0);
 
     /*************************************
   ********* INITIALIZE SOLUTION ********
   **************************************/
-    std::cout << "warm starting with init state: " << x0.transpose() << "\n";
     warm_start_mpc(x0);
 
     /*************************************
   ********* SET REFERENCE PARAMS *******
   **************************************/
     if (!set_solver_parameters(corridor)) {
-      return {0, 0};
+      std::cout << termcolor::yellow << "Setting solver params failed!\n";
+      result.status  = SolverStatus::kParamMismatch;
+      result.command = {0, 0};
+      return result;
     }
 
     /*************************************
@@ -137,12 +156,13 @@ class MPCBase {
       std::cout << "[MPCC] SOLVER STATUS WAS INFEASIBLE!\n";
     }
 
-    std::array<double, 2> cmd = impl.compute_mpc_vel_command(xtraj, utraj);
+    result.status  = SolverStatus::kSuccess;
+    result.command = impl.compute_mpc_vel_command(xtraj, utraj);
 
     _prev_x0 = xtraj;
     _prev_u0 = utraj;
 
-    return cmd;
+    return result;
   }
 
  protected:
@@ -275,6 +295,8 @@ class MPCBase {
       _acados_solver.get_output(step, "x", &xtraj[step * MPCImpl::kNX]);
       _acados_solver.get_output(step, "u", &utraj[step * MPCImpl::kNU]);
     }
+
+    std::cout << "xtraj 0: " << xtraj.head(MPCImpl::kNX) << "\n";
 
     _acados_solver.get_output(_mpc_steps, "x",
                               &xtraj[_mpc_steps * MPCImpl::kNX]);

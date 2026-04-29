@@ -213,11 +213,11 @@ bool DIMPCC::set_solver_parameters(const types::Corridor& corridor) {
 
 void DIMPCC::reset_horizon() {
   for (int i = 0; i < _mpc_steps; ++i) {
-    mpc_x[i]     = _odom(0);
-    mpc_y[i]     = _odom(1);
+    mpc_x[i]     = _state(kIndX);
+    mpc_y[i]     = _state(kIndY);
     mpc_vx[i]    = 0;
     mpc_vy[i]    = 0;
-    mpc_s[i]     = 0;
+    mpc_s[i]     = 1e-2;
     mpc_s_dot[i] = 0;
   }
 

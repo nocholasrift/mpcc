@@ -29,6 +29,9 @@ find_package(Eigen3 REQUIRED)
 add_subdirectory(third_party/HiGHS)
 add_subdirectory(third_party/pybind11)
 
+# set(ACADOS_WITH_QPOASES ON CACHE BOOL "Enabling qpOASES for acados" FORCE)
+# add_subdirectory(third_party/acados)
+
 message(STATUS "ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
 
 set(HiGHS_INCLUDE_DIRS
@@ -51,6 +54,14 @@ set(HiGHS_INCLUDE_DIRS
   third_party/HiGHS/highs/test_kkt
   third_party/HiGHS/highs/util
 )
+
+# set(ACADOS_INCLUDE_DIRS
+#   third_party/acados/include
+#   third_party/acados/interfaces/acados_c
+#   third_party/acados/include/blasfeo/include
+#   third_party/acados/include/hpipm/include
+# )
+# message(STATUS "ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
 
 if (APPLE)
   set(EIGEN3_INCLUDE_DIRS /opt/homebrew/opt/eigen/include/eigen3)

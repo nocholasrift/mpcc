@@ -4,6 +4,7 @@
 #include <pybind11/stl_bind.h>
 
 #include <mpcc/common/map_util.h>
+#include <mpcc/common/mpcc_base.h>
 #include <mpcc/common/mpcc_core.h>
 #include <mpcc/common/tube_gen.h>
 #include <mpcc/common/utils.h>
@@ -110,6 +111,16 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def_readwrite("length", &DIMPCC::MPCHorizon::length)
       .def("get_state_at_step", &DIMPCC::MPCHorizon::get_state_at_step)
       .def("get_input_at_step", &DIMPCC::MPCHorizon::get_input_at_step);
+
+  py::enum_<SolverStatus>(m, "SolverStatus")
+      .value("Success", SolverStatus::kSuccess)
+      .value("Presolve", SolverStatus::kPresolve)
+      .value("ParamMismatch", SolverStatus::kParamMismatch)
+      .value("SolverNotReady", SolverStatus::kSolverNotReady);
+
+  py::class_<MPCResult>(m, "MPCResult")
+      .def_readwrite("status", &MPCResult::status)
+      .def_readwrite("command", &MPCResult::command);
 
   py::class_<MPCCore>(m, "MPCCore")
       .def(py::init<>())
