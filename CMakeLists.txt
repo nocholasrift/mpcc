@@ -166,14 +166,14 @@ target_compile_options(acados_generated_lib PRIVATE -fPIC)
 ########################
 # MPCC Core Library
 ########################
-add_library(mpcc_core
+add_library(mpcc_core SHARED
   src/mpcc/common/mpcc_core.cpp
   src/mpcc/unicycle/mpcc_unicycle_acados.cpp
   src/mpcc/unicycle/casadi_unicycle_interface.cpp
   src/mpcc/double_integrator/mpcc_di_acados.cpp
   src/mpcc/double_integrator/casadi_double_integrator_interface.cpp
 )
-target_compile_options(mpcc_core PRIVATE -std=c++17 -O2)
+target_compile_options(mpcc_core PRIVATE -std=c++17 -O2 -fPIC)
 target_include_directories(mpcc_core PRIVATE 
   ${CASADI_GEN_DIR}
   ${ACADOS_OUTPUT_DIRS} 
@@ -292,13 +292,17 @@ if (ROS1)
 
   # add_dependencies(mpcc_ros ${PROJECT_NAME}_generate_messages ${ACADOS_TARGETS})
   target_compile_options(mpcc_ros PRIVATE -std=c++17 -O2)
-  target_include_directories(mpcc_ros PRIVATE ${ACADOS_OUTPUT_DIRS} ${HiGHS_INCLUDE_DIRS})
+  target_include_directories(mpcc_ros PRIVATE 
+    ${ACADOS_OUTPUT_DIRS} 
+    ${HiGHS_INCLUDE_DIRS}
+    mpcc_ros1/include
+  )
 
-  add_executable(publish_pf_pose src/utils/publish_pf_pose.cpp)
+  add_executable(publish_pf_pose mpcc_ros1/src/utils/publish_pf_pose.cpp)
   target_link_libraries(publish_pf_pose ${catkin_LIBRARIES})
 
-  add_executable(local_costmap src/utils/local_costmap.cpp)
-  target_link_libraries(local_costmap ${catkin_LIBRARIES})
+  # add_executable(local_costmap src/utils/local_costmap.cpp)
+  # target_link_libraries(local_costmap ${catkin_LIBRARIES})
 elseif(ROS2)
   message(STATUS "Catkin found, building ROS2 nodes")
   find_package(tf2 REQUIRED)

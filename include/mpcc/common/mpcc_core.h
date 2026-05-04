@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mpcc/common/mpcc_config.h>
 #include <mpcc/common/map_util.h>
 #include <mpcc/common/tube_gen.h>
 #include <mpcc/common/types.h>

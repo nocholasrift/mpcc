@@ -5,7 +5,6 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Twist.h>
-#include <mpcc/ros/logger.h>
 #include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
@@ -18,10 +17,44 @@
 #include <thread>
 
 #include <mpcc/common/mpcc_core.h>
+#include <mpcc_ros1/logger.h>
+
+struct ParamLoader {
+  ros::NodeHandle* nh;
+
+  double getd(const char* name, double def) const {
+    double ret;
+    nh->param(name, ret, def);
+    return ret;
+  }
+
+  double geti(const char* name, int def) const {
+    int ret;
+    nh->param(name, ret, def);
+    return ret;
+  }
+
+  double getb(const char* name, bool def) const {
+    bool ret;
+    nh->param(name, ret, def);
+    return ret;
+  }
+
+  std::string gets(const char* name, const std::string& def) const {
+    std::string ret;
+    nh->param<std::string>(name, ret, def);
+    return ret;
+  }
+};
 
 class MPCCROS {
  public:
   MPCCROS(ros::NodeHandle& nh);
+  void init();
+
+  mpcc::MPCConfig loadMPCConfig(ParamLoader& p_loader);
+  NodeConfig loadNodeConfig(ParamLoader& p_loader);
+
   ~MPCCROS();
 
  private:
@@ -160,6 +193,9 @@ class MPCCROS {
 
   costmap_2d::Costmap2DROS* _local_costmap;
 
+  std::shared_ptr<NodeConfig> _node_cfg;
+  std::shared_ptr<mpcc::MPCConfig> _mpc_cfg;
+
   std::vector<Eigen::Vector3d> poses;
   std::vector<double> mpc_results;
 
@@ -219,5 +255,5 @@ class MPCCROS {
 
   std::thread timer_thread;
 
-  static constexpr double kMAX_ALPHA = 100.f;
+  static constexpr double kMAX_ALPHA = 10.f;
 };

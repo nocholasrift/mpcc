@@ -19,11 +19,8 @@ void MPCCore::load_params(std::shared_ptr<MPCConfig> cfg) {
   if (_mpc_cfg->input_type == MPCType::kUnicycle) {
     std::cout << termcolor::green << "[MPC Core] Using unicycle model"
               << termcolor::reset << std::endl;
-    std::cout << "attempting raw construct" << std::endl;
     UnicycleMPCC test(_mpc_cfg);
-    std::cout << "emplacing back" << std::endl;
     _mpc.emplace<UnicycleMPCC>(_mpc_cfg);
-    std::cout << "done" << std::endl;
   } else if (_mpc_cfg->input_type == MPCType::kDoubleIntegrator) {
     std::cout << termcolor::green << "[MPC Core] Using double integrator model"
               << termcolor::reset << std::endl;
@@ -34,12 +31,10 @@ void MPCCore::load_params(std::shared_ptr<MPCConfig> cfg) {
         std::to_string(static_cast<unsigned int>(_mpc_input_type)));
   }
 
-  std::cout << "setting tube stuff\n";
   tube::TubeGenerator::Settings tube_settings;
   tube_settings.degree       = _mpc_cfg->tube.poly_degree;
   tube_settings.num_samples  = _mpc_cfg->tube.num_samples;
   tube_settings.max_distance = _mpc_cfg->tube.max_width / 2.0;
-  std::cout << "done\n";
 
   _tube_generator.update_settings(tube_settings);
   _tube_generator.set_verbose(false);

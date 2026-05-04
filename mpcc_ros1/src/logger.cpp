@@ -1,5 +1,5 @@
 #include <mpcc/common/utils.h>
-#include <mpcc/ros/logger.h>
+#include <mpcc_ros1/logger.h>
 #include <std_msgs/Float64.h>
 #include "mpcc/common/mpcc_core.h"
 
@@ -27,7 +27,8 @@ double get_max_width(const std::array<Eigen::VectorXd, 2>& tubes, double length,
 }
 
 RLLogger::RLLogger(ros::NodeHandle& nh,
-                   const std::unordered_map<std::string, double>& params,
+                   std::shared_ptr<NodeConfig> node_cfg,
+                   std::shared_ptr<mpcc::MPCConfig> mpc_cfg,
                    bool is_logging) {
 
   _nh            = nh;
@@ -38,7 +39,7 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
   _max_obs_dist  = 1.0;
   _mpc_steps     = 0;
 
-  load_params(params);
+  load_params(node_cfg, mpc_cfg);
 
   _is_logging = is_logging;
 
@@ -58,45 +59,10 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
 
 RLLogger::~RLLogger() {}
 
-void RLLogger::load_params(
-    const std::unordered_map<std::string, double>& params) {
-  _mpc_steps =
-      params.find("STEPS") != params.end() ? params.at("STEPS") : _mpc_steps;
-  _min_alpha = params.find("MIN_ALPHA") != params.end() ? params.at("MIN_ALPHA")
-                                                        : _min_alpha;
-
-  _max_alpha = params.find("MAX_ALPHA") != params.end() ? params.at("MAX_ALPHA")
-                                                        : _max_alpha;
-
-  _min_alpha_dot = params.find("MIN_ALPHA_DOT") != params.end()
-                       ? params.at("MIN_ALPHA_DOT")
-                       : _min_alpha_dot;
-
-  _max_alpha_dot = params.find("MAX_ALPHA_DOT") != params.end()
-                       ? params.at("MAX_ALPHA_DOT")
-                       : _max_alpha_dot;
-
-  _min_h_val = params.find("MIN_H_VAL") != params.end() ? params.at("MIN_H_VAL")
-                                                        : _min_h_val;
-
-  _max_h_val = params.find("MAX_H_VAL") != params.end() ? params.at("MAX_H_VAL")
-                                                        : _max_h_val;
-
-  _max_obs_dist = params.find("MAX_OBS_DIST") != params.end()
-                      ? params.at("MAX_OBS_DIST")
-                      : _max_obs_dist;
-
-  _task_id = params.find("TASK_ID") != params.end() ? params.at("TASK_ID") : -1;
-
-  _num_samples = params.find("NUM_SAMPLES") != params.end()
-                     ? params.at("NUM_SAMPLES")
-                     : 1e6;
-
-  _max_path_length = params.find("MAX_PATH_LENGTH") != params.end()
-                         ? params.at("MAX_PATH_LENGTH")
-                         : 1e6;
-
-  _params = params;
+void RLLogger::load_params(std::shared_ptr<NodeConfig> node_cfg,
+                           std::shared_ptr<mpcc::MPCConfig> mpc_cfg) {
+  _node_cfg = node_cfg;
+  _mpc_cfg  = mpc_cfg;
 }
 
 bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
@@ -142,19 +108,21 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
 
   // copying instead of using const auto& becuase we will modify this
   // map...
-  auto mpc_params = mpc_core.get_params();
-  double dt       = mpc_params.at("DT");
+  double dt       = _mpc_cfg->dt;
 
   // double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv * dt;
   // double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw * dt;
-  double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv;
-  double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw;
+  double alpha_abv = _mpc_cfg->cbf.alpha_abv + _alpha_dot_abv;
+  double alpha_blw = _mpc_cfg->cbf.alpha_blw + _alpha_dot_blw;
 
   ROS_WARN("ALPHA_ABV: %.2f", alpha_abv);
   ROS_WARN("ALPHA_BLW: %.2f", alpha_blw);
 
   // alpha_abv = std::max(_min_alpha, std::min(_max_alpha, alpha_abv));
   // alpha_blw = std::max(_min_alpha, std::min(_max_alpha, alpha_blw));
+
+  _mpc_cfg->cbf.alpha_abv = alpha_abv;
+  _mpc_cfg->cbf.alpha_blw = alpha_blw;
 
   std_msgs::Float64 alpha_msg;
   alpha_msg.data = alpha_abv;
@@ -163,10 +131,6 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
   std_msgs::Float64 alpha_msg_blw;
   alpha_msg_blw.data = alpha_blw;
   _alpha_pub_blw.publish(alpha_msg_blw);
-
-  mpc_params["CBF_ALPHA_ABV"] = alpha_abv;
-  mpc_params["CBF_ALPHA_BLW"] = alpha_blw;
-  mpc_core.load_params(mpc_params);
 
   return true;
 }
@@ -187,8 +151,10 @@ void RLLogger::fill_state(const mpcc::MPCCore& mpc_core, mpcc::RLState& state) {
   }
 
   state.state.emplace_back(mpc_core.get_state().tail(1)[0]);
-  state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_ABV"));
-  state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_BLW"));
+  state.state.emplace_back(_mpc_cfg->cbf.alpha_abv);
+  state.state.emplace_back(_mpc_cfg->cbf.alpha_blw);
+  /*state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_ABV"));*/
+  /*state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_BLW"));*/
 }
 
 }  // namespace logger

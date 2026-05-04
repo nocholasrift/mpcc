@@ -1,4 +1,5 @@
-#include "mpcc/ros/mpcc_ros.h"
+#include "mpcc_ros1/mpcc_ros.h"
+#include "mpcc/common/mpcc_base.h"
 #include "mpcc/common/mpcc_core.h"
 
 #include <geometry_msgs/Point32.h>
@@ -31,147 +32,22 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _vel_msg.linear.x  = 0;
   _vel_msg.angular.z = 0;
 
-  double freq;
+  ParamLoader p_loader;
+  p_loader.nh = &_nh;
 
-  // Localization params
-  _nh.param("use_vicon", _use_vicon, false);
+  _node_cfg = std::make_shared<NodeConfig>(loadNodeConfig(p_loader));
+  _mpc_cfg  = std::make_shared<mpcc::MPCConfig>(loadMPCConfig(p_loader));
 
-  // MPC params
-  _nh.param("vel_pub_freq", _vel_pub_freq, 20.0);
-  _nh.param("controller_frequency", freq, 10.0);
-  _nh.param("mpc_steps", _mpc_steps, 10.0);
-
-  // param cant do unsigned ints?
-  int input_type;
-  _nh.param("mpc_input_type", input_type,
-            static_cast<int>(mpcc::MPCType::kDoubleIntegrator));
-  _mpc_input_type = static_cast<mpcc::MPCType>(input_type);
-
-  // Cost function params
-  _nh.param("w_vel", _w_vel, 1.0);
-  _nh.param("w_angvel", _w_angvel, 1.0);
-  _nh.param("w_linvel", _w_linvel, 1.0);
-  _nh.param("w_angvel_d", _w_angvel_d, 1.0);
-  _nh.param("w_linvel_d", _w_linvel_d, .5);
-  _nh.param("w_etheta", _w_etheta, 1.0);
-  _nh.param("w_cte", _w_cte, 1.0);
-
-  _nh.param("w_lag_e", _w_ql, 50.0);
-  _nh.param("w_contour_e", _w_qc, .1);
-  _nh.param("w_speed", _w_q_speed, .3);
-
-  // Constraint params
-  _nh.param("max_angvel", _max_angvel, 3.0);
-  _nh.param("max_linvel", _max_linvel, 2.0);
-  _nh.param("max_linacc", _max_linacc, 3.0);
-  _nh.param("max_angacc", _max_anga, 2 * M_PI);
-  _nh.param("min_alpha", _min_alpha, .1);
-  _nh.param("max_alpha", _max_alpha, 10.);
-  _nh.param("min_alpha_dot", _min_alpha_dot, -1.0);
-  _nh.param("max_alpha_dot", _max_alpha_dot, 1.0);
-  _nh.param("min_h_val", _min_h_val, -1e8);
-  _nh.param("max_h_val", _max_h_val, 1e8);
-
-  _nh.param("bound_value", _bound_value, 1.0e19);
-
-  // Goal params
-  _nh.param("x_goal", _x_goal, 0.0);
-  _nh.param("y_goal", _y_goal, 0.0);
-  _nh.param("goal_tolerance", _tol, 0.3);
-
-  // Teleop params
-  _nh.param("teleop", _teleop, false);
-  _nh.param<std::string>("frame_id", _frame_id, "odom");
-
-  // clf params
-  _nh.param("w_lyap_lag_e", _w_ql_lyap, 1.0);
-  _nh.param("w_lyap_contour_e", _w_qc_lyap, 1.0);
-  _nh.param("clf_gamma", _clf_gamma, .5);
-
-  // cbf params
-  _nh.param("use_cbf", _use_cbf, false);
-  _nh.param("cbf_alpha_abv", _cbf_alpha_abv, .5);
-  _nh.param("cbf_alpha_blw", _cbf_alpha_blw, .5);
-  _nh.param("cbf_colinear", _cbf_colinear, .1);
-  _nh.param("cbf_padding", _cbf_padding, .1);
-  _nh.param("dynamic_alpha", _use_dynamic_alpha, false);
-
-  // proportional controller params
-  _nh.param("prop_gain", _prop_gain, .5);
-  _nh.param("prop_gain_thresh", _prop_angle_thresh, 30. * M_PI / 180.);
-
-  // tube parameters
-  _nh.param("tube_poly_degree", _tube_degree, 6);
-  _nh.param("tube_num_samples", _tube_samples, 50);
-  _nh.param("max_tube_width", _max_tube_width, 2.0);
-
-  _nh.param("ref_length_size", _mpc_ref_len_sz, 4.);
-  _nh.param("mpc_ref_samples", _mpc_ref_samples, 10);
-
-  _nh.param("task_id", _task_id, -1);
-  _nh.param("is_eval", _is_eval, false);
-  _nh.param("logging", _is_logging, false);
-  _nh.param("num_samples", _num_samples, static_cast<int>(1e6));
-  _nh.param("max_path_length", _max_path_length, static_cast<int>(1e6));
-
-  _dt = 1.0 / freq;
-
-  _mpc_params["DT"]        = _dt;
-  _mpc_params["STEPS"]     = _mpc_steps;
-  _mpc_params["W_V"]       = _w_linvel;
-  _mpc_params["W_ANGVEL"]  = _w_angvel;
-  _mpc_params["W_DA"]      = _w_linvel_d;
-  _mpc_params["W_DANGVEL"] = _w_angvel_d;
-  _mpc_params["W_ETHETA"]  = _w_etheta;
-  _mpc_params["W_POS"]     = _w_pos;
-  _mpc_params["W_CTE"]     = _w_cte;
-  _mpc_params["LINVEL"]    = _max_linvel;
-  _mpc_params["ANGVEL"]    = _max_angvel;
-  _mpc_params["BOUND"]     = _bound_value;
-  _mpc_params["X_GOAL"]    = _x_goal;
-  _mpc_params["Y_GOAL"]    = _y_goal;
-
-  _mpc_params["ANGLE_THRESH"] = _prop_angle_thresh;
-  _mpc_params["ANGLE_GAIN"]   = _prop_gain;
-
-  _mpc_params["W_LAG"]     = _w_ql;
-  _mpc_params["W_CONTOUR"] = _w_qc;
-  _mpc_params["W_SPEED"]   = _w_q_speed;
-
-  _mpc_params["REF_LENGTH"]  = _mpc_ref_len_sz;
-  _mpc_params["REF_SAMPLES"] = _mpc_ref_samples;
-
-  _mpc_params["CLF_GAMMA"]     = _clf_gamma;
-  _mpc_params["CLF_W_LAG"]     = _w_ql_lyap;
-  _mpc_params["CLF_W_CONTOUR"] = _w_qc_lyap;
-
-  _mpc_params["USE_CBF"]           = _use_cbf;
-  _mpc_params["CBF_ALPHA_ABV"]     = _cbf_alpha_abv;
-  _mpc_params["CBF_ALPHA_BLW"]     = _cbf_alpha_blw;
-  _mpc_params["CBF_COLINEAR"]      = _cbf_colinear;
-  _mpc_params["CBF_PADDING"]       = _cbf_padding;
-  _mpc_params["CBF_DYNAMIC_ALPHA"] = _use_dynamic_alpha;
-
-  _mpc_params["MAX_ANGA"]   = _max_anga;
-  _mpc_params["MAX_LINACC"] = _max_linacc;
-
-  _mpc_params["TUBE_DEGREE"]    = _tube_degree;
-  _mpc_params["TUBE_SAMPLES"]   = _tube_samples;
-  _mpc_params["MAX_TUBE_WIDTH"] = _max_tube_width;
-
-  _mpc_params["DEBUG"] = true;
-
-  _mpc_core = std::make_unique<mpcc::MPCCore>(_mpc_input_type);
-  ROS_INFO("loading mpc params");
-  _mpc_core->load_params(_mpc_params);
-  ROS_INFO("done loading params!");
+  _mpc_core = std::make_unique<mpcc::MPCCore>(_mpc_cfg);
+  ROS_INFO("Loading MPC core params...");
 
   _mapSub  = nh.subscribe("/grid_map", 1, &MPCCROS::mapcb, this);
   _odomSub = nh.subscribe("/odometry/filtered", 1, &MPCCROS::odomcb, this);
   _trajSub =
       nh.subscribe("/reference_trajectory", 1, &MPCCROS::trajectorycb, this);
 
-  _timer = nh.createTimer(ros::Duration(_dt), &MPCCROS::mpcc_ctrl_loop, this);
+  _timer = nh.createTimer(ros::Duration(_mpc_cfg->dt), &MPCCROS::mpcc_ctrl_loop,
+                          this);
 
   _startPub       = nh.advertise<std_msgs::Float64>("/progress", 10);
   _pathPub        = nh.advertise<nav_msgs::Path>("/spline_path", 10);
@@ -192,33 +68,6 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
   _backup_srv =
       nh.advertiseService("/mpc_backup", &MPCCROS::toggleBackup, this);
 
-  if (_is_eval) {
-    ROS_WARN("******************");
-    ROS_WARN("LOGGING IS ENABLED");
-    ROS_WARN("******************");
-  }
-
-  if (_use_cbf && (_is_logging || _is_eval)) {
-    std::unordered_map<std::string, double> logger_params;
-    logger_params["MIN_ALPHA"]       = _min_alpha;
-    logger_params["MAX_ALPHA"]       = _max_alpha;
-    logger_params["MIN_ALPHA_DOT"]   = _min_alpha_dot;
-    logger_params["MAX_ALPHA_DOT"]   = _max_alpha_dot;
-    logger_params["MIN_H_VAL"]       = _min_h_val;
-    logger_params["MAX_H_VAL"]       = _max_h_val;
-    logger_params["MAX_OBS_DIST"]    = _max_tube_width;
-    logger_params["TASK_ID"]         = _task_id;
-    logger_params["NUM_SAMPLES"]     = _num_samples;
-    logger_params["MAX_PATH_LENGTH"] = _max_path_length;
-
-    _logger =
-        std::make_unique<logger::RLLogger>(nh, logger_params, _is_logging);
-
-  } else if (!_use_cbf) {
-    _cbf_alpha_abv = kMAX_ALPHA;
-    _cbf_alpha_blw = kMAX_ALPHA;
-  }
-
   // num coeffs is tube_W_ANGVELdegree + 1
   /*_tube_degree += 1;*/
 }
@@ -226,6 +75,105 @@ MPCCROS::MPCCROS(ros::NodeHandle& nh) : _nh("~") {
 MPCCROS::~MPCCROS() {
   if (timer_thread.joinable())
     timer_thread.join();
+}
+
+void MPCCROS::init() {
+  if (_node_cfg->is_eval && _mpc_cfg->cbf.use_cbf) {
+    ROS_WARN("******************");
+    ROS_WARN("LOGGING IS ENABLED");
+    ROS_WARN("******************");
+
+    /*std::unordered_map<std::string, double> logger_params;*/
+    /*logger_params["MIN_ALPHA"]       = _min_alpha;*/
+    /*logger_params["MAX_ALPHA"]       = _max_alpha;*/
+    /*logger_params["MIN_ALPHA_DOT"]   = _min_alpha_dot;*/
+    /*logger_params["MAX_ALPHA_DOT"]   = _max_alpha_dot;*/
+    /*logger_params["MIN_H_VAL"]       = _min_h_val;*/
+    /*logger_params["MAX_H_VAL"]       = _max_h_val;*/
+    /*logger_params["MAX_OBS_DIST"]    = _max_tube_width;*/
+    /*logger_params["TASK_ID"]         = _task_id;*/
+    /*logger_params["NUM_SAMPLES"]     = _num_samples;*/
+    /*logger_params["MAX_PATH_LENGTH"] = _max_path_length;*/
+
+    _logger = std::make_unique<logger::RLLogger>(_nh, _node_cfg, _mpc_cfg,
+                                                 _is_logging);
+
+  } else if (!_use_cbf) {
+    _cbf_alpha_abv = kMAX_ALPHA;
+    _cbf_alpha_blw = kMAX_ALPHA;
+  }
+}
+
+mpcc::MPCConfig MPCCROS::loadMPCConfig(ParamLoader& p_loader) {
+  mpcc::MPCConfig conf;
+
+  // general MPC params
+  conf.steps       = p_loader.geti("mpc_steps", 10);
+  conf.dt          = 1.0 / p_loader.getd("controller_frequency", 10.0);
+  conf.ref_samples = p_loader.geti("mpc_ref_samples", 10);
+  conf.ref_length  = p_loader.getd("ref_length_size", 4.0);
+  conf.input_type  = static_cast<mpcc::MPCType>(p_loader.geti(
+      "mpc_input_type", static_cast<int>(mpcc::MPCType::kDoubleIntegrator)));
+
+  // Cost weights
+  conf.weights.w_vel       = p_loader.getd("w_vel", 1.0);
+  conf.weights.w_angvel    = p_loader.getd("w_angvel", 1.0);
+  conf.weights.w_linvel    = p_loader.getd("w_linvel", 1.0);
+  conf.weights.w_angvel_d  = p_loader.getd("w_angvel_d", 1.0);
+  conf.weights.w_linvel_d  = p_loader.getd("w_linvel_d", 0.5);
+  conf.weights.w_etheta    = p_loader.getd("w_etheta", 0.5);
+  conf.weights.w_cte       = p_loader.getd("w_cte", 1.0);
+  conf.weights.w_lag_e     = p_loader.getd("w_lag_e", 50.0);
+  conf.weights.w_contour_e = p_loader.getd("w_contour_e", 0.1);
+  conf.weights.w_speed     = p_loader.getd("w_speed", 0.3);
+
+  // Constraints
+  conf.constraints.max_angvel  = p_loader.getd("max_angvel", 3.0);
+  conf.constraints.max_linvel  = p_loader.getd("max_linvel", 2.0);
+  conf.constraints.max_linacc  = p_loader.getd("max_linacc", 3.0);
+  conf.constraints.max_angacc  = p_loader.getd("max_angacc", 2 * M_PI);
+  conf.constraints.bound_value = p_loader.getd("bound_value", 1.0e19);
+
+  // CBF
+  conf.cbf.use_cbf       = p_loader.getb("use_cbf", false);
+  conf.cbf.alpha_abv     = p_loader.getd("cbf_alpha_abv", 0.5);
+  conf.cbf.alpha_blw     = p_loader.getd("cbf_alpha_blw", 0.5);
+  conf.cbf.colinear      = p_loader.getd("cbf_colinear", 0.1);
+  conf.cbf.padding       = p_loader.getd("cbf_padding", 0.1);
+  conf.cbf.dynamic_alpha = p_loader.getb("dynamic_alpha", false);
+  conf.cbf.min_alpha     = p_loader.getd("min_alpha", 0.1);
+  conf.cbf.max_alpha     = p_loader.getd("max_alpha", 5.0);
+  conf.cbf.min_alpha_dot = p_loader.getd("min_alpha_dot", -3.0);
+  conf.cbf.max_alpha_dot = p_loader.getd("max_alpha_dot", 3.0);
+  conf.cbf.min_h_val     = p_loader.getd("min_h_val", -100.0);
+  conf.cbf.max_h_val     = p_loader.getd("max_h_val", 100.0);
+
+  // CLF
+  conf.clf.w_lag_e     = p_loader.getd("w_lyap_lag_e", 1.0);
+  conf.clf.w_contour_e = p_loader.getd("w_lyap_contour_e", 1.0);
+  conf.clf.gamma       = p_loader.getd("clf_gamma", 0.5);
+
+  // Prop controller params
+  conf.prop.gain        = p_loader.getd("prop_gain", 0.5);
+  conf.prop.gain_thresh = p_loader.getd("prop_gain_thresh", 30. * M_PI / 180.);
+
+  // Tube Generation (for CBF)
+  conf.tube.poly_degree = p_loader.geti("tube_poly_degree", 6);
+  conf.tube.num_samples = p_loader.geti("tube_num_samples", 50);
+  conf.tube.max_width   = p_loader.getd("max_tube_width", 2.0);
+
+  return conf;
+}
+
+NodeConfig MPCCROS::loadNodeConfig(ParamLoader& p_loader) {
+  NodeConfig conf;
+
+  conf.use_vicon    = p_loader.getb("use_vicon", false);
+  conf.is_eval      = p_loader.getb("is_eval", false);
+  conf.vel_pub_freq = p_loader.getd("vel_pub_freq", 20.0);
+  conf.frame_id     = p_loader.gets("frame_id", "odom");
+
+  return conf;
 }
 
 bool MPCCROS::toggleBackup(std_srvs::Empty::Request& req,
@@ -259,7 +207,7 @@ void MPCCROS::visualizeTubes() {
   /*horizon = std::min(horizon, max_view_horizon);*/
 
   visualization_msgs::Marker tubemsg_a;
-  tubemsg_a.header.frame_id    = _frame_id;
+  tubemsg_a.header.frame_id    = _node_cfg->frame_id;
   tubemsg_a.header.stamp       = ros::Time::now();
   tubemsg_a.ns                 = "tube_above";
   tubemsg_a.id                 = 87;
@@ -322,7 +270,7 @@ void MPCCROS::visualizeTubes() {
 
 void MPCCROS::visualizeTraj() {
   visualization_msgs::Marker traj;
-  traj.header.frame_id    = _frame_id;
+  traj.header.frame_id    = _node_cfg->frame_id;
   traj.header.stamp       = ros::Time::now();
   traj.ns                 = "mpc_reference";
   traj.id                 = 117;
@@ -479,9 +427,9 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   if (len_start > true_ref_len - 0.25) {
     ROS_INFO("Reached end of traj %.2f / %.2f", len_start, true_ref_len);
     _vel_msg.angular.z = 0;
-    if (_mpc_input_type == mpcc::MPCType::kUnicycle)
+    if (_mpc_cfg->input_type == mpcc::MPCType::kUnicycle)
       _vel_msg.linear.x = 0;
-    else if (_mpc_input_type == mpcc::MPCType::kDoubleIntegrator) {
+    else if (_mpc_cfg->input_type == mpcc::MPCType::kDoubleIntegrator) {
       _vel_msg.linear.x = 0;
       _vel_msg.linear.y = 0;
     }
@@ -494,9 +442,9 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   ros::Time now = ros::Time::now();
 
   Eigen::VectorXd state(4);
-  if (_mpc_input_type == mpcc::MPCType::kUnicycle)
+  if (_mpc_cfg->input_type == mpcc::MPCType::kUnicycle)
     state << _odom(0), _odom(1), _odom(2), _vel_msg.linear.x;
-  else if (_mpc_input_type == mpcc::MPCType::kDoubleIntegrator)
+  else if (_mpc_cfg->input_type == mpcc::MPCType::kDoubleIntegrator)
     state << _odom(0), _odom(1), _vel_msg.linear.x, _vel_msg.linear.y;
   else {
     ROS_ERROR("Unknown MPC input type: %d",
@@ -510,14 +458,14 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   }
 
   ROS_INFO("calling mpc core solve");
-  std::array<double, 2> input = _mpc_core->solve(state);
+  mpcc::MPCResult input = _mpc_core->solve(state);
 
-  if (_mpc_input_type == mpcc::MPCType::kUnicycle) {
-    _vel_msg.linear.x  = input[0];
-    _vel_msg.angular.z = input[1];
-  } else if (_mpc_input_type == mpcc::MPCType::kDoubleIntegrator) {
-    _vel_msg.linear.x = input[0];
-    _vel_msg.linear.y = input[1];
+  if (_mpc_cfg->input_type == mpcc::MPCType::kUnicycle) {
+    _vel_msg.linear.x  = input.command[0];
+    _vel_msg.angular.z = input.command[1];
+  } else if (_mpc_cfg->input_type == mpcc::MPCType::kDoubleIntegrator) {
+    _vel_msg.linear.x = input.command[0];
+    _vel_msg.linear.y = input.command[1];
   } else {
     ROS_ERROR("Unknown MPC input type: %d",
               static_cast<unsigned int>(_mpc_input_type));
@@ -537,7 +485,7 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
   visualizeTubes();
 
   geometry_msgs::PointStamped pt;
-  pt.header.frame_id = _frame_id;
+  pt.header.frame_id = _node_cfg->frame_id;
   pt.point.z         = .1;
 
   double s               = trajectory.get_closest_s(_odom.head(2));
@@ -556,7 +504,7 @@ void MPCCROS::publishReference() {
 
   nav_msgs::Path msg;
   msg.header.stamp    = ros::Time::now();
-  msg.header.frame_id = _frame_id;
+  msg.header.frame_id = _node_cfg->frame_id;
   msg.poses.reserve(_trajectory.points.size());
 
   bool published = false;
@@ -568,7 +516,7 @@ void MPCCROS::publishReference() {
 
     geometry_msgs::PoseStamped& pose = msg.poses.emplace_back();
     pose.header.stamp                = ros::Time::now();
-    pose.header.frame_id             = _frame_id;
+    pose.header.frame_id             = _node_cfg->frame_id;
     pose.pose.position.x             = pt.positions[0];
     pose.pose.position.y             = pt.positions[1];
     pose.pose.position.z             = 0;
@@ -593,13 +541,13 @@ void MPCCROS::publishMPCTrajectory() {
 
   geometry_msgs::PoseStamped goal;
   goal.header.stamp       = ros::Time::now();
-  goal.header.frame_id    = _frame_id;
+  goal.header.frame_id    = _node_cfg->frame_id;
   goal.pose.position.x    = _x_goal;
   goal.pose.position.y    = _y_goal;
   goal.pose.orientation.w = 1;
 
   nav_msgs::Path pathMsg;
-  pathMsg.header.frame_id = _frame_id;
+  pathMsg.header.frame_id = _node_cfg->frame_id;
   pathMsg.header.stamp    = ros::Time::now();
 
   const mpcc::types::Trajectory& reference = _mpc_core->get_trajectory();
@@ -632,7 +580,7 @@ void MPCCROS::publishMPCTrajectory() {
 
   trajectory_msgs::JointTrajectory traj;
   traj.header.stamp    = ros::Time::now();
-  traj.header.frame_id = _frame_id;
+  traj.header.frame_id = _node_cfg->frame_id;
 
   for (int step = 0; step < horizon_steps; ++step) {
 
@@ -649,17 +597,18 @@ void MPCCROS::publishMPCTrajectory() {
     /*double jerk_x = 0;*/
     /*double jerk_y = 0;*/
     Eigen::VectorXd jerk;
+    double dt = _mpc_cfg->dt;
     if (step < horizon_steps - 1) {
       const Eigen::VectorXd& next_acc = std::visit(
           [&](const auto& arg) { return arg.get_vel_at_step(step + 1); },
           horizon);
-      jerk = (next_acc - acc) / _dt;
+      jerk = (next_acc - acc) / dt;
     } else {
       jerk = Eigen::VectorXd::Zero(vel.size());
     }
 
     trajectory_msgs::JointTrajectoryPoint pt;
-    pt.time_from_start = ros::Duration(step * _dt);
+    pt.time_from_start = ros::Duration(step * dt);
     pt.positions       = {pos(0), pos(1), 0};
     pt.velocities      = {vel(0), vel(1), 0};
     pt.accelerations   = {acc(0), acc(1), 0};
