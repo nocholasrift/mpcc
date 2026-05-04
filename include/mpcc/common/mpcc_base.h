@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mpcc/common/acados_interface.h>
+#include <mpcc/common/mpcc_config.h>
 #include <mpcc/common/types.h>
 #include <mpcc/common/utils.h>
 #include <mpcc/common/termcolor.hpp>
@@ -34,8 +35,12 @@ class MPCBase {
  public:
   virtual ~MPCBase() = default;
   // virtual void load_params(const std::map<std::string, double>& params) = 0;
-  void load_params(const std::map<std::string, double>& params) {
-    static_cast<MPCImpl*>(this)->load_params(params);
+  // void load_params(const std::map<std::string, double>& params) {
+  //   static_cast<MPCImpl*>(this)->load_params(params);
+  // }
+  void load_params(std::shared_ptr<MPCConfig> cfg) {
+    // this->_mpc_cfg = cfg;
+    static_cast<MPCImpl*>(this)->load_params(cfg);
   }
 
   void set_odom(const Eigen::VectorXd& odom) {
@@ -143,11 +148,12 @@ class MPCBase {
     /*************************************
   *********** PROCESS OUTPUT ***********
   **************************************/
+    double mpc_steps = _mpc_cfg->steps;
 
     Eigen::VectorXd xtraj;
     Eigen::VectorXd utraj;
-    xtraj.resize((_mpc_steps + 1) * MPCImpl::kNX);
-    utraj.resize(_mpc_steps * MPCImpl::kNU);
+    xtraj.resize((mpc_steps + 1) * MPCImpl::kNX);
+    utraj.resize(mpc_steps * MPCImpl::kNU);
     process_solver_output(xtraj, utraj);
 
     _has_run = true;
@@ -205,7 +211,7 @@ class MPCBase {
   void warm_start_mpc(const Eigen::VectorXd& initial_state) {
 
     // should be true by construction
-    assert(_prev_x0.size() == (_mpc_steps + 1) * MPCImpl::kNX);
+    assert(_prev_x0.size() == (_mpc_cfg->steps + 1) * MPCImpl::kNX);
 
     Eigen::Vector2d prev_pos = _prev_x0.segment(MPCImpl::kNX, 2);
     Eigen::Vector2d curr_pos = initial_state.head(2);
@@ -227,7 +233,9 @@ class MPCBase {
   // Gros et. al.
   void warm_start_shifted_u(bool correct_perturb,
                             const Eigen::VectorXd& state) {
+    double mpc_steps  = _mpc_cfg->steps;
     double starting_s = _prev_x0[1 * MPCImpl::kNX + MPCImpl::kIndS];
+
     if (correct_perturb) {
       std::cout << termcolor::red << "[MPCC] Guess pos. too far, correcting"
                 << termcolor::reset << std::endl;
@@ -236,7 +244,7 @@ class MPCBase {
 
       // project forward previous control inputs, starting from true current
       // state
-      for (int step = 0; step < _mpc_steps - 1; ++step) {
+      for (int step = 0; step < mpc_steps - 1; ++step) {
         _acados_solver.set_output(step, "x", curr.data());
         _acados_solver.set_output(step, "u",
                                   &_prev_u0[(step + 1) * MPCImpl::kNU]);
@@ -244,16 +252,16 @@ class MPCBase {
             curr, _prev_u0.segment((step + 1) * MPCImpl::kNU, MPCImpl::kNU));
       }
 
-      _acados_solver.set_output(_mpc_steps - 1, "x", curr.data());
-      _acados_solver.set_output(_mpc_steps - 1, "u",
-                                &_prev_u0[(_mpc_steps - 1) * MPCImpl::kNU]);
+      _acados_solver.set_output(mpc_steps - 1, "x", curr.data());
+      _acados_solver.set_output(mpc_steps - 1, "u",
+                                &_prev_u0[(mpc_steps - 1) * MPCImpl::kNU]);
 
       curr = static_cast<MPCImpl*>(this)->next_state(
           curr, _prev_u0.tail(MPCImpl::kNU));
 
-      _acados_solver.set_output(_mpc_steps, "x", curr.data());
+      _acados_solver.set_output(mpc_steps, "x", curr.data());
     } else {
-      for (int step = 0; step < _mpc_steps - 1; ++step) {
+      for (int step = 0; step < mpc_steps - 1; ++step) {
         Eigen::VectorXd warm_state =
             _prev_x0.segment((step + 1) * MPCImpl::kNX, MPCImpl::kNX);
         warm_state(MPCImpl::kIndS) -= starting_s;
@@ -266,40 +274,41 @@ class MPCBase {
       Eigen::VectorXd xN_prev = _prev_x0.tail(MPCImpl::kNX);
       xN_prev(MPCImpl::kIndS) -= starting_s;
 
-      _acados_solver.set_output(_mpc_steps - 1, "x", xN_prev.data());
-      _acados_solver.set_output(_mpc_steps - 1, "u",
+      _acados_solver.set_output(mpc_steps - 1, "x", xN_prev.data());
+      _acados_solver.set_output(mpc_steps - 1, "u",
                                 _prev_u0.tail(MPCImpl::kNU).data());
 
       Eigen::VectorXd uN_prev = _prev_u0.tail(MPCImpl::kNU);
       Eigen::VectorXd xN =
           static_cast<MPCImpl*>(this)->next_state(xN_prev, uN_prev);
 
-      _acados_solver.set_output(_mpc_steps, "x", xN.data());
+      _acados_solver.set_output(mpc_steps, "x", xN.data());
     }
   }
 
   void warm_start_no_u(const Eigen::VectorXd& initial_state) {
     Eigen::VectorXd u_init = Eigen::VectorXd::Zero(MPCImpl::kNU);
 
-    for (int step = 0; step < _mpc_steps; ++step) {
+    double mpc_steps = _mpc_cfg->steps;
+    for (int step = 0; step < mpc_steps; ++step) {
       _acados_solver.set_output(step, "x", initial_state.data());
       _acados_solver.set_output(step, "u", u_init.data());
     }
 
-    _acados_solver.set_output(_mpc_steps, "x", initial_state.data());
+    _acados_solver.set_output(mpc_steps, "x", initial_state.data());
   }
 
   void process_solver_output(Eigen::VectorXd& xtraj, Eigen::VectorXd& utraj) {
     // stored as x0, y0,..., x1, y1, ..., xN, yN, ...
-    for (int step = 0; step < _mpc_steps; ++step) {
+    double mpc_steps = _mpc_cfg->steps;
+    for (int step = 0; step < mpc_steps; ++step) {
       _acados_solver.get_output(step, "x", &xtraj[step * MPCImpl::kNX]);
       _acados_solver.get_output(step, "u", &utraj[step * MPCImpl::kNU]);
     }
 
     std::cout << "xtraj 0: " << xtraj.head(MPCImpl::kNX) << "\n";
 
-    _acados_solver.get_output(_mpc_steps, "x",
-                              &xtraj[_mpc_steps * MPCImpl::kNX]);
+    _acados_solver.get_output(mpc_steps, "x", &xtraj[mpc_steps * MPCImpl::kNX]);
 
     static_cast<MPCImpl*>(this)->map_trajectory_to_buffers(xtraj, utraj);
   }
@@ -327,6 +336,8 @@ class MPCBase {
  protected:
   using SolverTraits = types::SolverTraits<MPCImpl>;
   AcadosInterface<SolverTraits> _acados_solver;
+
+  std::shared_ptr<MPCConfig> _mpc_cfg;
 
   Eigen::VectorXd _state;
   Eigen::VectorXd _odom;

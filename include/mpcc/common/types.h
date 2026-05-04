@@ -9,6 +9,9 @@
 #include <unsupported/Eigen/Splines>
 
 namespace mpcc {
+
+enum class MPCType { kDoubleIntegrator, kUnicycle };
+
 namespace types {
 
 class SplineWrapper {

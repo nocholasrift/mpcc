@@ -18,6 +18,7 @@ class Orientable {
                                     double threshold = -1) const {
     double e = atan2(sin(target_heading - current_heading),
                      cos(target_heading - current_heading));
+    std::cout << "error theta is: " << e << "\n";
 
     return std::max(min_actuation, std::min(max_actuation, prop_gain * e));
   }

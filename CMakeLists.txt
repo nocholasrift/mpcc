@@ -15,7 +15,7 @@ find_package(catkin QUIET COMPONENTS
   trajectory_msgs
   grid_map_ros
   costmap_2d
-  amrl_logging
+  # amrl_logging
 )
 
 # find_package(pybind11 QUIET)
@@ -25,14 +25,9 @@ find_package(BLASFEO REQUIRED)
 find_package(HPIPM REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-
 add_subdirectory(third_party/HiGHS)
 add_subdirectory(third_party/pybind11)
 
-# set(ACADOS_WITH_QPOASES ON CACHE BOOL "Enabling qpOASES for acados" FORCE)
-# add_subdirectory(third_party/acados)
-
-message(STATUS "ACADOS_INCLUDE_DIRS: ${ACADOS_INCLUDE_DIRS}")
 
 set(HiGHS_INCLUDE_DIRS
   ${HIGHS_BINARY_DIR}
@@ -235,13 +230,27 @@ endif()
 ########################
 # ROS executables (only if catkin)
 ########################
-if(catkin_FOUND)
-  set(ROS1 TRUE)
-else()
-  find_package(ament_cmake QUIET)
-  if (ament_cmake_FOUND)
+if (DEFINED ENV{ROS_VERSION})
+  if ($ENV{ROS_VERSION} EQUAL 1)
+    set(ROS1 TRUE)
+  elseif ($ENV{ROS_VERSION} EQUAL 2)
     set(ROS2 TRUE)
   endif()
+else()
+  find_package(catkin QUIET)
+  if (catkin_FOUND)
+    set(ROS1 TRUE)
+  else()
+    find_package(ament_cmake QUIET)
+    if (ament_cmake_FOUND)
+      set(ROS2 TRUE)
+    endif()
+  endif()
+endif()
+
+if (ROS1 OR ROS2)
+  set(MSG_FILES "msg/RLState.msg")
+  set(SRV_FILES "srv/QuerySAC.srv" "srv/QuerySACDI.srv")
 endif()
 
 if (ROS1)
@@ -271,9 +280,9 @@ if (ROS1)
   )
 
   add_executable(mpcc_ros 
-    src/mpcc/ros/logger.cpp
-    src/mpcc/ros/mpcc_ros.cpp
-    src/mpcc/ros/mpcc_node.cpp
+    mpcc_ros1/src/logger.cpp
+    mpcc_ros1/src/mpcc_ros.cpp
+    mpcc_ros1/src/mpcc_node.cpp
   )
 
   target_link_libraries(mpcc_ros
@@ -292,46 +301,84 @@ if (ROS1)
   target_link_libraries(local_costmap ${catkin_LIBRARIES})
 elseif(ROS2)
   message(STATUS "Catkin found, building ROS2 nodes")
+  find_package(tf2 REQUIRED)
   find_package(rclcpp REQUIRED)
   find_package(std_msgs REQUIRED)
-  find_package(geometry_msgs REQUIRED)
   find_package(nav_msgs REQUIRED)
-  find_package(sensor_msgs REQUIRED)
-  find_package(trajectory_msgs REQUIRED)
   find_package(std_srvs REQUIRED)
-
+  find_package(sensor_msgs REQUIRED)
+  find_package(ament_cmake REQUIRED)
+  find_package(geometry_msgs REQUIRED)
+  find_package(trajectory_msgs REQUIRED)
+  find_package(nav2_costmap_2d REQUIRED)
+  find_package(tf2_geometry_msgs REQUIRED)
   find_package(rosidl_default_generators REQUIRED)
 
-  # ------------------------
-  # Messages / Services
-  # ------------------------
   rosidl_generate_interfaces(${PROJECT_NAME}
-    "msg/RLState.msg"
-    "srv/QuerySAC.srv"
-    "srv/QuerySACDI.srv"
-    DEPENDENCIES geometry_msgs trajectory_msgs nav_msgs
+    ${MSG_FILES}
+    ${SRV_FILES}
+    DEPENDENCIES geometry_msgs nav_msgs trajectory_msgs
   )
 
-  add_executable(mpcc_ros 
-    src/mpcc/ros/logger.cpp
-    src/mpcc/ros/mpcc_ros.cpp
-    src/mpcc/ros/mpcc_node.cpp
+  add_executable(mpcc_ros
+    mpcc_ros2/src/logger_ros2.cpp
+    mpcc_ros2/src/mpcc_ros2.cpp
+    mpcc_ros2/src/mpcc_node2.cpp
   )
-
   target_compile_options(mpcc_ros PRIVATE -std=c++17 -O2)
 
+  rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
   target_link_libraries(mpcc_ros
     mpcc_core
+    # tf2::tf2
+    # tf2_geometry_msgs::tf2_geometry_msgs
+    ${cpp_typesupport_target}
   )
 
-  rosidl_target_interfaces(mpcc_ros
-    ${PROJECT_NAME} "rosidl_typesupport_cpp"
+  ament_target_dependencies(mpcc_ros
+    rclcpp
+    trajectory_msgs
+    nav2_costmap_2d
   )
+
+  target_include_directories(mpcc_ros
+    PRIVATE
+    mpcc_ros2/include
+    ${ACADOS_OUTPUT_DIRS}
+    ${HiGHS_INCLUDE_DIRS}
+  )
+
 
   install(TARGETS mpcc_ros
     DESTINATION lib/${PROJECT_NAME}
   )
+
+  add_executable(publish_pf_pose mpcc_ros2/src/utils/publish_pf_pose.cpp)
+  ament_target_dependencies(publish_pf_pose
+    rclcpp
+    nav_msgs
+    tf2
+    tf2_ros
+    tf2_geometry_msgs
+  )
+  install(TARGETS publish_pf_pose DESTINATION lib/${PROJECT_NAME})
+
+  ament_export_dependencies(rosidl_default_runtime)
+
+  install(DIRECTORY
+    mpcc_ros2/launch
+    mpcc_ros2/params
+    # params
+    DESTINATION share/${PROJECT_NAME}
+  )
+
+  # install python scripts
+  install(DIRECTORY
+    mpcc_ros2/scripts/
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
+  ament_package()
 else()
-
+  message(STATUS "Ros not found, skipping")
 endif()
-

@@ -7,71 +7,87 @@
 
 using namespace mpcc;
 
-MPCCore::MPCCore() {
-  // using emplace because all MPC classes have non-copyable
-  // solver interface inherited from the base class
-  _mpc.emplace<UnicycleMPCC>();
-  _tube_generator.set_verbose(false);
+MPCCore::MPCCore(std::shared_ptr<MPCConfig> cfg) {
+  load_params(cfg);
 }
 
-MPCCore::MPCCore(const MPCType& mpc_input_type) {
-  _mpc_input_type = mpc_input_type;
+MPCCore::~MPCCore() {}
 
-  if (_mpc_input_type == MPCType::kUnicycle) {
+void MPCCore::load_params(std::shared_ptr<MPCConfig> cfg) {
+  _mpc_cfg = cfg;
+
+  if (_mpc_cfg->input_type == MPCType::kUnicycle) {
     std::cout << termcolor::green << "[MPC Core] Using unicycle model"
               << termcolor::reset << std::endl;
-    _mpc.emplace<UnicycleMPCC>();
-  } else if (_mpc_input_type == MPCType::kDoubleIntegrator) {
+    std::cout << "attempting raw construct" << std::endl;
+    UnicycleMPCC test(_mpc_cfg);
+    std::cout << "emplacing back" << std::endl;
+    _mpc.emplace<UnicycleMPCC>(_mpc_cfg);
+    std::cout << "done" << std::endl;
+  } else if (_mpc_cfg->input_type == MPCType::kDoubleIntegrator) {
     std::cout << termcolor::green << "[MPC Core] Using double integrator model"
               << termcolor::reset << std::endl;
-    _mpc.emplace<DIMPCC>();
+    _mpc.emplace<DIMPCC>(_mpc_cfg);
   } else {
     throw std::runtime_error(
         "Invalid MPC input type: " +
         std::to_string(static_cast<unsigned int>(_mpc_input_type)));
   }
-  _tube_generator.set_verbose(false);
-}
 
-MPCCore::~MPCCore() {}
-
-void MPCCore::load_params(const std::map<std::string, double>& params) {
-  utils::get_param(params, "DT", _dt);
-  utils::get_param(params, "REF_LENGTH", _tube_horizon);
-  utils::get_param(params, "MAX_ANGA", _max_anga);
-  utils::get_param(params, "MAX_LINACC", _max_linacc);
-  utils::get_param(params, "LINVEL", _max_vel);
-  utils::get_param(params, "ANGVEL", _max_angvel);
-  utils::get_param(params, "ANGLE_GAIN", _prop_gain);
-  utils::get_param(params, "ANGLE_THRESH", _prop_angle_thresh);
-
-  // hack for now, will come back to fix...
-  double tube_degree{0.}, tube_samples{0.};
-  utils::get_param(params, "TUBE_DEGREE", tube_degree);
-  utils::get_param(params, "TUBE_SAMPLES", tube_samples);
-  utils::get_param(params, "MAX_TUBE_WIDTH", _max_tube_width);
-  utils::get_param(params, "REF_LENGTH", _tube_horizon);
-
-  _tube_degree  = static_cast<int>(tube_degree);
-  _tube_samples = static_cast<int>(tube_samples);
-  _max_tube_width /= 2.;
-
-  double mpc_steps = _mpc_steps;
-  utils::get_param(params, "STEPS", mpc_steps);
-  _mpc_steps = static_cast<int>(mpc_steps);
-
+  std::cout << "setting tube stuff\n";
   tube::TubeGenerator::Settings tube_settings;
-  tube_settings.degree       = _tube_degree;
-  tube_settings.num_samples  = _tube_samples;
-  tube_settings.max_distance = _max_tube_width;
+  tube_settings.degree       = _mpc_cfg->tube.poly_degree;
+  tube_settings.num_samples  = _mpc_cfg->tube.num_samples;
+  tube_settings.max_distance = _mpc_cfg->tube.max_width / 2.0;
+  std::cout << "done\n";
 
   _tube_generator.update_settings(tube_settings);
-
-  _params = params;
-
-  // _mpc->load_params(params);
-  call_mpc([&](auto& mpc) { mpc.load_params(params); });
+  _tube_generator.set_verbose(false);
+  // call_mpc([&](auto& mpc) { mpc.load_params(cfg); });
 }
+
+// void MPCCore::load_params(const std::map<std::string, double>& params) {
+//
+//   // for (const auto& [key, value] : params){
+//   //   std::cout << "[MPC Core] " << key << ": " << value << "\n";
+//   // }
+//
+//   utils::get_param(params, "DT", _dt);
+//   utils::get_param(params, "REF_LENGTH", _tube_horizon);
+//   utils::get_param(params, "MAX_ANGA", _max_anga);
+//   utils::get_param(params, "MAX_LINACC", _max_linacc);
+//   utils::get_param(params, "LINVEL", _max_vel);
+//   utils::get_param(params, "ANGVEL", _max_angvel);
+//   utils::get_param(params, "ANGLE_GAIN", _prop_gain);
+//   utils::get_param(params, "ANGLE_THRESH", _prop_angle_thresh);
+//
+//   // hack for now, will come back to fix...
+//   double tube_degree{0.}, tube_samples{0.};
+//   utils::get_param(params, "TUBE_DEGREE", tube_degree);
+//   utils::get_param(params, "TUBE_SAMPLES", tube_samples);
+//   utils::get_param(params, "MAX_TUBE_WIDTH", _max_tube_width);
+//   utils::get_param(params, "REF_LENGTH", _tube_horizon);
+//
+//   _tube_degree  = static_cast<int>(tube_degree);
+//   _tube_samples = static_cast<int>(tube_samples);
+//   _max_tube_width /= 2.;
+//
+//   double mpc_steps = _mpc_steps;
+//   utils::get_param(params, "STEPS", mpc_steps);
+//   _mpc_steps = static_cast<int>(mpc_steps);
+//
+//   tube::TubeGenerator::Settings tube_settings;
+//   tube_settings.degree       = _tube_degree;
+//   tube_settings.num_samples  = _tube_samples;
+//   tube_settings.max_distance = _max_tube_width;
+//
+//   _tube_generator.update_settings(tube_settings);
+//
+//   _params = params;
+//
+//   // _mpc->load_params(params);
+//   call_mpc([&](auto& mpc) { mpc.load_params(params); });
+// }
 
 void MPCCore::set_odom(const Eigen::Vector3d& odom) {
   _odom = odom;
@@ -93,7 +109,7 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
   // _trajectory.extend_to_length(required_mpc_length);
 
   double traj_len = _trajectory.get_arclen();
-  double horizon  = std::min(_tube_horizon, traj_len);
+  double horizon  = std::min(_mpc_cfg->ref_length, traj_len);
 
   // tube::TubeGenerator::Settings tube_settings;
   // tube_settings.degree       = _tube_degree;
@@ -140,7 +156,8 @@ MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
         },
         horizon);
 
-    double max_possible_horizon_dist = _max_vel * _dt * _mpc_steps;
+    double max_possible_horizon_dist =
+        _mpc_cfg->constraints.max_linvel * _mpc_cfg->dt * _mpc_cfg->steps;
     std::cout << "LAST S WAS: " << last_s << "\n";
     std::cout << "remaining len: " << _trajectory.get_arclen() - current_s
               << "\n";
@@ -165,7 +182,7 @@ MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
   // Just like with trajectory length,acados MPC also has fixed number of knots
   // that can be used for the trajectory due to a quirk with Casadi Splines.
   unsigned int required_mpc_knots =
-      static_cast<unsigned int>(_params["REF_SAMPLES"]);
+      static_cast<unsigned int>(_mpc_cfg->ref_samples);
 
   /*types::Trajectory adjusted_traj =*/
   /*    extended_trajectory.get_adjusted_traj(current_s, required_mpc_knots);*/
@@ -211,7 +228,8 @@ MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
   // _tube_generator.shift_tube_domain(current_s, horizon, abv, blw);
 
   int N_virtual_states = 2;
-  double s_dot = std::min(std::max((current_s - _prev_s) / _dt, 0.), _max_vel);
+  double s_dot = std::min(std::max((current_s - _prev_s) / _mpc_cfg->dt, 0.),
+                          _mpc_cfg->constraints.max_linvel);
   // std::cout << "prev_s: " << _prev_s << "\tcurrent_s: " << current_s << "\n";
   _prev_s = current_s;
 
@@ -287,8 +305,7 @@ Eigen::VectorXd MPCCore::get_cbf_data(size_t horizon_idx) const {
       [&](const auto& arg) { return arg.get_state_at_step(0); }, horizon);
 
   double current_s = std::max(_trajectory.get_closest_s(init_state), 1e-6);
-  unsigned int num_samples =
-      static_cast<unsigned int>(_params.at("REF_SAMPLES"));
+  unsigned int num_samples = static_cast<unsigned int>(_mpc_cfg->ref_samples);
   types::Trajectory adjusted_traj =
       _trajectory.get_adjusted_traj(current_s, num_samples);
 
@@ -329,6 +346,6 @@ MPCCore::AnyHorizon MPCCore::get_horizon() const {
   return call_mpc([&](auto& mpc) -> AnyHorizon { return mpc.get_horizon(); });
 }
 
-const std::map<std::string, double>& MPCCore::get_params() const {
-  return _params;
+std::shared_ptr<const MPCConfig> MPCCore::get_params() const {
+  return _mpc_cfg;
 }

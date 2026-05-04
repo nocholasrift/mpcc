@@ -164,6 +164,7 @@ class ModelServer(Node):
     # Service callback
     # -------------------------
     def query_sac(self, req, resp):
+        # print("HELLO?")
         obs = np.array(req.state.state)
         unnormalized_obs = obs.copy()
 
@@ -177,8 +178,8 @@ class ModelServer(Node):
             self.params["MAX_ALPHA_DOT"],
         )
 
-        alpha_abv = unnormalized_obs[-2] + action[0] #* self.params["DT"]
-        alpha_blw = unnormalized_obs[-1] + action[1] #* self.params["DT"]
+        alpha_abv = unnormalized_obs[-2] + action[0] * self.params["DT"]
+        alpha_blw = unnormalized_obs[-1] + action[1] * self.params["DT"]
 
         # context update
         if self.prev_obs is not None:
@@ -231,3 +232,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

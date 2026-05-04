@@ -11,6 +11,7 @@
 #include <nav2_costmap_2d/costmap_2d_ros.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64.hpp>
@@ -18,8 +19,9 @@
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
 
 // Project Specific
+#include <mpcc/common/mpcc_config.h>
 #include <mpcc/common/mpcc_core.h>
-#include <mpcc/ros/logger.h>  // Ensure this is ported to ROS2 as well
+#include <mpcc_ros2/logger_ros2.h>
 
 #include <Eigen/Dense>
 #include <map>
@@ -28,9 +30,39 @@
 #include <thread>
 #include <vector>
 
+struct ParamLoader {
+  rclcpp::Node* node;
+
+  double getd(const char* name, double def) const {
+    node->declare_parameter(name, def);
+    std::cout << name << ": " << node->get_parameter(name).as_double() << "\n";
+    return node->get_parameter(name).as_double();
+  }
+  int geti(const char* name, int def) const {
+    node->declare_parameter(name, def);
+    std::cout << name << ": " << node->get_parameter(name).as_int() << "\n";
+    return node->get_parameter(name).as_int();
+  }
+  bool getb(const char* name, bool def) const {
+    node->declare_parameter(name, def);
+    std::cout << name << ": " << node->get_parameter(name).as_bool() << "\n";
+    return node->get_parameter(name).as_bool();
+  }
+  std::string gets(const char* name, const char* def) const {
+    node->declare_parameter(name, std::string(def));
+    std::cout << name << ": " << node->get_parameter(name).as_string() << "\n";
+    return node->get_parameter(name).as_string();
+  }
+};
+
 class MPCCROS : public rclcpp::Node {
  public:
   MPCCROS();  // Node options usually handled internally or via constructor
+  void init();
+
+  mpcc::MPCConfig loadMPCConfig(ParamLoader& p_loader);
+  NodeConfig loadNodeConfig(ParamLoader& p_loader);
+
   virtual ~MPCCROS();
 
  private:
@@ -41,10 +73,9 @@ class MPCCROS : public rclcpp::Node {
 
   // --- Callbacks ---
   void odomcb(const nav_msgs::msg::Odometry::SharedPtr msg);
-  void mapcb(const nav_msgs::msg::Occupancy_grid::SharedPtr msg);
+  void mapcb(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
   void goalcb(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
-  void trajectorycb(
-      const trajectory_msgs::msg::Joint_trajectory::SharedPtr msg);
+  void trajectorycb(const trajectory_msgs::msg::JointTrajectory::SharedPtr msg);
 
   void publishVel();
   void visualizeTubes();
@@ -56,6 +87,7 @@ class MPCCROS : public rclcpp::Node {
 
   bool can_execute();
 
+ private:
   // --- ROS2 Members ---
 
   // Subscribers
@@ -72,11 +104,13 @@ class MPCCROS : public rclcpp::Node {
 
   // Publishers
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr _velPub;
-  rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr _trajPub;
-  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr _pathPub;
-  // ... (Other publishers would follow the same pattern)
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr _pathPub;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr _trajPub;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr _startPub;
+  rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr
+      _horizonPub;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr _donePub;
-  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr _tubeVizPub;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr _tubeVizPub;
 
   // Services & Clients
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr _backup_srv;
@@ -95,19 +129,21 @@ class MPCCROS : public rclcpp::Node {
   trajectory_msgs::msg::JointTrajectory _trajectory;
   nav2_costmap_2d::Costmap2DROS* _local_costmap;
 
+  std::shared_ptr<NodeConfig> _node_cfg;
+  std::shared_ptr<mpcc::MPCConfig> _mpc_cfg;
+
   std::vector<Eigen::Vector3d> poses;
   std::vector<double> mpc_results;
 
   std::map<std::string, double> _mpc_params;
 
-  double _mpc_steps, _w_vel, _w_angvel, _w_linvel, _w_angvel_d, _w_linvel_d,
-      _w_etheta, _max_angvel, _max_linvel, _bound_value, _x_goal, _y_goal,
-      _theta_goal, _tol, _max_linacc, _max_anga, _w_cte, _w_pos, _w_qc, _w_ql,
-      _w_q_speed;
+  double _w_vel, _w_angvel, _w_linvel, _w_angvel_d, _w_linvel_d, _w_etheta,
+      _max_angvel, _max_linvel, _bound_value, _x_goal, _y_goal, _theta_goal,
+      _tol, _max_linacc, _max_anga, _w_cte, _w_pos, _w_qc, _w_ql, _w_q_speed;
 
   double _cbf_alpha_abv, _cbf_alpha_blw, _cbf_colinear, _cbf_padding;
 
-  double _prop_gain, _prop_angle_thresh;
+  double _prop_gain, _prop_gain_thresh;
 
   double _clf_gamma;
   double _w_ql_lyap;
@@ -134,19 +170,16 @@ class MPCCROS : public rclcpp::Node {
   bool _is_eval;
 
   int _task_id;
+  int _mpc_steps;
   int _num_samples;
   int _tube_degree;
   int _tube_samples;
   int _max_path_length;
   int _mpc_ref_samples;
 
-  Eigen::MatrixX4d _poly;
-  geometry_msgs::Twist _vel_msg;
-
   Eigen::VectorXd _prev_rl_state;
   Eigen::VectorXd _curr_rl_state;
 
-  std::string _frame_id;
   std::string _logging_table_name;
   std::string _logging_topic_name;
 

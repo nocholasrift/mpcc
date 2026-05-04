@@ -527,7 +527,7 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
 
   // log data back to db if logging enabled
   /*if (_is_logging || _is_eval)*/
-  _mpc_core->get_cbf_data(0);
+  // _mpc_core->get_cbf_data(0);
 
   ROS_WARN("runtime: %.3f", (ros::Time::now() - now).toSec());
 

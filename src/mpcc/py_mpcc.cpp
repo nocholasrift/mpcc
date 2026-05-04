@@ -5,6 +5,7 @@
 
 #include <mpcc/common/map_util.h>
 #include <mpcc/common/mpcc_base.h>
+#include <mpcc/common/mpcc_config.h>
 #include <mpcc/common/mpcc_core.h>
 #include <mpcc/common/tube_gen.h>
 #include <mpcc/common/utils.h>
@@ -122,9 +123,114 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def_readwrite("status", &MPCResult::status)
       .def_readwrite("command", &MPCResult::command);
 
-  py::class_<MPCCore>(m, "MPCCore")
+  // MPC Config
+  py::class_<mpcc::CostWeights, std::shared_ptr<mpcc::CostWeights>>(
+      m, "CostWeights")
       .def(py::init<>())
-      .def(py::init<const MPCType&>())
+      .def_readwrite("w_vel", &mpcc::CostWeights::w_vel)
+      .def_readwrite("w_angvel", &mpcc::CostWeights::w_angvel)
+      .def_readwrite("w_linvel", &mpcc::CostWeights::w_linvel)
+      .def_readwrite("w_angvel_d", &mpcc::CostWeights::w_angvel_d)
+      .def_readwrite("w_linvel_d", &mpcc::CostWeights::w_linvel_d)
+      .def_readwrite("w_etheta", &mpcc::CostWeights::w_etheta)
+      .def_readwrite("w_cte", &mpcc::CostWeights::w_cte)
+      .def_readwrite("w_lag_e", &mpcc::CostWeights::w_lag_e)
+      .def_readwrite("w_contour_e", &mpcc::CostWeights::w_contour_e)
+      .def_readwrite("w_speed", &mpcc::CostWeights::w_speed)
+      .def("__repr__", [](const mpcc::CostWeights& w) {
+        return "<CostWeights w_lag_e=" + std::to_string(w.w_lag_e) +
+               " w_contour_e=" + std::to_string(w.w_contour_e) +
+               " w_speed=" + std::to_string(w.w_speed) + ">";
+      });
+
+  py::class_<mpcc::Constraints, std::shared_ptr<mpcc::Constraints>>(
+      m, "Constraints")
+      .def(py::init<>())
+      .def_readwrite("max_angvel", &mpcc::Constraints::max_angvel)
+      .def_readwrite("max_linvel", &mpcc::Constraints::max_linvel)
+      .def_readwrite("max_linacc", &mpcc::Constraints::max_linacc)
+      .def_readwrite("max_angacc", &mpcc::Constraints::max_angacc)
+      .def_readwrite("bound_value", &mpcc::Constraints::bound_value)
+      .def("__repr__", [](const mpcc::Constraints& c) {
+        return "<Constraints max_linvel=" + std::to_string(c.max_linvel) +
+               " max_angvel=" + std::to_string(c.max_angvel) + ">";
+      });
+
+  py::class_<mpcc::CBFConfig, std::shared_ptr<mpcc::CBFConfig>>(m, "CBFConfig")
+      .def(py::init<>())
+      .def_readwrite("use_cbf", &mpcc::CBFConfig::use_cbf)
+      .def_readwrite("alpha_abv", &mpcc::CBFConfig::alpha_abv)
+      .def_readwrite("alpha_blw", &mpcc::CBFConfig::alpha_blw)
+      .def_readwrite("colinear", &mpcc::CBFConfig::colinear)
+      .def_readwrite("padding", &mpcc::CBFConfig::padding)
+      .def_readwrite("dynamic_alpha", &mpcc::CBFConfig::dynamic_alpha)
+      .def_readwrite("min_alpha", &mpcc::CBFConfig::min_alpha)
+      .def_readwrite("max_alpha", &mpcc::CBFConfig::max_alpha)
+      .def_readwrite("min_alpha_dot", &mpcc::CBFConfig::min_alpha_dot)
+      .def_readwrite("max_alpha_dot", &mpcc::CBFConfig::max_alpha_dot)
+      .def_readwrite("min_h_val", &mpcc::CBFConfig::min_h_val)
+      .def_readwrite("max_h_val", &mpcc::CBFConfig::max_h_val)
+      .def("__repr__", [](const mpcc::CBFConfig& c) {
+        return "<CBFConfig use_cbf=" +
+               std::string(c.use_cbf ? "True" : "False") +
+               " alpha_abv=" + std::to_string(c.alpha_abv) +
+               " alpha_blw=" + std::to_string(c.alpha_blw) + ">";
+      });
+
+  py::class_<mpcc::CLFConfig, std::shared_ptr<mpcc::CLFConfig>>(m, "CLFConfig")
+      .def(py::init<>())
+      .def_readwrite("w_lag_e", &mpcc::CLFConfig::w_lag_e)
+      .def_readwrite("w_contour_e", &mpcc::CLFConfig::w_contour_e)
+      .def_readwrite("gamma", &mpcc::CLFConfig::gamma)
+      .def("__repr__", [](const mpcc::CLFConfig& c) {
+        return "<CLFConfig gamma=" + std::to_string(c.gamma) +
+               " w_lag_e=" + std::to_string(c.w_lag_e) + ">";
+      });
+
+  py::class_<mpcc::TubeConfig, std::shared_ptr<mpcc::TubeConfig>>(m,
+                                                                  "TubeConfig")
+      .def(py::init<>())
+      .def_readwrite("poly_degree", &mpcc::TubeConfig::poly_degree)
+      .def_readwrite("num_samples", &mpcc::TubeConfig::num_samples)
+      .def_readwrite("max_width", &mpcc::TubeConfig::max_width)
+      .def("__repr__", [](const mpcc::TubeConfig& t) {
+        return "<TubeConfig poly_degree=" + std::to_string(t.poly_degree) +
+               " max_width=" + std::to_string(t.max_width) + ">";
+      });
+
+  py::class_<mpcc::PropControllerConfig,
+             std::shared_ptr<mpcc::PropControllerConfig>>(
+      m, "PropControllerConfig")
+      .def(py::init<>())
+      .def_readwrite("gain", &mpcc::PropControllerConfig::gain)
+      .def_readwrite("gain_thresh", &mpcc::PropControllerConfig::gain_thresh)
+      .def("__repr__", [](const mpcc::PropControllerConfig& p) {
+        return "<PropControllerConfig gain=" + std::to_string(p.gain) +
+               " gain_thresh=" + std::to_string(p.gain_thresh) + ">";
+      });
+
+  py::class_<mpcc::MPCConfig, std::shared_ptr<mpcc::MPCConfig>>(m, "MPCConfig")
+      .def(py::init<>())
+      .def_readwrite("steps", &mpcc::MPCConfig::steps)
+      .def_readwrite("dt", &mpcc::MPCConfig::dt)
+      .def_readwrite("ref_samples", &mpcc::MPCConfig::ref_samples)
+      .def_readwrite("ref_length", &mpcc::MPCConfig::ref_length)
+      .def_readwrite("input_type", &mpcc::MPCConfig::input_type)
+      .def_readwrite("weights", &mpcc::MPCConfig::weights)
+      .def_readwrite("constraints", &mpcc::MPCConfig::constraints)
+      .def_readwrite("cbf", &mpcc::MPCConfig::cbf)
+      .def_readwrite("clf", &mpcc::MPCConfig::clf)
+      .def_readwrite("tube", &mpcc::MPCConfig::tube)
+      .def_readwrite("prop", &mpcc::MPCConfig::prop)
+      .def("__repr__", [](const mpcc::MPCConfig& c) {
+        return "<MPCConfig steps=" + std::to_string(c.steps) +
+               " dt=" + std::to_string(c.dt) +
+               " ref_samples=" + std::to_string(c.ref_samples) + ">";
+      });
+
+  py::class_<MPCCore>(m, "MPCCore")
+      // .def(py::init<>())
+      .def(py::init<std::shared_ptr<mpcc::MPCConfig>>())
       .def("load_params", &MPCCore::load_params)
       .def("get_params", &MPCCore::get_params)
       .def("set_map", &MPCCore::set_map<unsigned char>)

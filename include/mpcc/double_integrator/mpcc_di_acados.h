@@ -141,10 +141,12 @@ class DIMPCC : public MPCBase<DIMPCC> {
   };
 
  public:
-  DIMPCC();
+  DIMPCC() = default;
+  DIMPCC(std::shared_ptr<MPCConfig> cfg);
   virtual ~DIMPCC();
 
-  void load_params(const std::map<std::string, double>& params);
+  // void load_params(const std::map<std::string, double>& params);
+  void load_params(std::shared_ptr<MPCConfig> cfg);
 
   void reset_horizon();
 

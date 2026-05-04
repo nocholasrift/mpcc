@@ -2,12 +2,14 @@
 
 #include <mpcc/msg/rl_state.hpp>
 #include <mpcc/srv/query_sac.hpp>
-#include <mpcc/srv/query_sac_di.hpp>
+#include <mpcc/srv/query_sacdi.hpp>
 
+#include <mpcc/common/mpcc_config.h>
 #include <mpcc/common/mpcc_core.h>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/float64.hpp>
 
 #include <Eigen/Core>
 
@@ -16,15 +18,23 @@
 #include <string>
 #include <unordered_map>
 
+struct NodeConfig {
+  bool use_vicon       = false;
+  bool is_eval         = false;
+  double vel_pub_freq  = 20.0;
+  std::string frame_id = "odom";
+  // mpcc::MPCConfig mpc;
+};
+
 namespace logger {
 
 class RLLogger {
  public:
-  RLLogger(rclcpp::Node::SharedPtr node,
-           const std::unordered_map<std::string, double>& params,
-           bool is_logging);
+  RLLogger(rclcpp::Node::SharedPtr node, std::shared_ptr<NodeConfig> node_cfg,
+           std::shared_ptr<mpcc::MPCConfig> mpc_cfg, bool is_logging);
 
-  void load_params(const std::unordered_map<std::string, double>& params);
+  void load_params(std::shared_ptr<NodeConfig> node_cfg,
+                   std::shared_ptr<mpcc::MPCConfig> mpc_cfg);
 
   ~RLLogger();
 
@@ -42,11 +52,12 @@ class RLLogger {
   // Publishers
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr done_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr logging_pub_;
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr alpha_pub_abv_;
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr alpha_pub_blw_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr alpha_pub_abv_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr alpha_pub_blw_;
 
   // Service client
   rclcpp::Client<mpcc::srv::QuerySAC>::SharedPtr sac_client_;
+  rclcpp::CallbackGroup::SharedPtr cb_group_;
 
   // -------------------------
   // RL state
@@ -83,7 +94,9 @@ class RLLogger {
 
   uint8_t exceeded_bounds_;
 
-  std::unordered_map<std::string, double> params_;
+  std::shared_ptr<NodeConfig> node_cfg_;
+  std::shared_ptr<mpcc::MPCConfig> mpc_cfg_;
+  // std::unordered_map<std::string, double> params_;
 };
 
 // utility

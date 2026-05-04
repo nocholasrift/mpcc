@@ -39,6 +39,7 @@ class AcadosInterface {
   double is_initialized() const { return is_initialized_; }
 
  private:
+  // no copying allowed
   AcadosInterface(AcadosInterface const&);
   AcadosInterface& operator=(AcadosInterface const&);
 

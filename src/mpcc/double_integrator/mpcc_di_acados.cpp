@@ -19,133 +19,56 @@ const uint16_t DIMPCC::kNU;
 const uint16_t DIMPCC::kNBX0;
 // #endif
 
-DIMPCC::DIMPCC() {
-  _dt         = -1;
-  _max_linvel = 2.;
-  _max_linacc = 2.;
-  _mpc_steps  = 10;
-
-  _w_ql      = 50.0;
-  _w_qc      = .1;
-  _w_q_speed = .3;
-  _w_ql_lyap = 1;
-  _w_qc_lyap = 1;
-
-  _gamma     = .5;
-  _use_cbf   = false;
-  _alpha_abv = 1.0;
-  _alpha_blw = 1.0;
-  _colinear  = 0.01;
-  _padding   = .05;
-
-  _s_dot       = 0;
-  _ref_samples = 10;
-  _ref_len_sz  = 4.0;
+DIMPCC::DIMPCC(std::shared_ptr<MPCConfig> cfg) {
+  _state = Eigen::VectorXd::Zero(kNX);
+  _odom  = Eigen::VectorXd(3);
 
   _has_run       = false;
   _solve_success = false;
   _is_shift_warm = false;
   _odom_init     = false;
 
-  _state = Eigen::VectorXd::Zero(kNX);
-
-  _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
-  _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
-
-  mpc_x.resize(_mpc_steps + 1);
-  mpc_y.resize(_mpc_steps + 1);
-  mpc_vx.resize(_mpc_steps + 1);
-  mpc_vy.resize(_mpc_steps + 1);
-  mpc_s.resize(_mpc_steps + 1);
-  mpc_s_dot.resize(_mpc_steps + 1);
-
-  mpc_ax.resize(_mpc_steps);
-  mpc_ay.resize(_mpc_steps);
-  mpc_s_ddots.resize(_mpc_steps);
-
-  _acados_solver.initialize(_mpc_steps);
+  load_params(cfg);
 }
 
 DIMPCC::~DIMPCC() {}
 
-void DIMPCC::load_params(const std::map<std::string, double>& params) {
-  _params = params;
+// void DIMPCC::load_params(const std::map<std::string, double>& params) {
+void DIMPCC::load_params(std::shared_ptr<MPCConfig> cfg) {
 
-  // Init parameters for MPC object
-  _max_linvel = _params.find("LINVEL") != _params.end() ? _params.at("LINVEL")
-                                                        : _max_linvel;
-  _max_linacc = _params.find("MAX_LINACC") != _params.end()
-                    ? _params.at("MAX_LINACC")
-                    : _max_linacc;
+  _mpc_cfg = cfg;
 
-  _w_ql = params.find("W_LAG") != params.end() ? params.at("W_LAG") : _w_ql;
-  _w_qc =
-      params.find("W_CONTOUR") != params.end() ? params.at("W_CONTOUR") : _w_qc;
-  _w_q_speed = params.find("W_SPEED") != params.end() ? params.at("W_SPEED")
-                                                      : _w_q_speed;
-
-  _ref_len_sz  = params.find("REF_LENGTH") != params.end()
-                     ? params.at("REF_LENGTH")
-                     : _ref_len_sz;
-  _ref_samples = params.find("REF_SAMPLES") != params.end()
-                     ? params.at("REF_SAMPLES")
-                     : _ref_samples;
-
-  _gamma     = params.find("CLF_GAMMA") != params.end() ? params.at("CLF_GAMMA")
-                                                        : _gamma;
-  _w_ql_lyap = params.find("CLF_W_LAG") != params.end() ? params.at("CLF_W_LAG")
-                                                        : _w_ql_lyap;
-  _w_qc_lyap = params.find("CLF_W_CONTOUR") != params.end()
-                   ? params.at("CLF_W_CONTOUR")
-                   : _w_ql_lyap;
-
-  _use_cbf =
-      params.find("USE_CBF") != params.end() ? params.at("USE_CBF") : _use_cbf;
-  _alpha_abv = params.find("CBF_ALPHA_ABV") != params.end()
-                   ? params.at("CBF_ALPHA_ABV")
-                   : _alpha_abv;
-  _alpha_blw = params.find("CBF_ALPHA_BLW") != params.end()
-                   ? params.at("CBF_ALPHA_BLW")
-                   : _alpha_blw;
-  _colinear  = params.find("CBF_COLINEAR") != params.end()
-                   ? params.at("CBF_COLINEAR")
-                   : _colinear;
-  _padding   = params.find("CBF_PADDING") != params.end()
-                   ? params.at("CBF_PADDING")
-                   : _padding;
-
-  double new_dt = params.find("DT") != params.end() ? params.at("DT") : _dt;
-  double new_steps =
-      _params.find("STEPS") != _params.end() ? _params.at("STEPS") : _mpc_steps;
-
-  _dt        = new_dt;
-  _mpc_steps = new_steps;
-
-  std::cout << "mpc steps: " << _mpc_steps << "\n";
-  int status = _acados_solver.initialize(_mpc_steps);
+  double mpc_steps = _mpc_cfg->steps;
+  std::cout << "mpc steps: " << mpc_steps << "\n";
+  int status = _acados_solver.initialize(mpc_steps);
   if (status) {
     throw std::runtime_error("Acados initialization failed with status + " +
                              std::to_string(status) + "!");
   }
 
-  mpc_x.resize(_mpc_steps + 1);
-  mpc_y.resize(_mpc_steps + 1);
-  mpc_vx.resize(_mpc_steps + 1);
-  mpc_vy.resize(_mpc_steps + 1);
-  mpc_s.resize(_mpc_steps + 1);
-  mpc_s_dot.resize(_mpc_steps + 1);
+  mpc_x.resize(mpc_steps + 1);
+  mpc_y.resize(mpc_steps + 1);
+  mpc_vx.resize(mpc_steps + 1);
+  mpc_vy.resize(mpc_steps + 1);
+  mpc_s.resize(mpc_steps + 1);
+  mpc_s_dot.resize(mpc_steps + 1);
 
-  mpc_ax.resize(_mpc_steps);
-  mpc_ay.resize(_mpc_steps);
-  mpc_s_ddots.resize(_mpc_steps);
+  mpc_ax.resize(mpc_steps);
+  mpc_ay.resize(mpc_steps);
+  mpc_s_ddots.resize(mpc_steps);
 
-  if (_prev_x0.size() != (_mpc_steps + 1) * kNX) {
+  if (_prev_x0.size() != (mpc_steps + 1) * kNX) {
     std::cout << termcolor::yellow
               << "x0, u0 size differs from mpc_steps size, resizing and "
                  "zeroing out\n";
-    _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
-    _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
+    _prev_x0 = Eigen::VectorXd::Zero((mpc_steps + 1) * kNX);
+    _prev_u0 = Eigen::VectorXd::Zero(mpc_steps * kNU);
   }
+
+  _acados_solver.initialize(mpc_steps);
+
+  std::cout << "!! MPC Obj parameters updated !! " << std::endl;
+  std::cout << "!! ACADOS model instantiated !! " << std::endl;
 }
 
 bool DIMPCC::set_solver_parameters(const types::Corridor& corridor) {
@@ -171,6 +94,7 @@ bool DIMPCC::set_solver_parameters(const types::Corridor& corridor) {
   int N_tube_coeffs = corridor.get_above_poly().get_coeffs().size();
   int provided_params =
       ctrls_x.size() + ctrls_y.size() + 2 * N_tube_coeffs + Param::kNP_Scalar;
+
   if (provided_params != Param::kNP) {
     std::cerr << termcolor::yellow << "[MPCC] provided param count "
               << provided_params << " does not match acados parameter size "
@@ -179,15 +103,16 @@ bool DIMPCC::set_solver_parameters(const types::Corridor& corridor) {
     return false;
   }
 
-  params[Param::k_Q_c]       = _w_qc;
-  params[Param::k_Q_l]       = _w_ql;
-  params[Param::k_Q_s]       = _w_q_speed;
-  params[Param::k_alpha_abv] = _alpha_abv;
-  params[Param::k_alpha_blw] = _alpha_blw;
-  params[Param::k_Ql_c]      = _w_qc_lyap;
-  params[Param::k_Ql_l]      = _w_ql_lyap;
-  params[Param::k_gamma]     = _gamma;
+  params[Param::k_Q_c]       = _mpc_cfg->weights.w_contour_e;
+  params[Param::k_Q_l]       = _mpc_cfg->weights.w_lag_e;
+  params[Param::k_Q_s]       = _mpc_cfg->weights.w_speed;
+  params[Param::k_alpha_abv] = _mpc_cfg->cbf.alpha_abv;
+  params[Param::k_alpha_blw] = _mpc_cfg->cbf.alpha_blw;
+  params[Param::k_Ql_c]      = _mpc_cfg->clf.w_contour_e;
+  params[Param::k_Ql_l]      = _mpc_cfg->clf.w_lag_e;
+  params[Param::k_gamma]     = _mpc_cfg->clf.gamma;
   params[Param::k_L_path]    = traj_view.arclen;
+
   // params[Param::k_s_start]   = corridor.get_offset();
 
   int N_ctrls = ctrls_x.size();
@@ -204,7 +129,8 @@ bool DIMPCC::set_solver_parameters(const types::Corridor& corridor) {
     params[i + 2 * N_ctrls + N_tube_coeffs] = below_coeffs(i);
   }
 
-  for (int step = 0; step < _mpc_steps + 1; ++step) {
+  double mpc_steps = _mpc_cfg->steps;
+  for (int step = 0; step < mpc_steps + 1; ++step) {
     _acados_solver.update_params(step, params);
   }
 
@@ -212,7 +138,8 @@ bool DIMPCC::set_solver_parameters(const types::Corridor& corridor) {
 }
 
 void DIMPCC::reset_horizon() {
-  for (int i = 0; i < _mpc_steps; ++i) {
+  double mpc_steps = _mpc_cfg->steps;
+  for (int i = 0; i < mpc_steps; ++i) {
     mpc_x[i]     = _state(kIndX);
     mpc_y[i]     = _state(kIndY);
     mpc_vx[i]    = 0;
@@ -221,7 +148,7 @@ void DIMPCC::reset_horizon() {
     mpc_s_dot[i] = 0;
   }
 
-  for (int i = 0; i < _mpc_steps - 1; ++i) {
+  for (int i = 0; i < mpc_steps - 1; ++i) {
     mpc_ax[i]      = 0;
     mpc_ay[i]      = 0;
     mpc_s_ddots[i] = 0;
@@ -234,9 +161,9 @@ Eigen::VectorXd DIMPCC::get_cbf_data(const types::Corridor& corridor,
   Eigen::VectorXd input = _prev_u0.segment(horizon_idx * kNU, kNU);
 
   CasadiDoubleIntegratorInterface::Params params;
-  params.qc_lyap    = _w_qc_lyap;
-  params.ql_lyap    = _w_ql_lyap;
-  params.gamma_lyap = _gamma;
+  params.qc_lyap    = _mpc_cfg->clf.w_contour_e;
+  params.ql_lyap    = _mpc_cfg->clf.w_lag_e;
+  params.gamma_lyap = _mpc_cfg->clf.gamma;
 
   CasadiDoubleIntegratorInterface casadi_interface;
   double h_abv = casadi_interface.get_h_abv(state, input, corridor, params);
@@ -247,10 +174,10 @@ Eigen::VectorXd DIMPCC::get_cbf_data(const types::Corridor& corridor,
   double hdot_blw =
       casadi_interface.get_h_dot_blw(state, input, corridor, params);
 
-  std::cout << "h_abv is: " << h_abv << "\n";
-  std::cout << "h_dot_abv is: " << hdot_abv << "\n";
-  std::cout << "h_blw is: " << h_blw << "\n";
-  std::cout << "h_dot_blw is: " << hdot_blw << "\n";
+  // std::cout << "h_abv is: " << h_abv << "\n";
+  // std::cout << "h_dot_abv is: " << hdot_abv << "\n";
+  // std::cout << "h_blw is: " << h_blw << "\n";
+  // std::cout << "h_dot_blw is: " << hdot_blw << "\n";
 
   return Eigen::Vector4d(h_abv, hdot_abv, h_blw, hdot_blw);
 }
@@ -270,13 +197,16 @@ Eigen::VectorXd DIMPCC::next_state(const Eigen::VectorXd& current_state,
   double ay    = control(kIndAy);
   double sddot = control(kIndSDDot);
 
-  ret(kIndX)  = x1 + vx1 * _dt;
-  ret(kIndY)  = y1 + vy1 * _dt;
-  ret(kIndVx) = std::max(std::min(vx1 + ax * _dt, _max_linvel), -_max_linvel);
-  ret(kIndVy) = std::max(std::min(vy1 + ay * _dt, _max_linvel), -_max_linvel);
-  ret(kIndS)  = s1 + sdot1 * _dt;
+  double dt         = _mpc_cfg->dt;
+  double max_linvel = _mpc_cfg->constraints.max_linvel;
+
+  ret(kIndX)  = x1 + vx1 * dt;
+  ret(kIndY)  = y1 + vy1 * dt;
+  ret(kIndVx) = std::max(std::min(vx1 + ax * dt, max_linvel), -max_linvel);
+  ret(kIndVy) = std::max(std::min(vy1 + ay * dt, max_linvel), -max_linvel);
+  ret(kIndS)  = s1 + sdot1 * dt;
   ret(kIndSDot) =
-      std::max(std::min(sdot1 + sddot * _dt, _max_linvel), -_max_linvel);
+      std::max(std::min(sdot1 + sddot * dt, max_linvel), -max_linvel);
 
   return ret;
 }
@@ -304,21 +234,25 @@ Eigen::VectorXd DIMPCC::prepare_initial_state(const Eigen::VectorXd& state,
 std::array<double, 2> DIMPCC::compute_mpc_vel_command(
     const Eigen::VectorXd& state, const Eigen::VectorXd& u) {
 
+  double dt         = _mpc_cfg->dt;
+  double max_linacc = _mpc_cfg->constraints.max_linacc;
   double new_velx =
-      limit(state[kIndVx], state[kIndVx] + u[kIndAx] * _dt, _max_linacc, _dt);
+      limit(state[kIndVx], state[kIndVx] + u[kIndAx] * dt, max_linacc, dt);
   double new_vely =
-      limit(state[kIndVy], state[kIndVy] + u[kIndAy] * _dt, _max_linacc, _dt);
+      limit(state[kIndVy], state[kIndVy] + u[kIndAy] * dt, max_linacc, dt);
 
   // ensure velx and y are within input bounds
-  new_velx = std::max(std::min(new_velx, _max_linvel), -_max_linvel);
-  new_vely = std::max(std::min(new_vely, _max_linvel), -_max_linvel);
+  double max_linvel = _mpc_cfg->constraints.max_linvel;
+  new_velx          = std::max(std::min(new_velx, max_linvel), -max_linvel);
+  new_vely          = std::max(std::min(new_vely, max_linvel), -max_linvel);
 
   return {new_velx, new_vely};
 }
 
 void DIMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
                                        const Eigen::VectorXd& utraj) {
-  for (int i = 0; i <= _mpc_steps; ++i) {
+  double mpc_steps = _mpc_cfg->steps;
+  for (int i = 0; i <= mpc_steps; ++i) {
     mpc_x[i]     = xtraj[kIndX + i * kIndStateInc];
     mpc_y[i]     = xtraj[kIndY + i * kIndStateInc];
     mpc_vx[i]    = xtraj[kIndVx + i * kIndStateInc];
@@ -327,7 +261,7 @@ void DIMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
     mpc_s_dot[i] = xtraj[kIndSDot + i * kIndStateInc];
   }
 
-  for (int i = 0; i < _mpc_steps; ++i) {
+  for (int i = 0; i < mpc_steps; ++i) {
     mpc_ax[i]      = utraj[kIndAx + i * kIndInputInc];
     mpc_ay[i]      = utraj[kIndAy + i * kIndInputInc];
     mpc_s_ddots[i] = utraj[kIndSDDot + i * kIndInputInc];
@@ -336,16 +270,18 @@ void DIMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
 
 const std::array<Eigen::VectorXd, 2> DIMPCC::get_state_limits() const {
   Eigen::VectorXd xmin(kNX), xmax(kNX);
-  xmin << -1e3, -1e3, -_max_linvel, -_max_linvel, 0, -_max_linvel;
-  xmax << 1e3, 1e3, _max_linvel, _max_linvel, _ref_len_sz, _max_linvel;
+  double max_linvel = _mpc_cfg->constraints.max_linvel;
+  xmin << -1e3, -1e3, -max_linvel, -max_linvel, 0, -max_linvel;
+  xmax << 1e3, 1e3, max_linvel, max_linvel, _mpc_cfg->ref_length, max_linvel;
 
   return {xmin, xmax};
 }
 
 const std::array<Eigen::VectorXd, 2> DIMPCC::get_input_limits() const {
   Eigen::VectorXd umin(kNU), umax(kNU);
-  umin << -_max_linacc, -_max_linacc, -_max_linacc;
-  umax << _max_linacc, _max_linacc, _max_linacc;
+  double max_linacc = _mpc_cfg->constraints.max_linacc;
+  umin << -max_linacc, -max_linacc, -max_linacc;
+  umax << max_linacc, max_linacc, max_linacc;
 
   return {umin, umax};
 }
@@ -353,6 +289,7 @@ const std::array<Eigen::VectorXd, 2> DIMPCC::get_input_limits() const {
 DIMPCC::MPCHorizon DIMPCC::get_horizon() const {
 
   // sadly c++17 does not support designated initializers 😭
+  double mpc_steps = _mpc_cfg->steps;
   DIMPCC::MPCHorizon horizon;
   horizon.states.xs          = utils::vector_to_eigen(mpc_x);
   horizon.states.ys          = utils::vector_to_eigen(mpc_y);
@@ -364,9 +301,9 @@ DIMPCC::MPCHorizon DIMPCC::get_horizon() const {
   horizon.inputs.accs_x       = utils::vector_to_eigen(mpc_ax);
   horizon.inputs.accs_y       = utils::vector_to_eigen(mpc_ay);
   horizon.inputs.arclens_ddot = utils::vector_to_eigen(mpc_s_ddots);
-  horizon.length              = _mpc_steps + 1;
+  horizon.length              = mpc_steps + 1;
 
-  const auto N = _mpc_steps + 1;
+  const auto N = mpc_steps + 1;
 
   // these should all hold true by construction, mostly here for
   // future refactoring in case I screw something up down the line

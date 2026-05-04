@@ -21,163 +21,60 @@ const uint16_t UnicycleMPCC::kNU;
 const uint16_t UnicycleMPCC::kNBX0;
 // #endif
 
-UnicycleMPCC::UnicycleMPCC() {
-  // Set default value
-  _dt          = .1;
-  _mpc_steps   = 10;
-  _max_angvel  = 3.0;  // Maximal angvel radian (~30 deg)
-  _max_linvel  = 2.0;  // Maximal linvel accel
-  _max_linacc  = 4.0;  // Maximal linacc accel
-  _max_anga    = 2 * M_PI;
-  _bound_value = 1.0e3;  // Bound value for other variables
-
-  _w_ql      = 50.0;
-  _w_qc      = .1;
-  _w_q_speed = .3;
-  _w_ql_lyap = 1;
-  _w_qc_lyap = 1;
-
-  _gamma     = .5;
-  _use_cbf   = false;
-  _alpha_abv = 1.0;
-  _alpha_blw = 1.0;
-  _colinear  = 0.01;
-  _padding   = .05;
-
-  _use_eigen   = false;
-  _ref_samples = 10;
-  _ref_len_sz  = 4.0;
-
+UnicycleMPCC::UnicycleMPCC(std::shared_ptr<MPCConfig> cfg) {
   _has_run   = false;
   _odom_init = false;
 
   _traj_alignment_threshold = .1;
   _alignment_p_gain         = 1;
 
-  _s_dot = 0;
-
   _state = Eigen::VectorXd::Zero(kNX);
   _odom  = Eigen::VectorXd(3);
-
-  _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
-  _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
-
-  mpc_x.resize(_mpc_steps + 1);
-  mpc_y.resize(_mpc_steps + 1);
-  mpc_theta.resize(_mpc_steps + 1);
-  mpc_linvels.resize(_mpc_steps + 1);
-  mpc_s.resize(_mpc_steps + 1);
-  mpc_s_dot.resize(_mpc_steps + 1);
-
-  mpc_angvels.resize(_mpc_steps);
-  mpc_linaccs.resize(_mpc_steps);
-  mpc_s_ddots.resize(_mpc_steps);
-
-  reset_horizon();
 
   _use_dyna_obs  = false;
   _is_shift_warm = false;
   _solve_success = false;
 
-  _acados_solver.initialize(_mpc_steps);
+  load_params(cfg);
 
   // cpg_update_A_mat(0, -1.1);
 }
 
 UnicycleMPCC::~UnicycleMPCC() {}
 
-void UnicycleMPCC::load_params(const std::map<std::string, double>& params) {
-  _params = params;
+void UnicycleMPCC::load_params(std::shared_ptr<MPCConfig> cfg) {
+  _mpc_cfg = cfg;
 
-  // Init parameters for MPC object
-  _dt = params.find("DT") != params.end() ? params.at("DT") : _dt;
-  _mpc_steps =
-      _params.find("STEPS") != _params.end() ? _params.at("STEPS") : _mpc_steps;
-  _max_angvel = _params.find("ANGVEL") != _params.end() ? _params.at("ANGVEL")
-                                                        : _max_angvel;
-  _max_linvel = _params.find("LINVEL") != _params.end() ? _params.at("LINVEL")
-                                                        : _max_linvel;
-  _max_linacc = _params.find("MAX_LINACC") != _params.end()
-                    ? _params.at("MAX_LINACC")
-                    : _max_linacc;
-  _max_anga = _params.find("MAX_ANGA") != _params.end() ? _params.at("MAX_ANGA")
-                                                        : _max_anga;
+  // std::cout << "ACCESSING MPC STEPS\n";
+  double mpc_steps = _mpc_cfg->steps;
+  // std::cout << "DONE\n";
+  // int status = _acados_solver.initialize(mpc_steps);
 
-  _bound_value = _params.find("BOUND") != _params.end() ? _params.at("BOUND")
-                                                        : _bound_value;
+  mpc_x.resize(mpc_steps + 1);
+  mpc_y.resize(mpc_steps + 1);
+  mpc_theta.resize(mpc_steps + 1);
+  mpc_linvels.resize(mpc_steps + 1);
+  mpc_s.resize(mpc_steps + 1);
+  mpc_s_dot.resize(mpc_steps + 1);
 
-  _w_angvel   = params.find("W_ANGVEL") != params.end() ? params.at("W_ANGVEL")
-                                                        : _w_angvel;
-  _w_angvel_d = params.find("W_DANGVEL") != params.end()
-                    ? params.at("W_DANGVEL")
-                    : _w_angvel_d;
-  _w_linvel_d =
-      params.find("W_DA") != params.end() ? params.at("W_DA") : _w_linvel_d;
-
-  _w_ql = params.find("W_LAG") != params.end() ? params.at("W_LAG") : _w_ql;
-  _w_qc =
-      params.find("W_CONTOUR") != params.end() ? params.at("W_CONTOUR") : _w_qc;
-  _w_q_speed = params.find("W_SPEED") != params.end() ? params.at("W_SPEED")
-                                                      : _w_q_speed;
-
-  _ref_len_sz  = params.find("REF_LENGTH") != params.end()
-                     ? params.at("REF_LENGTH")
-                     : _ref_len_sz;
-  _ref_samples = params.find("REF_SAMPLES") != params.end()
-                     ? params.at("REF_SAMPLES")
-                     : _ref_samples;
-
-  _gamma     = params.find("CLF_GAMMA") != params.end() ? params.at("CLF_GAMMA")
-                                                        : _gamma;
-  _w_ql_lyap = params.find("CLF_W_LAG") != params.end() ? params.at("CLF_W_LAG")
-                                                        : _w_ql_lyap;
-  _w_qc_lyap = params.find("CLF_W_CONTOUR") != params.end()
-                   ? params.at("CLF_W_CONTOUR")
-                   : _w_ql_lyap;
-
-  _use_cbf =
-      params.find("USE_CBF") != params.end() ? params.at("USE_CBF") : _use_cbf;
-  _alpha_abv = params.find("CBF_ALPHA_ABV") != params.end()
-                   ? params.at("CBF_ALPHA_ABV")
-                   : _alpha_abv;
-  _alpha_blw = params.find("CBF_ALPHA_BLW") != params.end()
-                   ? params.at("CBF_ALPHA_BLW")
-                   : _alpha_blw;
-  _colinear  = params.find("CBF_COLINEAR") != params.end()
-                   ? params.at("CBF_COLINEAR")
-                   : _colinear;
-  _padding   = params.find("CBF_PADDING") != params.end()
-                   ? params.at("CBF_PADDING")
-                   : _padding;
-
-  utils::get_param(params, "ANGLE_GAIN", _alignment_p_gain);
-  utils::get_param(params, "ANGLE_THRESH", _traj_alignment_threshold);
-
-  int status = _acados_solver.initialize(_mpc_steps);
-  if (status) {
-    throw std::runtime_error("Acados initialization failed with status + " +
-                             std::to_string(status) + "!");
-  }
-
-  mpc_x.resize(_mpc_steps + 1);
-  mpc_y.resize(_mpc_steps + 1);
-  mpc_theta.resize(_mpc_steps + 1);
-  mpc_linvels.resize(_mpc_steps + 1);
-  mpc_s.resize(_mpc_steps + 1);
-  mpc_s_dot.resize(_mpc_steps + 1);
-
-  mpc_angvels.resize(_mpc_steps);
-  mpc_linaccs.resize(_mpc_steps);
-  mpc_s_ddots.resize(_mpc_steps);
+  mpc_angvels.resize(mpc_steps);
+  mpc_linaccs.resize(mpc_steps);
+  mpc_s_ddots.resize(mpc_steps);
 
   reset_horizon();
 
-  if (_prev_x0.size() != (_mpc_steps + 1) * kNX) {
+  if (_prev_x0.size() != (mpc_steps + 1) * kNX) {
     std::cout << termcolor::yellow
               << "x0, u0 size differs from mpc_steps size, resizing and "
                  "zeroing out\n";
-    _prev_x0 = Eigen::VectorXd::Zero((_mpc_steps + 1) * kNX);
-    _prev_u0 = Eigen::VectorXd::Zero(_mpc_steps * kNU);
+    _prev_x0 = Eigen::VectorXd::Zero((mpc_steps + 1) * kNX);
+    _prev_u0 = Eigen::VectorXd::Zero(mpc_steps * kNU);
+  }
+
+  bool status = _acados_solver.initialize(mpc_steps);
+  if (status) {
+    throw std::runtime_error("Acados initialization failed with status + " +
+                             std::to_string(status) + "!");
   }
 
   std::cout << "!! MPC Obj parameters updated !! " << std::endl;
@@ -208,21 +105,21 @@ bool UnicycleMPCC::set_solver_parameters(const types::Corridor& corridor) {
   int provided_params =
       ctrls_x.size() + ctrls_y.size() + 2 * N_tube_coeffs + Param::kNP_Scalar;
   if (provided_params != Param::kNP) {
-    std::cerr << termcolor::yellow << "[MPCC] provided param count"
+    std::cerr << termcolor::yellow << "[MPCC] provided param count "
               << provided_params << " does not match acados parameter size "
               << Param::kNP << termcolor::reset << std::endl;
 
     return false;
   }
 
-  params[Param::k_Q_c]       = _w_qc;
-  params[Param::k_Q_l]       = _w_ql;
-  params[Param::k_Q_s]       = _w_q_speed;
-  params[Param::k_alpha_abv] = _alpha_abv;
-  params[Param::k_alpha_blw] = _alpha_blw;
-  params[Param::k_Ql_c]      = _w_qc_lyap;
-  params[Param::k_Ql_l]      = _w_ql_lyap;
-  params[Param::k_gamma]     = _gamma;
+  params[Param::k_Q_c]       = _mpc_cfg->weights.w_contour_e;
+  params[Param::k_Q_l]       = _mpc_cfg->weights.w_lag_e;
+  params[Param::k_Q_s]       = _mpc_cfg->weights.w_speed;
+  params[Param::k_alpha_abv] = _mpc_cfg->cbf.alpha_abv;
+  params[Param::k_alpha_blw] = _mpc_cfg->cbf.alpha_blw;
+  params[Param::k_Ql_c]      = _mpc_cfg->clf.w_contour_e;
+  params[Param::k_Ql_l]      = _mpc_cfg->clf.w_lag_e;
+  params[Param::k_gamma]     = _mpc_cfg->clf.gamma;
   params[Param::k_L_path]    = traj_view.arclen;
 
   int N_ctrls = ctrls_x.size();
@@ -239,7 +136,8 @@ bool UnicycleMPCC::set_solver_parameters(const types::Corridor& corridor) {
     params[i + 2 * N_ctrls + N_tube_coeffs] = below_coeffs(i);
   }
 
-  for (int step = 0; step < _mpc_steps + 1; ++step) {
+  double mpc_steps = _mpc_cfg->steps;
+  for (int step = 0; step < mpc_steps + 1; ++step) {
     _acados_solver.update_params(step, params);
   }
 
@@ -263,15 +161,19 @@ Eigen::VectorXd UnicycleMPCC::next_state(const Eigen::VectorXd& current_state,
   double w     = control(kIndAngVel);
   double sddot = control(kIndSDDot);
 
+  // needed params
+  double dt         = _mpc_cfg->dt;
+  double max_linvel = _mpc_cfg->constraints.max_linvel;
+
   // Dynamics equations
   // for numerical reasons, theta is not wrapped before going into solver.
-  ret(kIndX)     = x1 + v1 * cos(theta1) * _dt;
-  ret(kIndY)     = y1 + v1 * sin(theta1) * _dt;
-  ret(kIndTheta) = theta1 + w * _dt;
-  ret(kIndV)     = std::max(std::min(v1 + a * _dt, _max_linvel), -_max_linvel);
-  ret(kIndS)     = s1 + sdot1 * _dt;
+  ret(kIndX)     = x1 + v1 * cos(theta1) * dt;
+  ret(kIndY)     = y1 + v1 * sin(theta1) * dt;
+  ret(kIndTheta) = theta1 + w * dt;
+  ret(kIndV)     = std::max(std::min(v1 + a * dt, max_linvel), -max_linvel);
+  ret(kIndS)     = s1 + sdot1 * dt;
   ret(kIndSDot) =
-      std::max(std::min(sdot1 + sddot * _dt, _max_linvel), -_max_linvel);
+      std::max(std::min(sdot1 + sddot * dt, max_linvel), -max_linvel);
 
   return ret;
 }
@@ -279,7 +181,8 @@ Eigen::VectorXd UnicycleMPCC::next_state(const Eigen::VectorXd& current_state,
 void UnicycleMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
                                              const Eigen::VectorXd& utraj) {
 
-  for (int i = 0; i <= _mpc_steps; ++i) {
+  double mpc_steps = _mpc_cfg->steps;
+  for (int i = 0; i <= mpc_steps; ++i) {
     mpc_x[i]       = xtraj[kIndX + i * kIndStateInc];
     mpc_y[i]       = xtraj[kIndY + i * kIndStateInc];
     mpc_theta[i]   = xtraj[kIndTheta + i * kIndStateInc];
@@ -288,7 +191,7 @@ void UnicycleMPCC::map_trajectory_to_buffers(const Eigen::VectorXd& xtraj,
     mpc_s_dot[i]   = xtraj[kIndSDot + i * kIndStateInc];
   }
 
-  for (int i = 0; i < _mpc_steps; ++i) {
+  for (int i = 0; i < mpc_steps; ++i) {
     mpc_angvels[i] = utraj[kIndAngVel + i * kIndInputInc];
     mpc_linaccs[i] = utraj[kIndLinAcc + i * kIndInputInc];
     mpc_s_ddots[i] = utraj[kIndSDDot + i * kIndInputInc];
@@ -322,15 +225,18 @@ std::array<double, 2> UnicycleMPCC::compute_mpc_vel_command(
   double curr_angvel = u[kIndAngVel];
 
   // make sure velocity does not violate acc bounds, then cap
-  double new_vel =
-      limit(state[kIndV], state[kIndV] + u[kIndLinAcc] * _dt, _max_linacc, _dt);
-  new_vel = std::max(-_max_linvel, std::min(new_vel, _max_linvel));
+  double dt      = _mpc_cfg->dt;
+  double new_vel = limit(state[kIndV], state[kIndV] + u[kIndLinAcc] * dt,
+                         _mpc_cfg->constraints.max_linacc, dt);
+  new_vel = std::max(-_mpc_cfg->constraints.max_linvel,
+                     std::min(new_vel, _mpc_cfg->constraints.max_linvel));
 
   return {new_vel, curr_angvel};
 }
 
 void UnicycleMPCC::reset_horizon() {
-  for (int i = 0; i < _mpc_steps + 1; ++i) {
+  double mpc_steps = _mpc_cfg->steps;
+  for (int i = 0; i < mpc_steps + 1; ++i) {
     mpc_x[i]       = _state(kIndX);
     mpc_y[i]       = _state(kIndY);
     mpc_theta[i]   = 0;
@@ -339,7 +245,7 @@ void UnicycleMPCC::reset_horizon() {
     mpc_s_dot[i]   = 0;
   }
 
-  for (int i = 0; i < _mpc_steps; ++i) {
+  for (int i = 0; i < mpc_steps; ++i) {
     mpc_angvels[i] = 0;
     mpc_linaccs[i] = 0;
     mpc_s_ddots[i] = 0;
@@ -348,17 +254,22 @@ void UnicycleMPCC::reset_horizon() {
 
 const std::array<Eigen::VectorXd, 2> UnicycleMPCC::get_state_limits() const {
   Eigen::VectorXd xmin(kNX), xmax(kNX);
-  xmin << -_bound_value, -_bound_value, -M_PI, -_max_linvel, 0, -_max_linvel;
-  xmax << _bound_value, _bound_value, M_PI, _max_linvel, _ref_len_sz,
-      _max_linvel;
+  double max_linvel  = _mpc_cfg->constraints.max_linvel;
+  double bound_value = _mpc_cfg->constraints.bound_value;
+  xmin << -bound_value, -bound_value, -M_PI, -max_linvel, 0, -max_linvel;
+  xmax << bound_value, bound_value, M_PI, max_linvel, _mpc_cfg->ref_length,
+      max_linvel;
 
   return {xmin, xmax};
 }
 
 const std::array<Eigen::VectorXd, 2> UnicycleMPCC::get_input_limits() const {
   Eigen::VectorXd umin(kNU), umax(kNU);
-  umin << -_max_angvel, -_max_linacc, -_max_linacc;
-  umax << _max_angvel, _max_linacc, _max_linacc;
+  double max_angvel = _mpc_cfg->constraints.max_angvel;
+  double max_linacc = _mpc_cfg->constraints.max_linacc;
+
+  umin << -max_angvel, -max_linacc, -max_linacc;
+  umax << max_angvel, max_linacc, max_linacc;
 
   return {umin, umax};
 }
@@ -369,9 +280,9 @@ Eigen::VectorXd UnicycleMPCC::get_cbf_data(const types::Corridor& corridor,
   Eigen::VectorXd input = _prev_u0.segment(horizon_idx * kNU, kNU);
 
   CasadiUnicycleInterface::Params params;
-  params.qc_lyap    = _w_qc_lyap;
-  params.ql_lyap    = _w_ql_lyap;
-  params.gamma_lyap = _gamma;
+  params.qc_lyap    = _mpc_cfg->clf.w_contour_e;
+  params.ql_lyap    = _mpc_cfg->clf.w_lag_e;
+  params.gamma_lyap = _mpc_cfg->clf.gamma;
 
   CasadiUnicycleInterface casadi_interface;
   double h_abv = casadi_interface.get_h_abv(state, input, corridor, params);
@@ -382,16 +293,17 @@ Eigen::VectorXd UnicycleMPCC::get_cbf_data(const types::Corridor& corridor,
   double hdot_blw =
       casadi_interface.get_h_dot_blw(state, input, corridor, params);
 
-  std::cout << "h_abv is: " << h_abv << "\n";
-  std::cout << "h_dot_abv is: " << hdot_abv << "\n";
-  std::cout << "h_blw is: " << h_blw << "\n";
-  std::cout << "h_dot_blw is: " << hdot_blw << "\n";
+  // std::cout << "h_abv is: " << h_abv << "\n";
+  // std::cout << "h_dot_abv is: " << hdot_abv << "\n";
+  // std::cout << "h_blw is: " << h_blw << "\n";
+  // std::cout << "h_dot_blw is: " << hdot_blw << "\n";
 
   return Eigen::Vector4d(h_abv, hdot_abv, h_blw, hdot_blw);
 }
 
 UnicycleMPCC::MPCHorizon UnicycleMPCC::get_horizon() const {
 
+  double mpc_steps = _mpc_cfg->steps;
   UnicycleMPCC::MPCHorizon horizon;
 
   horizon.states.xs          = utils::vector_to_eigen(mpc_x);
@@ -404,9 +316,9 @@ UnicycleMPCC::MPCHorizon UnicycleMPCC::get_horizon() const {
   horizon.inputs.angvels      = utils::vector_to_eigen(mpc_angvels);
   horizon.inputs.linaccs      = utils::vector_to_eigen(mpc_linaccs);
   horizon.inputs.arclens_ddot = utils::vector_to_eigen(mpc_s_ddots);
-  horizon.length              = _mpc_steps + 1;
+  horizon.length              = mpc_steps + 1;
 
-  const auto N = _mpc_steps + 1;
+  const auto N = mpc_steps + 1;
   assert(horizon.states.xs.size() == N);
   assert(horizon.states.ys.size() == N);
   assert(horizon.states.thetas.size() == N);
@@ -451,13 +363,19 @@ std::optional<std::array<double, 2>> UnicycleMPCC ::presolve_hook(
 
   double traj_heading = atan2(point[1], point[0]);
 
-  if (!is_aligned(traj_heading, state[kIndTheta], _traj_alignment_threshold)) {
+  // std::cout << "theta is: " << state[kIndTheta] << "\n";
+  // std::cout << "prop thresh is: " << _mpc_cfg->prop.gain_thresh << "\n";
+  if (!is_aligned(traj_heading, state[kIndTheta], _mpc_cfg->prop.gain_thresh)) {
     std::cout << termcolor::yellow
               << "Unicycle model is executing presolve hook!\n"
               << termcolor::reset << std::endl;
+    double max_angvel = _mpc_cfg->constraints.max_angvel;
     double desired_angvel =
-        get_orient_control(traj_heading, state[kIndTheta], _alignment_p_gain,
-                           -_max_angvel, _max_angvel);
+        get_orient_control(traj_heading, state[kIndTheta], _mpc_cfg->prop.gain,
+                           -max_angvel, max_angvel);
+
+    // std::cout << "prop gain: " << _mpc_cfg->prop.gain << "\n";
+    // std::cout << "desired angvel: " << desired_angvel << "\n";
     double desired_vel = 0;
 
     _prev_u0[kIndLinAcc] = 0.;

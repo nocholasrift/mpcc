@@ -10,19 +10,18 @@
 #include <variant>
 
 namespace mpcc {
-enum class MPCType { kDoubleIntegrator, kUnicycle };
 
 class MPCCore {
 
  public:
   using AnyHorizon = std::variant<UnicycleMPCC::MPCHorizon, DIMPCC::MPCHorizon>;
-  MPCCore();
 
-  MPCCore(const MPCType& mpc_input_type);
+  MPCCore(std::shared_ptr<MPCConfig> cfg);
 
   ~MPCCore();
 
-  void load_params(const std::map<std::string, double>& params);
+  // void load_params(const std::map<std::string, double>& params);
+  void load_params(std::shared_ptr<MPCConfig> cfg);
   /**********************************************************************
    * Function: MPCCore::load_params()
    * Description: Loads parameters for the MPC controller
@@ -80,7 +79,8 @@ class MPCCore {
   const std::array<Eigen::VectorXd, 2> get_state_limits() const;
   const std::array<Eigen::VectorXd, 2> get_input_limits() const;
   AnyHorizon get_horizon() const;
-  const std::map<std::string, double>& get_params() const;
+
+  std::shared_ptr<const MPCConfig> get_params() const;
   Eigen::VectorXd get_cbf_data(size_t horizon_idx) const;
   /*const types::Trajectory& get_trajectory() { return _trajectory; }*/
   const types::Trajectory& get_trajectory() { return _trajectory; }
@@ -169,6 +169,8 @@ class MPCCore {
 
   // std::unique_ptr<MPCBase> _mpc;
   std::variant<UnicycleMPCC, DIMPCC> _mpc;
+
+  std::shared_ptr<MPCConfig> _mpc_cfg;
 
   MPCType _mpc_input_type = MPCType::kUnicycle;
 };

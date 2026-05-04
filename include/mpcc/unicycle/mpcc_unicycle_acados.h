@@ -155,10 +155,13 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
   };
 
  public:
-  UnicycleMPCC();
+  UnicycleMPCC() = default;
+
+  UnicycleMPCC(std::shared_ptr<MPCConfig> cfg);
   virtual ~UnicycleMPCC();
 
-  void load_params(const std::map<std::string, double>& params);
+  // void load_params(const std::map<std::string, double>& params);
+  void load_params(std::shared_ptr<MPCConfig> cfg);
   /**********************************************************************
    * Function: UnicycleMPCC::load_params()
    * Description: Loads parameters for the MPC controller
@@ -263,8 +266,6 @@ class UnicycleMPCC : public MPCBase<UnicycleMPCC>, public Orientable {
   std::vector<double> mpc_angvels;
   std::vector<double> mpc_linaccs;
   std::vector<double> mpc_s_ddots;
-
-  Eigen::MatrixXd _dyna_obs;
 
   double _ds;
 
