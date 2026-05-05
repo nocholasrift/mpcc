@@ -119,7 +119,7 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
   std::cout << "received trajectory of length: " << _trajectory.get_arclen()
             << "\n";
   std::cout << "trajectory has " << N << " knots\n";
-  std::cout << "start point: " << _trajectory(0).transpose() << "\n";
+  // std::cout << "start point: " << _trajectory(0).transpose() << "\n";
 
   _is_traj_set = true;
   _traj_reset  = true;
@@ -153,11 +153,11 @@ MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
 
     double max_possible_horizon_dist =
         _mpc_cfg->constraints.max_linvel * _mpc_cfg->dt * _mpc_cfg->steps;
-    std::cout << "LAST S WAS: " << last_s << "\n";
-    std::cout << "remaining len: " << _trajectory.get_arclen() - current_s
-              << "\n";
-    std::cout << "MAX POSSIBLE HORIZ DIST " << max_possible_horizon_dist
-              << "\n";
+    // std::cout << "LAST S WAS: " << last_s << "\n";
+    // std::cout << "remaining len: " << _trajectory.get_arclen() - current_s
+    // << "\n";
+    // std::cout << "MAX POSSIBLE HORIZ DIST " << max_possible_horizon_dist
+    // << "\n";
     if (std::abs(_trajectory.get_arclen() - current_s - last_s) <
         1.5 * max_possible_horizon_dist) {
       double extend_len = _trajectory.get_arclen() + max_possible_horizon_dist;
@@ -167,8 +167,8 @@ MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
     }
   }
 
-  std::cout << "non extended traj length: "
-            << _non_extended_trajectory.get_arclen() << "\n";
+  // std::cout << "non extended traj length: "
+  //           << _non_extended_trajectory.get_arclen() << "\n";
 
   /*double extend_len = _trajectory.get_arclen() + 2.0;*/
   /*types::Trajectory extended_trajectory =*/
@@ -204,9 +204,18 @@ MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
   // bool status            = _tube_generator.generate(*_map_util, adjusted_traj,
   // tube_starting_s, horizon);
   double tube_starting_s = 0.;
+
+  auto start = std::chrono::high_resolution_clock::now();
   bool status =
       _tube_generator.generate(*_map_util, adjusted_traj, tube_starting_s,
                                _non_extended_trajectory.get_arclen());
+  auto end = std::chrono::high_resolution_clock::now();
+
+  double time_to_solve =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+
+  std::cout << "tube generation solve time: " << time_to_solve << std::endl;
 
   // if (!_is_tube_generated) {
   //
@@ -261,15 +270,17 @@ MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
   //     _tube_generator.get_side_poly(tube::TubeGenerator::Side::kBelow),
   //     current_s);
 
-  auto start = std::chrono::high_resolution_clock::now();
-  result     = call_mpc(
+  start  = std::chrono::high_resolution_clock::now();
+  result = call_mpc(
       [&](auto& mpc) { return mpc.solve(mpcc_state, corridor, is_reverse); });
 
-  auto end = std::chrono::high_resolution_clock::now();
+  end = std::chrono::high_resolution_clock::now();
 
-  double time_to_solve =
+  time_to_solve =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
+
+  std::cout << "mpc time to solve: " << time_to_solve << std::endl;
 
   _has_run     = true;
   _curr_vel    = result.command[0];
@@ -289,6 +300,8 @@ Eigen::VectorXd MPCCore::get_cbf_data(size_t horizon_idx) const {
 
   size_t horizon_steps =
       std::visit([](const auto& arg) { return arg.length; }, horizon);
+
+  std::cout << "horizon has " << horizon_steps << " steps" << std::endl;
 
   if (horizon_idx >= horizon_steps) {
     throw std::invalid_argument(

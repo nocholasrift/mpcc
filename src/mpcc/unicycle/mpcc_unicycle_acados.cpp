@@ -279,6 +279,14 @@ Eigen::VectorXd UnicycleMPCC::get_cbf_data(const types::Corridor& corridor,
   Eigen::VectorXd state = _prev_x0.segment(horizon_idx * kNX, kNX);
   Eigen::VectorXd input = _prev_u0.segment(horizon_idx * kNU, kNU);
 
+  // if s > traj len, we get nan reports, not good.
+  // s >= 1e-2 already through mpc construction
+  constexpr double eps = 1e-2;
+  double arclen        = corridor.get_trajectory().get_arclen();
+  state[kIndS]         = std::min(state[kIndS], arclen - eps);
+  state[kIndS]         = std::max(state[kIndS], eps);
+  std::cout << "s is: " << state[kIndS] << std::endl;
+
   CasadiUnicycleInterface::Params params;
   params.qc_lyap    = _mpc_cfg->clf.w_contour_e;
   params.ql_lyap    = _mpc_cfg->clf.w_lag_e;
@@ -293,10 +301,10 @@ Eigen::VectorXd UnicycleMPCC::get_cbf_data(const types::Corridor& corridor,
   double hdot_blw =
       casadi_interface.get_h_dot_blw(state, input, corridor, params);
 
-  // std::cout << "h_abv is: " << h_abv << "\n";
-  // std::cout << "h_dot_abv is: " << hdot_abv << "\n";
-  // std::cout << "h_blw is: " << h_blw << "\n";
-  // std::cout << "h_dot_blw is: " << hdot_blw << "\n";
+  std::cout << "h_abv is: " << h_abv << std::endl;
+  std::cout << "h_dot_abv is: " << hdot_abv << std::endl;
+  std::cout << "h_blw is: " << h_blw << std::endl;
+  std::cout << "h_dot_blw is: " << hdot_blw << std::endl;
 
   return Eigen::Vector4d(h_abv, hdot_abv, h_blw, hdot_blw);
 }

@@ -24,6 +24,8 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('mpcc')
     juggler_layout_path = os.path.join(pkg_share, 'params', 'plotjuggler_layout.xml')
     # mpcc_param_file_path = PathJoinSubstitution([pkg_share, 'params', param_file])
+    node_env = os.environ.copy()
+    node_env['PYTHONUNBUFFERED'] = '1'
 
     return LaunchDescription([
 
@@ -73,6 +75,7 @@ def generate_launch_description():
             executable='pearl_server.py',
             name='pearl_server',
             output='screen',
+            emulate_tty=True,
             parameters=[{
                 'param_file': param_file,
             }]

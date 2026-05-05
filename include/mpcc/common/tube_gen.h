@@ -332,8 +332,8 @@ class TubeGenerator {
     Eigen::VectorXd negative_coeffs_blw =
         -1 * Eigen::Map<Eigen::VectorXd>(coeffs_blw.data(), coeffs_blw.size());
 
-    std::cout << "abv coeffs: " << eigen_coeffs_abv.transpose() << "\n";
-    std::cout << "blw coeffs: " << negative_coeffs_blw.transpose() << "\n";
+    // std::cout << "abv coeffs: " << eigen_coeffs_abv.transpose() << "\n";
+    // std::cout << "blw coeffs: " << negative_coeffs_blw.transpose() << "\n";
     // negative_coeffs_blw = negative_coeffs_blw.cwiseQuotient(horizon_scale);
 
     // dont love using two different constructors here but dont hate it enough to

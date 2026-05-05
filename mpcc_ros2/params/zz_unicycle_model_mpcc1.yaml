@@ -37,7 +37,7 @@ mpcc:
     cbf_colinear: 0.05
     cbf_padding: 0.05
 
-    is_eval: false
+    is_eval: true
 
     # rl training params
     min_alpha: 0.025

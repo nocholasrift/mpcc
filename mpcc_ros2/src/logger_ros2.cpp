@@ -15,9 +15,9 @@ namespace logger {
 // Constructor
 // -------------------------
 RLLogger::RLLogger(rclcpp::Node::SharedPtr node,
-                   std::shared_ptr<NodeConfig> node_cfg,
-                   std::shared_ptr<mpcc::MPCConfig> mpc_cfg, bool is_logging)
-    : node_(node), is_logging_(is_logging) {
+                   std::shared_ptr<mpcc_node::NodeConfig> node_cfg,
+                   std::shared_ptr<mpcc::MPCConfig> mpc_cfg)
+    : node_(node) {
 
   load_params(node_cfg, mpc_cfg);
   // Default Values
@@ -62,7 +62,7 @@ RLLogger::~RLLogger() {}
 // -------------------------
 // Params
 // -------------------------
-void RLLogger::load_params(std::shared_ptr<NodeConfig> node_cfg,
+void RLLogger::load_params(std::shared_ptr<mpcc_node::NodeConfig> node_cfg,
                            std::shared_ptr<mpcc::MPCConfig> mpc_cfg) {
   node_cfg_ = node_cfg;
   mpc_cfg_  = mpc_cfg;
@@ -142,6 +142,11 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
   // double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + alpha_dot_blw_ * dt;
   double alpha_abv = mpc_cfg_->cbf.alpha_abv + alpha_dot_abv_;
   double alpha_blw = mpc_cfg_->cbf.alpha_blw + alpha_dot_blw_;
+
+  if (std::isnan(alpha_abv) || std::isnan(alpha_blw)) {
+    RCLCPP_ERROR(node_->get_logger(), "alpha_abv/blw is nan!");
+    exit(-1);
+  }
 
   // Constraint
   mpc_cfg_->cbf.alpha_abv = std::clamp(alpha_abv, min_alpha, max_alpha);

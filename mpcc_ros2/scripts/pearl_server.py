@@ -168,7 +168,11 @@ class ModelServer(Node):
         obs = np.array(req.state.state)
         unnormalized_obs = obs.copy()
 
+        self.get_logger().info(f"obs: {obs}")
+
         obs = self.normalize_obs(obs)
+
+        self.get_logger().info(f"normalized obs: {obs}")
 
         raw_act, _ = self.agent.get_action(obs)
 

@@ -216,9 +216,9 @@ class MPCBase {
     Eigen::Vector2d prev_pos = _prev_x0.segment(MPCImpl::kNX, 2);
     Eigen::Vector2d curr_pos = initial_state.head(2);
 
-    std::cout << termcolor::yellow << "previous state: "
-              << _prev_x0.segment(MPCImpl::kNX, MPCImpl::kNX).transpose()
-              << termcolor::reset << "\n";
+    // std::cout << termcolor::yellow << "previous state: "
+    //           << _prev_x0.segment(MPCImpl::kNX, MPCImpl::kNX).transpose()
+    //           << termcolor::reset << "\n";
 
     if (!_is_shift_warm) {
       std::cout << "using no u warm start\n";
@@ -306,7 +306,7 @@ class MPCBase {
       _acados_solver.get_output(step, "u", &utraj[step * MPCImpl::kNU]);
     }
 
-    std::cout << "xtraj 0: " << xtraj.head(MPCImpl::kNX) << "\n";
+    // std::cout << "xtraj 0: " << xtraj.head(MPCImpl::kNX) << "\n";
 
     _acados_solver.get_output(mpc_steps, "x", &xtraj[mpc_steps * MPCImpl::kNX]);
 

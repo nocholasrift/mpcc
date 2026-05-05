@@ -6,6 +6,7 @@
 
 #include <mpcc/common/mpcc_config.h>
 #include <mpcc/common/mpcc_core.h>
+#include <mpcc/node/node_impl.h>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
@@ -18,22 +19,15 @@
 #include <string>
 #include <unordered_map>
 
-struct NodeConfig {
-  bool use_vicon       = false;
-  bool is_eval         = false;
-  double vel_pub_freq  = 20.0;
-  std::string frame_id = "odom";
-  // mpcc::MPCConfig mpc;
-};
-
 namespace logger {
 
 class RLLogger {
  public:
-  RLLogger(rclcpp::Node::SharedPtr node, std::shared_ptr<NodeConfig> node_cfg,
-           std::shared_ptr<mpcc::MPCConfig> mpc_cfg, bool is_logging);
+  RLLogger(rclcpp::Node::SharedPtr node,
+           std::shared_ptr<mpcc_node::NodeConfig> node_cfg,
+           std::shared_ptr<mpcc::MPCConfig> mpc_cfg);
 
-  void load_params(std::shared_ptr<NodeConfig> node_cfg,
+  void load_params(std::shared_ptr<mpcc_node::NodeConfig> node_cfg,
                    std::shared_ptr<mpcc::MPCConfig> mpc_cfg);
 
   ~RLLogger();
@@ -88,13 +82,12 @@ class RLLogger {
   double alpha_dot_blw_;
 
   bool is_done_;
-  bool is_logging_;
   bool is_colliding_;
   bool is_first_iter_;
 
   uint8_t exceeded_bounds_;
 
-  std::shared_ptr<NodeConfig> node_cfg_;
+  std::shared_ptr<mpcc_node::NodeConfig> node_cfg_;
   std::shared_ptr<mpcc::MPCConfig> mpc_cfg_;
   // std::unordered_map<std::string, double> params_;
 };

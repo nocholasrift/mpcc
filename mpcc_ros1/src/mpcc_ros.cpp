@@ -448,7 +448,7 @@ void MPCCROS::mpcc_ctrl_loop(const ros::TimerEvent& event) {
     state << _odom(0), _odom(1), _vel_msg.linear.x, _vel_msg.linear.y;
   else {
     ROS_ERROR("Unknown MPC input type: %d",
-              static_cast<unsigned int>(_mpc_input_type));
+              static_cast<unsigned int>(_mpc_cfg->input_type));
     return;
   }
 

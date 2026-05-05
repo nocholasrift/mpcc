@@ -6,10 +6,8 @@
 #include <mpcc_ros2/mpcc_ros2.h>
 
 MPCCROS::MPCCROS() : Node("mpcc_controller_node") {
-  _is_init      = false;
-  _is_goal      = false;
-  _reverse_mode = false;
-  _is_traj_set  = false;
+  _is_init     = false;
+  _is_traj_set = false;
 
   _vel_msg.linear.x  = 0;
   _vel_msg.angular.z = 0;
@@ -17,10 +15,11 @@ MPCCROS::MPCCROS() : Node("mpcc_controller_node") {
   ParamLoader p_loader;
   p_loader.node = this;
 
-  _node_cfg = std::make_shared<NodeConfig>(loadNodeConfig(p_loader));
+  _node_cfg = std::make_shared<mpcc_node::NodeConfig>(loadNodeConfig(p_loader));
   _mpc_cfg  = std::make_shared<mpcc::MPCConfig>(loadMPCConfig(p_loader));
 
-  _mpc_core = std::make_unique<mpcc::MPCCore>(_mpc_cfg);
+  // _mpc_core = std::make_unique<mpcc::MPCCore>(_mpc_cfg);
+  load_params(_mpc_cfg, _node_cfg);
   RCLCPP_INFO(this->get_logger(), "Loading MPC core params...");
 
   // --- ROS2 Interfaces ---
@@ -41,6 +40,8 @@ MPCCROS::MPCCROS() : Node("mpcc_controller_node") {
   _startPub   = this->create_publisher<std_msgs::msg::Float64>("/progress", 10);
   _horizonPub = this->create_publisher<trajectory_msgs::msg::JointTrajectory>(
       "/mpc_horizon", 10);
+  _tubeVizPub = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+      "/tube_viz", 0);
 
   // Service
   _backup_srv = this->create_service<std_srvs::srv::Empty>(
@@ -60,8 +61,8 @@ MPCCROS::~MPCCROS() {
     timer_thread.join();
 }
 
-NodeConfig MPCCROS::loadNodeConfig(ParamLoader& p_loader) {
-  NodeConfig conf;
+mpcc_node::NodeConfig MPCCROS::loadNodeConfig(ParamLoader& p_loader) {
+  mpcc_node::NodeConfig conf;
 
   conf.use_vicon    = p_loader.getb("use_vicon", false);
   conf.is_eval      = p_loader.getb("is_eval", false);
@@ -151,121 +152,146 @@ void MPCCROS::init() {
     // logger_params["MAX_PATH_LENGTH"] = _max_path_length;
 
     // rclcpp::Node actuall inherits from enable_shared_from_this...
-    _logger = std::make_unique<logger::RLLogger>(
-        this->shared_from_this(), _node_cfg, _mpc_cfg, _is_logging);
+    _logger = std::make_unique<logger::RLLogger>(this->shared_from_this(),
+                                                 _node_cfg, _mpc_cfg);
 
   } else if (!_mpc_cfg->cbf.use_cbf) {
-    _cbf_alpha_abv = kMAX_ALPHA;
-    _cbf_alpha_blw = kMAX_ALPHA;
+    _mpc_cfg->cbf.alpha_abv = kMAX_ALPHA;
+    _mpc_cfg->cbf.alpha_blw = kMAX_ALPHA;
   }
 }
 
 void MPCCROS::mapcb(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
-  map_util::OccupancyGrid<int8_t>::MapConfig config;
-  config.width      = msg->info.width;
-  config.height     = msg->info.height;
-  config.resolution = msg->info.resolution;
-  config.origin = {msg->info.origin.position.x, msg->info.origin.position.y};
-  config.occupied_values       = {100};
-  config.no_information_values = {-1};
-
-  _mpc_core->set_map<int8_t>(config, msg->data);
+  process_map(*msg);
+  // map_util::OccupancyGrid<int8_t>::MapConfig config;
+  // config.width      = msg->info.width;
+  // config.height     = msg->info.height;
+  // config.resolution = msg->info.resolution;
+  // config.origin = {msg->info.origin.position.x, msg->info.origin.position.y};
+  // config.occupied_values       = {100};
+  // config.no_information_values = {-1};
+  //
+  // _mpc_core->set_map<int8_t>(config, msg->data);
 }
 
 void MPCCROS::odomcb(const nav_msgs::msg::Odometry::SharedPtr msg) {
-  tf2::Quaternion q;
-  tf2::fromMsg(msg->pose.pose.orientation, q);
-  tf2::Matrix3x3 m(q);
-  double roll, pitch, yaw;
-  m.getRPY(roll, pitch, yaw);
-
-  _odom = Eigen::VectorXd(3);
-  _odom << msg->pose.pose.position.x, msg->pose.pose.position.y, yaw;
-
-  _mpc_core->set_odom(_odom);
-
-  if (!_is_init) {
-    _is_init = true;
-    RCLCPP_INFO(this->get_logger(), "Tracker initialized");
-  }
+  process_odom(*msg);
+  // tf2::Quaternion q;
+  // tf2::fromMsg(msg->pose.pose.orientation, q);
+  // tf2::Matrix3x3 m(q);
+  // double roll, pitch, yaw;
+  // m.getRPY(roll, pitch, yaw);
+  //
+  // _odom = Eigen::VectorXd(3);
+  // _odom << msg->pose.pose.position.x, msg->pose.pose.position.y, yaw;
+  //
+  // _mpc_core->set_odom(_odom);
+  //
+  // if (!_is_init) {
+  //   _is_init = true;
+  //   RCLCPP_INFO(this->get_logger(), "Tracker initialized");
+  // }
 }
 
 void MPCCROS::trajectorycb(
     const trajectory_msgs::msg::JointTrajectory::SharedPtr msg) {
-  RCLCPP_INFO(this->get_logger(), "Trajectory received!");
-  _trajectory = *msg;
-
-  if (msg->points.empty()) {
-    _vel_msg.linear.x  = 0;
-    _vel_msg.angular.z = 0;
-    return;
-  }
-
-  int N = msg->points.size();
-  Eigen::VectorXd ss(N), xs(N), ys(N);
-  for (int i = 0; i < N; ++i) {
-    xs[i] = msg->points[i].positions[0];
-    ys[i] = msg->points[i].positions[1];
-    ss[i] = rclcpp::Duration(msg->points[i].time_from_start).seconds();
-  }
-
-  _mpc_core->set_trajectory(xs, ys, ss);
-  _is_traj_set = true;
+  process_trajectory(*msg);
+  // RCLCPP_INFO(this->get_logger(), "Trajectory received!");
+  // _trajectory = *msg;
+  //
+  // if (msg->points.empty()) {
+  //   _vel_msg.linear.x  = 0;
+  //   _vel_msg.angular.z = 0;
+  //   return;
+  // }
+  //
+  // int N = msg->points.size();
+  // Eigen::VectorXd ss(N), xs(N), ys(N);
+  // for (int i = 0; i < N; ++i) {
+  //   xs[i] = msg->points[i].positions[0];
+  //   ys[i] = msg->points[i].positions[1];
+  //   ss[i] = rclcpp::Duration(msg->points[i].time_from_start).seconds();
+  // }
+  //
+  // _mpc_core->set_trajectory(xs, ys, ss);
+  // _is_traj_set = true;
   // visualizeTraj(); // Port this similarly if needed
 }
 
+void MPCCROS::publish_ref_viz(const nav_msgs::msg::Path& msg) {
+  _pathPub->publish(msg);
+}
+
+void MPCCROS::publish_mpc_horizon_viz(const nav_msgs::msg::Path& msg) {
+  _trajPub->publish(msg);
+}
+
+void MPCCROS::publish_mpc_horizon_traj(
+    const trajectory_msgs::msg::JointTrajectory& msg) {
+  _horizonPub->publish(msg);
+}
+
+void MPCCROS::publish_tube_viz(
+    const visualization_msgs::msg::MarkerArray& msg) {
+  _tubeVizPub->publish(msg);
+}
+
 void MPCCROS::mpcc_ctrl_loop() {
-  if (!_is_init || !_is_traj_set)
-    return;
-
-  const auto& trajectory = _mpc_core->get_trajectory();
-  double true_ref_len    = trajectory.get_arclen();
-  double len_start       = trajectory.get_closest_s(_odom.head(2));
-
-  auto start_msg = std_msgs::msg::Float64();
-  start_msg.data = len_start / true_ref_len;
-  _startPub->publish(start_msg);
-
-  if (len_start > true_ref_len - 0.25) {
-    RCLCPP_INFO(this->get_logger(), "Goal Reached.");
-    _vel_msg.linear.x  = 0;
-    _vel_msg.angular.z = 0;
-    _trajectory.points.clear();
-    return;
-  }
-
-  auto now = this->now();
-
-  Eigen::VectorXd state(4);
-  if (_mpc_cfg->input_type == mpcc::MPCType::kUnicycle)
-    state << _odom(0), _odom(1), _odom(2), _vel_msg.linear.x;
-  else
-    state << _odom(0), _odom(1), _vel_msg.linear.x, _vel_msg.linear.y;
-
-  if (_logger) {
-    _logger->request_alpha(*_mpc_core);
-  }
-
-  mpcc::MPCResult result = _mpc_core->solve(state);
-
-  if (result.status != mpcc::SolverStatus::kSuccess ||
-      result.status != mpcc::SolverStatus::kPresolve) {
-    RCLCPP_INFO(this->get_logger(), "MPC solve was not successful!");
-  }
-
-  if (_mpc_cfg->input_type == mpcc::MPCType::kUnicycle) {
-    _vel_msg.linear.x  = result.command[0];
-    _vel_msg.angular.z = result.command[1];
-  } else {
-    _vel_msg.linear.x = result.command[0];
-    _vel_msg.linear.y = result.command[1];
-  }
-
-  RCLCPP_DEBUG(this->get_logger(), "Solve time: %.3f",
-               (this->now() - now).seconds());
-
-  publishReference();
-  publishMPCTrajectory();
+  control_loop();
+  // if (!_is_init || !_is_traj_set)
+  //   return;
+  //
+  // const auto& trajectory = _mpc_core->get_trajectory();
+  // double true_ref_len    = trajectory.get_arclen();
+  // double len_start       = trajectory.get_closest_s(_odom.head(2));
+  //
+  // auto start_msg = std_msgs::msg::Float64();
+  // start_msg.data = len_start / true_ref_len;
+  // _startPub->publish(start_msg);
+  //
+  // if (len_start > true_ref_len - 0.25) {
+  //   RCLCPP_INFO(this->get_logger(), "Goal Reached.");
+  //   _vel_msg.linear.x  = 0;
+  //   _vel_msg.angular.z = 0;
+  //   _trajectory.points.clear();
+  //   return;
+  // }
+  //
+  // auto now = this->now();
+  //
+  // Eigen::VectorXd state(4);
+  // if (_mpc_cfg->input_type == mpcc::MPCType::kUnicycle)
+  //   state << _odom(0), _odom(1), _odom(2), _vel_msg.linear.x;
+  // else
+  //   state << _odom(0), _odom(1), _vel_msg.linear.x, _vel_msg.linear.y;
+  //
+  // if (_logger) {
+  //   _logger->request_alpha(*_mpc_core);
+  // }
+  //
+  // mpcc::MPCResult result = _mpc_core->solve(state);
+  //
+  // if (result.status != mpcc::SolverStatus::kSuccess &&
+  //     result.status != mpcc::SolverStatus::kPresolve) {
+  //   RCLCPP_INFO(this->get_logger(), "MPC solve was not successful!");
+  // }
+  //
+  // if (_mpc_cfg->input_type == mpcc::MPCType::kUnicycle) {
+  //   _vel_msg.linear.x  = result.command[0];
+  //   _vel_msg.angular.z = result.command[1];
+  // } else {
+  //   _vel_msg.linear.x = result.command[0];
+  //   _vel_msg.linear.y = result.command[1];
+  // }
+  //
+  // RCLCPP_INFO(this->get_logger(), "vel msg cmd is: %.2f\t%.2f",
+  //             _vel_msg.linear.x, _vel_msg.angular.z);
+  //
+  // RCLCPP_INFO(this->get_logger(), "Solve time: %.3f",
+  //             (this->now() - now).seconds());
+  //
+  // publishReference();
+  // publishMPCTrajectory();
 }
 
 void MPCCROS::publishVel() {
@@ -285,90 +311,4 @@ bool MPCCROS::toggleBackup(
   (void)res;
   _reverse_mode = !_reverse_mode;
   return true;
-}
-
-void MPCCROS::publishReference() {
-  if (_trajectory.points.empty())
-    return;
-
-  nav_msgs::msg::Path msg;
-  msg.header.stamp    = this->now();
-  msg.header.frame_id = _node_cfg->frame_id;
-
-  for (const auto& pt : _trajectory.points) {
-    geometry_msgs::msg::PoseStamped pose;
-    pose.header.frame_id    = _node_cfg->frame_id;
-    pose.header.stamp       = this->now();
-    pose.pose.position.x    = pt.positions[0];
-    pose.pose.position.y    = pt.positions[1];
-    pose.pose.orientation.w = 1.0;
-    msg.poses.push_back(pose);
-  }
-  _pathPub->publish(msg);
-}
-
-void MPCCROS::publishMPCTrajectory() {
-  mpcc::MPCCore::AnyHorizon horizon = _mpc_core->get_horizon();
-  size_t horizon_steps =
-      std::visit([](const auto& arg) { return arg.length; }, horizon);
-  if (horizon_steps == 0)
-    return;
-
-  nav_msgs::msg::Path pathMsg;
-  pathMsg.header.frame_id = _node_cfg->frame_id;
-  pathMsg.header.stamp    = this->now();
-
-  for (size_t step = 0; step < horizon_steps; ++step) {
-    const Eigen::VectorXd& pos = std::visit(
-        [&](const auto& arg) { return arg.get_pos_at_step(step); }, horizon);
-    geometry_msgs::msg::PoseStamped tmp;
-    tmp.header             = pathMsg.header;
-    tmp.pose.position.x    = pos(0);
-    tmp.pose.position.y    = pos(1);
-    tmp.pose.orientation.w = 1.0;
-    pathMsg.poses.push_back(tmp);
-  }
-  _trajPub->publish(pathMsg);
-
-  trajectory_msgs::msg::JointTrajectory traj;
-  traj.header.stamp    = this->now();
-  traj.header.frame_id = _node_cfg->frame_id;
-
-  double dt = _mpc_cfg->dt;
-  for (int step = 0; step < horizon_steps; ++step) {
-
-    const Eigen::VectorXd& pos = std::visit(
-        [&](const auto& arg) { return arg.get_pos_at_step(step); }, horizon);
-
-    const Eigen::VectorXd& vel = std::visit(
-        [&](const auto& arg) { return arg.get_vel_at_step(step); }, horizon);
-
-    const Eigen::VectorXd& acc = std::visit(
-        [&](const auto& arg) { return arg.get_vel_at_step(step); }, horizon);
-
-    // manually compute jerk in x and y directions from acceleration
-    /*double jerk_x = 0;*/
-    /*double jerk_y = 0;*/
-    Eigen::VectorXd jerk;
-    if (step < horizon_steps - 1) {
-      const Eigen::VectorXd& next_acc = std::visit(
-          [&](const auto& arg) { return arg.get_vel_at_step(step + 1); },
-          horizon);
-      jerk = (next_acc - acc) / dt;
-    } else {
-      jerk = Eigen::VectorXd::Zero(vel.size());
-    }
-
-    trajectory_msgs::msg::JointTrajectoryPoint pt;
-    pt.time_from_start =
-        rclcpp::Duration(std::chrono::duration<double>(step * dt));
-    pt.positions     = {pos(0), pos(1), 0};
-    pt.velocities    = {vel(0), vel(1), 0};
-    pt.accelerations = {acc(0), acc(1), 0};
-    pt.effort        = {jerk(0), jerk(1), 0};
-
-    traj.points.push_back(pt);
-  }
-
-  _horizonPub->publish(traj);
 }
