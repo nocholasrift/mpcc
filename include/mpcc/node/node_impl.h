@@ -333,8 +333,16 @@ class MPCCNodeImpl {
       _vel_msg.linear.x  = input.command[0];
       _vel_msg.angular.z = input.command[1];
     } else if (_mpc_cfg->input_type == mpcc::MPCType::kDoubleIntegrator) {
-      _vel_msg.linear.x = input.command[0];
-      _vel_msg.linear.y = input.command[1];
+      // TODO: parameterize this to be optional
+      double vx_world = input.command[0];
+      double vy_world = input.command[1];
+
+      double yaw = _odom(2);
+      double c   = cos(yaw);
+      double s   = sin(yaw);
+
+      _vel_msg.linear.x = c * vx_world + s * vy_world;
+      _vel_msg.linear.y = -s * vx_world + c * vy_world;
     }
   }
 
