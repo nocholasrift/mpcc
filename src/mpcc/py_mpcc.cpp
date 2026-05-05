@@ -34,6 +34,10 @@ PYBIND11_MODULE(py_mpcc, m) {
   py::class_<Polynomial>(m, "Polynomial")
       .def(py::init<>())
       .def(py::init<const Eigen::VectorXd&>())
+      .def("__call__",
+           py::overload_cast<double>(&Polynomial::operator(), py::const_))
+      .def("__call__", py::overload_cast<double, unsigned int>(
+                           &Polynomial::operator(), py::const_))
       .def("set_coeffs", static_cast<void (Polynomial::*)(Eigen::VectorXd&)>(
                              &Polynomial::set_coeffs))
       .def("get_coeffs", &Polynomial::get_coeffs)
@@ -211,6 +215,10 @@ PYBIND11_MODULE(py_mpcc, m) {
 
   py::class_<mpcc::MPCConfig, std::shared_ptr<mpcc::MPCConfig>>(m, "MPCConfig")
       .def(py::init<>())
+      .def("copy",
+           [](const mpcc::MPCConfig& self) {
+             return std::make_shared<mpcc::MPCConfig>(self);
+           })
       .def_readwrite("steps", &mpcc::MPCConfig::steps)
       .def_readwrite("dt", &mpcc::MPCConfig::dt)
       .def_readwrite("ref_samples", &mpcc::MPCConfig::ref_samples)
