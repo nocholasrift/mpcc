@@ -29,7 +29,10 @@ class MPCCNodeImpl {
   using Point          = typename RosTraits::Point;
   using ColorRGBA      = typename RosTraits::ColorRGBA;
 
-  MPCCNodeImpl()  = default;
+  MPCCNodeImpl() {
+    _prev_mpc_result.status = mpcc::SolverStatus::kSuccess;
+    _prev_mpc_result.command = {0,0};
+  }
   ~MPCCNodeImpl() = default;
 
   void load_params(std::shared_ptr<mpcc::MPCConfig> mpc_cfg,
@@ -113,14 +116,14 @@ class MPCCNodeImpl {
     // derived().log_error("alpha_abv: %.2f", _mpc_cfg->cbf.alpha_abv);
     // derived().log_error("alpha_blw: %.2f", _mpc_cfg->cbf.alpha_blw);
 
-    mpcc::MPCResult result = _mpc_core->solve(state);
+    _prev_mpc_result = _mpc_core->solve(state);
 
-    if (result.status != mpcc::SolverStatus::kSuccess &&
-        result.status != mpcc::SolverStatus::kPresolve) {
+    if (_prev_mpc_result.status != mpcc::SolverStatus::kSuccess &&
+        _prev_mpc_result.status != mpcc::SolverStatus::kPresolve) {
       derived().log_error("MPC solve was not successful!");
     }
 
-    apply_input(result);
+    apply_input(_prev_mpc_result);
     derived().log_warn("runtime: %.3f", RosTraits::elapsed(t_start));
 
     publish_reference();
@@ -306,6 +309,7 @@ class MPCCNodeImpl {
 
   Eigen::VectorXd _odom;
   TwistMsg _vel_msg;
+  mpcc::MPCResult _prev_mpc_result;
 
  private:
   Derived& derived() { return static_cast<Derived&>(*this); }
@@ -318,7 +322,7 @@ class MPCCNodeImpl {
       state << _odom(0), _odom(1), _odom(2), _vel_msg.linear.x;
     } else if (_mpc_cfg->input_type == mpcc::MPCType::kDoubleIntegrator) {
       state.resize(4);
-      state << _odom(0), _odom(1), _vel_msg.linear.x, _vel_msg.linear.y;
+      state << _odom(0), _odom(1), _prev_mpc_result.command[0], _prev_mpc_result.command[1];
     } else {
       throw std::runtime_error(
           "Unknown MPC input type: " +
@@ -336,6 +340,8 @@ class MPCCNodeImpl {
       // TODO: parameterize this to be optional
       double vx_world = input.command[0];
       double vy_world = input.command[1];
+      _vel_msg.linear.x = vx_world;
+      _vel_msg.linear.y = vy_world;
 
       double yaw = _odom(2);
       double c   = cos(yaw);
@@ -346,7 +352,6 @@ class MPCCNodeImpl {
     }
   }
 
- private:
 };
 
 }  // namespace mpcc_node

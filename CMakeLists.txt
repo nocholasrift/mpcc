@@ -377,8 +377,8 @@ elseif(ROS2)
   )
 
   # install python scripts
-  install(DIRECTORY
-    mpcc_ros2/scripts/
+  install(PROGRAMS
+    mpcc_ros2/scripts/pearl_server.py
     DESTINATION lib/${PROJECT_NAME}
   )
 
