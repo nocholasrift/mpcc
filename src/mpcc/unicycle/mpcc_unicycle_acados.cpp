@@ -285,7 +285,6 @@ Eigen::VectorXd UnicycleMPCC::get_cbf_data(const types::Corridor& corridor,
   double arclen        = corridor.get_trajectory().get_arclen();
   state[kIndS]         = std::min(state[kIndS], arclen - eps);
   state[kIndS]         = std::max(state[kIndS], eps);
-  std::cout << "s is: " << state[kIndS] << std::endl;
 
   CasadiUnicycleInterface::Params params;
   params.qc_lyap    = _mpc_cfg->clf.w_contour_e;
@@ -301,10 +300,22 @@ Eigen::VectorXd UnicycleMPCC::get_cbf_data(const types::Corridor& corridor,
   double hdot_blw =
       casadi_interface.get_h_dot_blw(state, input, corridor, params);
 
-  std::cout << "h_abv is: " << h_abv << std::endl;
-  std::cout << "h_dot_abv is: " << hdot_abv << std::endl;
-  std::cout << "h_blw is: " << h_blw << std::endl;
-  std::cout << "h_dot_blw is: " << hdot_blw << std::endl;
+  auto is_nan = [](const std::vector<double>& candidates) {
+    for (auto candidate : candidates) {
+      if (std::isnan(candidate))
+        return true;
+    }
+    return false;
+  };
+
+  if (is_nan({h_abv, hdot_abv, h_blw, hdot_blw})) {
+    std::cout << "traj arclen: " << arclen << std::endl;
+    std::cout << "state is: " << state.transpose() << std::endl;
+    std::cout << "h_abv is: " << h_abv << std::endl;
+    std::cout << "h_dot_abv is: " << hdot_abv << std::endl;
+    std::cout << "h_blw is: " << h_blw << std::endl;
+    std::cout << "h_dot_blw is: " << hdot_blw << std::endl;
+  }
 
   return Eigen::Vector4d(h_abv, hdot_abv, h_blw, hdot_blw);
 }

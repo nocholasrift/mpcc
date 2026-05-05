@@ -117,7 +117,7 @@ void MPCCore::set_trajectory(const Eigen::VectorXd& x_pts,
   //     _tube_generator.generate(*_map_util, _trajectory, tube_settings);
 
   std::cout << "received trajectory of length: " << _trajectory.get_arclen()
-            << "\n";
+            << std::endl;
   std::cout << "trajectory has " << N << " knots\n";
   // std::cout << "start point: " << _trajectory(0).transpose() << "\n";
 
@@ -198,6 +198,16 @@ MPCResult MPCCore::solve(const Eigen::VectorXd& state, bool is_reverse) {
   // if (horizon > traj_len) {
   //   horizon = traj_len;
   // }
+
+  // if adjust arclen is too low, don't bother running, just stop
+  if (horizon < 1e-1) {
+    MPCResult result;
+    result.status  = SolverStatus::kSuccess;
+    result.command = {0, 0};
+
+    _curr_vel    = result.command[0];
+    _curr_angvel = result.command[1];
+  }
 
   // passing in 0 here because, by construction, adjusted traj will start at s = 0
   // double tube_starting_s = 0;
