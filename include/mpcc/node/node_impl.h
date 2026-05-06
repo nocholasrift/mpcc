@@ -33,6 +33,7 @@ class MPCCNodeImpl {
     _prev_mpc_result.status = mpcc::SolverStatus::kSuccess;
     _prev_mpc_result.command = {0,0};
   }
+
   ~MPCCNodeImpl() = default;
 
   void load_params(std::shared_ptr<mpcc::MPCConfig> mpc_cfg,
@@ -233,7 +234,8 @@ class MPCCNodeImpl {
 
   void visualize_tubes() {
     mpcc::types::Corridor corridor = _mpc_core->get_corridor(_odom.head(2));
-    double horizon                 = corridor.get_trajectory().get_arclen();
+    /*double horizon                 = corridor.get_trajectory().get_arclen();*/
+    double horizon                 = _mpc_core->get_non_extended_trajectory().get_arclen();
 
     if (horizon < 0.05)
       return;

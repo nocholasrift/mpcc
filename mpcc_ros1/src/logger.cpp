@@ -27,9 +27,8 @@ double get_max_width(const std::array<Eigen::VectorXd, 2>& tubes, double length,
 }
 
 RLLogger::RLLogger(ros::NodeHandle& nh,
-                   std::shared_ptr<NodeConfig> node_cfg,
-                   std::shared_ptr<mpcc::MPCConfig> mpc_cfg,
-                   bool is_logging) {
+                   std::shared_ptr<mpcc_node::NodeConfig> node_cfg,
+                   std::shared_ptr<mpcc::MPCConfig> mpc_cfg) {
 
   _nh            = nh;
   _min_alpha     = 0.01;
@@ -41,7 +40,6 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
 
   load_params(node_cfg, mpc_cfg);
 
-  _is_logging = is_logging;
 
   _alpha_pub_abv = _nh.advertise<std_msgs::Float64>("/cbf_alpha_abv", 100);
   _alpha_pub_blw = _nh.advertise<std_msgs::Float64>("/cbf_alpha_blw", 100);
@@ -59,7 +57,7 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
 
 RLLogger::~RLLogger() {}
 
-void RLLogger::load_params(std::shared_ptr<NodeConfig> node_cfg,
+void RLLogger::load_params(std::shared_ptr<mpcc_node::NodeConfig> node_cfg,
                            std::shared_ptr<mpcc::MPCConfig> mpc_cfg) {
   _node_cfg = node_cfg;
   _mpc_cfg  = mpc_cfg;

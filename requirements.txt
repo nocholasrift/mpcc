@@ -10,3 +10,7 @@ gtimer==1.0.0b5
 casadi==3.6.7
 click
 lxml
+lark
+empy==3.3.4
+scipy
+matplotlib

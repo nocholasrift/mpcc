@@ -133,6 +133,8 @@ class MPCCROS : public rclcpp::Node,
   }
 
   // TODO: Make this safer
+  const logger::RLLogger& logger() const { return *_logger; }
+
   logger::RLLogger& logger() { return *_logger; }
 
   bool has_logger() { return _logger != nullptr; }
@@ -266,5 +268,5 @@ class MPCCROS : public rclcpp::Node,
 
   bool _reverse_mode{false};
   std::thread timer_thread;
-  static constexpr double kMAX_ALPHA = 10.0;
+  static constexpr double kMAX_ALPHA = 10.0f;
 };

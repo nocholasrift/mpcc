@@ -3,8 +3,10 @@
 #include <mpcc/QuerySAC.h>
 #include <mpcc/QuerySACDI.h>
 #include <mpcc/RLState.h>
+
 #include <mpcc/common/mpcc_config.h>
 #include <mpcc/common/mpcc_core.h>
+#include <mpcc/node/node_impl.h>
 
 #include <ros/ros.h>
 #include <std_msgs/Bool.h>
@@ -12,24 +14,15 @@
 
 #include <cstdint>
 
-struct NodeConfig {
-  bool use_vicon       = false;
-  bool is_eval         = false;
-  double vel_pub_freq  = 20.0;
-  std::string frame_id = "odom";
-  // mpcc::MPCConfig mpc;
-};
-
 namespace logger {
 
 class RLLogger {
  public:
   RLLogger(ros::NodeHandle& nh,
-           std::shared_ptr<NodeConfig> node_cfg, 
-           std::shared_ptr<mpcc::MPCConfig> mpc_cfg, 
-           bool is_logging);
+           std::shared_ptr<mpcc_node::NodeConfig> node_cfg, 
+           std::shared_ptr<mpcc::MPCConfig> mpc_cfg);
 
-  void load_params(std::shared_ptr<NodeConfig> node_cfg,
+  void load_params(std::shared_ptr<mpcc_node::NodeConfig> node_cfg,
                    std::shared_ptr<mpcc::MPCConfig> mpc_cfg);
 
   ~RLLogger();
@@ -54,7 +47,7 @@ class RLLogger {
 
   unsigned int _count;
 
-  std::shared_ptr<NodeConfig> _node_cfg;
+  std::shared_ptr<mpcc_node::NodeConfig> _node_cfg;
   std::shared_ptr<mpcc::MPCConfig> _mpc_cfg;
 
   std::string _table_name;

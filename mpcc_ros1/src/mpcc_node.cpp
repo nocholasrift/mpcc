@@ -6,6 +6,8 @@ int main(int argc, char** argv) {
   ros::NodeHandle nh;
 
   MPCCROS mpcc_ros(nh);
+  mpcc_ros.init();
+
   ros::AsyncSpinner spinner(1);
   spinner.start();
   ros::waitForShutdown();

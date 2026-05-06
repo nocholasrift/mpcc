@@ -26,7 +26,6 @@ from oyster.rlkit.samplers.util import rollout
 class ModelServer:
     def __init__(self, variant):
 
-
         self.N_alpha = 2
         self.N_horizon = 3
 
@@ -98,14 +97,19 @@ class ModelServer:
             exit(-1)
 
         # ptu.set_gpu_mode
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         itr = 74
         self.context_encoder.load_state_dict(
-            torch.load(os.path.join(path_to_exp, f"context_encoder_itr_{itr}.pth"), map_location=device)
+            torch.load(
+                os.path.join(path_to_exp, f"context_encoder_itr_{itr}.pth"),
+                map_location=device,
+            )
         )
         self.policy.load_state_dict(
-            torch.load(os.path.join(path_to_exp, f"policy_itr_{itr}.pth"), map_location=device)
+            torch.load(
+                os.path.join(path_to_exp, f"policy_itr_{itr}.pth"), map_location=device
+            )
         )
 
         self.context_encoder.eval().to(device)
@@ -120,7 +124,6 @@ class ModelServer:
         )
         self.agent = MakeDeterministic(self.agent)
         self.agent.clear_z()
-
 
         self.prev_obs = None
         self.prev_action = None
@@ -159,24 +162,32 @@ class ModelServer:
         raw_act, _ = self.agent.get_action(obs)
 
         action = self.unnormalize(
-            raw_act, self.params["MIN_ALPHA_DOT"], self.params["MAX_ALPHA_DOT"]
+            raw_act, self.params.cbf.min_alpha_dot, self.params.cbf.max_alpha_dot
         )
 
-        print("RAW_ACT",raw_act)
-        print("ACTION",action)
+        print("RAW_ACT", raw_act)
+        print("ACTION", action)
 
         alpha_abv = unormalized_obs[-2] + action[0]
         alpha_blw = unormalized_obs[-1] + action[1]
 
         exceed_count = 0
-        if alpha_abv < self.params["MIN_ALPHA"] or alpha_abv > self.params["MAX_ALPHA"]:
+        if (
+            alpha_abv < self.params.cbf.min_alpha
+            or alpha_abv > self.params.cbf.max_alpha
+        ):
             exceed_count += 1
 
-        if alpha_blw < self.params["MIN_ALPHA"] or alpha_blw > self.params["MAX_ALPHA"]:
+        if (
+            alpha_blw < self.params.cbf.min_alpha
+            or alpha_blw > self.params.cbf.max_alpha
+        ):
             exceed_count += 1
 
         if self.prev_obs is not None and self.prev_action is not None:
-            r = CBFEnv.get_reward(unormalized_obs, False, self.params, self.N_horizon, action)
+            r = CBFEnv.get_reward(
+                unormalized_obs, False, self.params, self.N_horizon, action
+            )
             self.agent.update_context(
                 [self.prev_obs, self.prev_action, r, obs, False, {}]
             )
