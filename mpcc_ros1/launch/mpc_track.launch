@@ -21,7 +21,7 @@
 		<!--<param name="mpc_type" value="$(arg mpc_type)" />-->
 
 		<remap from="/odometry/filtered" to="$(arg odomTopic)" />
-		<remap from="/cmd_vel" to="$(arg cmdTopic)" />
+		<!--<remap from="/cmd_vel" to="$(arg cmdTopic)" />-->
 	</node>
 
 	<!--<rosparam file="$(find mpcc)/params/local_costmap_params.yaml" command="load" ns="local_costmap/local_costmap/" />-->
@@ -36,7 +36,7 @@
     <arg name="joy_dev" value="$(arg dev)" />
   </include>
 
-  <node pkg="mpcc" type="deadman.py" name="deadman" output="screen"/>
+  <!--<node pkg="mpcc" type="deadman.py" name="deadman" output="screen"/>-->
 
 
 </launch>

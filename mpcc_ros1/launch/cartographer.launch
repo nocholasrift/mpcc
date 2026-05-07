@@ -9,6 +9,7 @@
     <remap from="/scan" to="/front/scan" />
     <remap from="/odom" to="/odometry/filtered" />
     <remap from="/imu" to="/imu/data" />
+    <!--<remap from="/imu" to="/imu" />-->
   </node>
 
   <!-- This node turns the submaps into a standard ROS map for RViz/Navigation -->
