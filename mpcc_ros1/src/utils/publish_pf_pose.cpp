@@ -19,7 +19,7 @@ void odomcb(const nav_msgs::Odometry::ConstPtr& msg) {
   geometry_msgs::TransformStamped odom_to_map;
   try {
     odom_to_map = tf_buffer.lookupTransform(
-        frame_id, child_frame_id, msg->header.stamp, ros::Duration(1.0));
+        frame_id, child_frame_id, ros::Time(0));
   } catch (tf2::TransformException& e) {
     ROS_WARN("[Particle Filter] Transform Lookup Exception: %s", e.what());
     return;

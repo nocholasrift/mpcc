@@ -72,5 +72,4 @@
     <!-- <remap from="map" to="map_alt" /> -->
   </node>
 
-  <node name="publish_pf_pose" pkg="mpcc" type="publish_pf_pose" output="screen" />
 </launch>

@@ -7,7 +7,7 @@ controller_frequency: 10
 
 # dynamics
 max_angvel: 1.5
-max_linvel: 1.5
+max_linvel: 1.0
 max_linacc: 3.2
 max_angacc: 6.283
 
@@ -24,8 +24,8 @@ w_contour_e: .8
 w_speed: 2.0
 
 # CLF Params
-w_lyap_lag_e: 1
-w_lyap_contour_e: 1
+w_lyap_lag_e: 0.1
+w_lyap_contour_e: 0.1
 clf_gamma: .5
 
 # CBF params
@@ -50,8 +50,8 @@ min_h_val: -10.
 max_h_val: 100.
 
 prop_gain: 1.5
-prop_gain_thresh: .5
-# prop_gain_thresh: .349
+# prop_gain_thresh: 0.5
+prop_gain_thresh: 0.349
 
 max_tube_width: .75
 

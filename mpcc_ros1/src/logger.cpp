@@ -110,8 +110,14 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
 
   // double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv * dt;
   // double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw * dt;
-  double alpha_abv = _mpc_cfg->cbf.alpha_abv + _alpha_dot_abv;
-  double alpha_blw = _mpc_cfg->cbf.alpha_blw + _alpha_dot_blw;
+  double alpha_abv = _mpc_cfg->cbf.alpha_abv;
+  double alpha_blw = _mpc_cfg->cbf.alpha_blw;
+  if (!std::isnan(_alpha_dot_abv) && !std::isnan(_alpha_dot_blw)){
+    alpha_abv = _mpc_cfg->cbf.alpha_abv + _alpha_dot_abv;
+    alpha_blw = _mpc_cfg->cbf.alpha_blw + _alpha_dot_blw;
+  } else{
+    ROS_WARN("alpha dot abv/blw was nan! Keepin alphas the same value");
+  }
 
   ROS_WARN("ALPHA_ABV: %.2f", alpha_abv);
   ROS_WARN("ALPHA_BLW: %.2f", alpha_blw);

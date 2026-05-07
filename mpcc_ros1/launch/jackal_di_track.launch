@@ -3,6 +3,7 @@
 <launch>
   <arg name="odomTopic" default="/gmapping/odometry" />
 	<arg name="cmdTopic" default="/mpc_vel" />
+  <arg name="dev" default="/dev/input/js0" />
   <!--<arg name="param_file" value="meta_mpc/zz_double_integrator_mpcc0" />-->
   <arg name="param_file" value="zz_unicycle_model_mpcc1" />
   <arg name="use_rl" default="false" />
@@ -20,14 +21,23 @@
 		<!--<param name="mpc_type" value="$(arg mpc_type)" />-->
 
 		<remap from="/odometry/filtered" to="$(arg odomTopic)" />
-		<!--<remap from="/cmd_vel" to="$(arg cmdTopic)" />-->
+		<remap from="/cmd_vel" to="$(arg cmdTopic)" />
 	</node>
 
 	<!--<rosparam file="$(find mpcc)/params/local_costmap_params.yaml" command="load" ns="local_costmap/local_costmap/" />-->
 	<!--<node name="local_costmap" pkg="mpcc" type="local_costmap" output="screen" />-->
 	<!--<node name="cmd_mapper" pkg="mpcc" type="di_to_uni_cmd_mapper.py" output="screen" />-->
 
-  <include file="$(find mpcc)/mpcc_ros1/launch/gmapping.launch" /> 
+  <!-- <include file="$(find mpcc)/mpcc_ros1/launch/gmapping.launch" />  -->
+  <include file="$(find mpcc)/mpcc_ros1/launch/cartographer.launch" /> 
+  <node name="publish_pf_pose" pkg="mpcc" type="publish_pf_pose" output="screen" />
+
+  <include file="$(find robust_fast_navigation)/planner_ros1/launch/teleop.launch"> 
+    <arg name="joy_dev" value="$(arg dev)" />
+  </include>
+
+  <node pkg="mpcc" type="deadman.py" name="deadman" output="screen"/>
+
 
 </launch>
 

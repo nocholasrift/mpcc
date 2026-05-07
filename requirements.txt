@@ -4,7 +4,7 @@ pyyaml
 packaging
 defusedxml
 setuptools>=61
-torch
+# torch
 tqdm
 gtimer==1.0.0b5
 casadi==3.6.7
