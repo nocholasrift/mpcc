@@ -62,6 +62,21 @@ class mpcc_ode_model:
 
         self.cbf(params)
 
+        self.V_max = MX.sym("V_max")
+        self.A_max = MX.sym("A_max")
+
+        self.velx_con_abv = self.V_max - self.vx1
+        self.velx_con_blw = self.vx1 + self.V_max
+
+        self.vely_con_abv = self.V_max - self.vy1
+        self.vely_con_blw = self.vy1 + self.V_max
+
+        self.accx_con_abv = self.A_max - self.ax
+        self.accx_con_blw = self.ax + self.A_max
+
+        self.accy_con_abv = self.A_max - self.ay
+        self.accy_con_blw = self.ay + self.A_max
+
         # cost expr
         self.Q_c = MX.sym("Q_c")  # 0.1
         self.Q_l = MX.sym("Q_l")  # 100
@@ -96,6 +111,8 @@ class mpcc_ode_model:
         self.pv.add(str(self.Ql_l), self.Ql_l)
         self.pv.add(str(self.gamma), self.gamma)
         self.pv.add(str(self.L_path), self.L_path)
+        self.pv.add(str(self.V_max), self.V_max)
+        self.pv.add(str(self.A_max), self.A_max)
         # self.pv.add(str(self.s_start), self.s_start)
 
         self.p = self.pv.as_casadi_vector()
@@ -134,10 +151,14 @@ class mpcc_ode_model:
         # self.model.con_h_expr = vertcat(self.cbf_con_abv, self.cbf_con_blw)
 
         self.model.con_h_expr_0 = vertcat(
-            self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
+            self.lyap_con, self.cbf_con_abv, self.cbf_con_blw, 
+            self.velx_con_abv, self.velx_con_blw, self.vely_con_abv, self.vely_con_blw,
+            self.accx_con_abv, self.accx_con_blw, self.accy_con_abv, self.accy_con_blw,
         )
         self.model.con_h_expr = vertcat(
-            self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
+            self.lyap_con, self.cbf_con_abv, self.cbf_con_blw,
+            self.velx_con_abv, self.velx_con_blw, self.vely_con_abv, self.vely_con_blw,
+            self.accx_con_abv, self.accx_con_blw, self.accy_con_abv, self.accy_con_blw,
         )
 
         # store meta information

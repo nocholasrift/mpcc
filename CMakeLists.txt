@@ -372,7 +372,7 @@ elseif(ROS2)
   install(DIRECTORY
     mpcc_ros2/launch
     mpcc_ros2/params
-    # params
+    mpcc_ros2/rviz
     DESTINATION share/${PROJECT_NAME}
   )
 

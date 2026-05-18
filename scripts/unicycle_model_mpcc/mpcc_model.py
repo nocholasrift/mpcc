@@ -155,6 +155,20 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
     # cost_expr = y_expr.T @ Q_mat @ y_expr - Q_s * sdot1
     # cost_expr_e = y_expr_e.T @ Q_mat_e @ y_expr_e - Q_s * sdot1
 
+    # state constraints
+    V_max = MX.sym("V_max")
+    A_max = MX.sym("A_max")
+    W_max = MX.sym("W_max")
+
+    vel_con_abv = V_max - v1
+    vel_con_blw = v1 + V_max
+
+    omega_con_abv = W_max - w
+    omega_con_blw = w + W_max
+
+    acc_con_abv = A_max - a
+    acc_con_blw = a + A_max
+
     # Control Barrier Function
     alpha_abv = MX.sym("alpha_abv")
     alpha_blw = MX.sym("alpha_blw")
@@ -240,6 +254,9 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
     pv.add(str(Ql_l), Ql_l)
     pv.add(str(gamma), gamma)
     pv.add(str(L_path), L_path)
+    pv.add(str(V_max), V_max)
+    pv.add(str(A_max), A_max)
+    pv.add(str(W_max), W_max)
  
     p = pv.as_casadi_vector()
     
@@ -274,8 +291,16 @@ def export_mpcc_ode_model_spline_tube_cbf(params, output_dir) -> AcadosModel:
     # model.con_h_expr_0 = vertcat(con_abv, con_blw)
     # model.con_h_expr = vertcat(con_abv, con_blw)
 
-    model.con_h_expr_0 = vertcat(con_abv, con_blw, lyap_con)
-    model.con_h_expr = vertcat(con_abv, con_blw, lyap_con)
+    model.con_h_expr_0 = vertcat(
+        con_abv, con_blw, lyap_con, 
+        vel_con_abv, vel_con_blw, omega_con_abv, omega_con_blw,
+        acc_con_abv, acc_con_blw,
+    )
+    model.con_h_expr = vertcat(
+        con_abv, con_blw, lyap_con,
+        vel_con_abv, vel_con_blw, omega_con_abv, omega_con_blw,
+        acc_con_abv, acc_con_blw,
+    )
 
     # model.con_h_expr_0 = vertcat(lyap_con)
     # model.con_h_expr = vertcat(lyap_con)

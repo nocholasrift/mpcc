@@ -81,8 +81,8 @@ def create_ocp_tube_cbf(yaml_file, casadi_dir):
     # ocp.constraints.idxsh = np.array([0])
 
     nsh = 3
-    con_upper_bounds = np.array([1e6, 1e6, 0])
-    con_lower_bounds = np.array([0, 0, -1e6])
+    con_upper_bounds = np.array([1e6, 1e6, 0, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6])
+    con_lower_bounds = np.array([0, 0, -1e6, 0, 0, 0, 0, 0, 0])
     # con_upper_bounds = np.array([1e6, 1e6, 0])
     # con_lower_bounds = np.array([-1e6, -1e6, -1e6])
     #
@@ -143,9 +143,9 @@ def create_ocp_tube_cbf(yaml_file, casadi_dir):
     # ocp.cost.zu_e = grad_cost * np.ones((1,))
 
     # theta can be whatever
-    ocp.constraints.lbx = np.array([-1e6, -1e6, -1e6, 0, 0, -1e6])
-    ocp.constraints.ubx = np.array([1e6, 1e6, 1e6, 4, 1e6, 4])
-    ocp.constraints.idxbx = np.array(range(nx))  # Covers all state indices
+    # ocp.constraints.lbx = np.array([-1e6, -1e6, -1e6, 0, 0, -1e6])
+    # ocp.constraints.ubx = np.array([1e6, 1e6, 1e6, 4, 1e6, 4])
+    # ocp.constraints.idxbx = np.array(range(nx))  # Covers all state indices
 
     ocp.constraints.x0 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 

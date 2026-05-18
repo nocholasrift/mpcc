@@ -9,7 +9,7 @@ mpcc:
 
     # dynamics
     max_angvel: 1.5
-    max_linvel: 1.5
+    max_linvel: 1.0
     max_linacc: 3.2
     max_angacc: 6.283
 

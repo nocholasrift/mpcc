@@ -112,6 +112,8 @@ bool DIMPCC::set_solver_parameters(const types::Corridor& corridor) {
   params[Param::k_Ql_l]      = _mpc_cfg->clf.w_lag_e;
   params[Param::k_gamma]     = _mpc_cfg->clf.gamma;
   params[Param::k_L_path]    = traj_view.arclen;
+  params[Param::k_V_max]     = _mpc_cfg->constraints.max_linvel;
+  params[Param::k_A_max]     = _mpc_cfg->constraints.max_linacc;
 
   // params[Param::k_s_start]   = corridor.get_offset();
 

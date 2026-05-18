@@ -65,8 +65,8 @@ def create_ocp(yaml_file, casadi_dir):
     # con_lower_bounds = np.array([-1e6, -1e6])
     # con_upper_bounds = np.array([0, 1e6, 1e6])
     # con_lower_bounds = np.array([-1e6, -1e6, -1e6])
-    con_upper_bounds = np.array([0, 1e6, 1e6])
-    con_lower_bounds = np.array([-1e6, 0, 0])
+    con_upper_bounds = np.array([0, 1e6, 1e6, 1e6, 1e6, 1e6,1e6,1e6,1e6,1e6,1e6])
+    con_lower_bounds = np.array([-1e6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
     # constraint bounds
     ocp.constraints.uh_0 = con_upper_bounds
@@ -118,11 +118,11 @@ def create_ocp(yaml_file, casadi_dir):
     ocp.constraints.idxbu = np.array([0, 1, 2])
 
     # theta can be whatever
-    max_vel = 10.0
-    max_sdot = np.sqrt(2 * max_vel**2)
-    ocp.constraints.lbx = np.array([-1e6, -1e6, -max_vel, -max_vel, 0, 0])
-    ocp.constraints.ubx = np.array([1e6, 1e6, max_vel, max_vel, 1e6, max_sdot])
-    ocp.constraints.idxbx = np.array(range(nx))  # Covers all state indices
+    # max_vel = 10.0
+    # max_sdot = np.sqrt(2 * max_vel**2)
+    # ocp.constraints.lbx = np.array([-1e6, -1e6, -max_vel, -max_vel, 0, 0])
+    # ocp.constraints.ubx = np.array([1e6, 1e6, max_vel, max_vel, 1e6, max_sdot])
+    # ocp.constraints.idxbx = np.array(range(nx))  # Covers all state indices
 
     ocp.constraints.x0 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
