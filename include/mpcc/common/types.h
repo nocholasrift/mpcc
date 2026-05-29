@@ -10,7 +10,7 @@
 
 namespace mpcc {
 
-enum class MPCType { kDoubleIntegrator, kUnicycle };
+enum class MPCType { kDoubleIntegrator, kUnicycle, kBicycle };
 
 namespace types {
 

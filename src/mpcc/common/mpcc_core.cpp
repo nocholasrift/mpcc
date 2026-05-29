@@ -25,6 +25,10 @@ void MPCCore::load_params(std::shared_ptr<MPCConfig> cfg) {
     std::cout << termcolor::green << "[MPC Core] Using double integrator model"
               << termcolor::reset << std::endl;
     _mpc.emplace<DIMPCC>(_mpc_cfg);
+  } else if (_mpc_cfg->input_type == MPCType::kBicycle) {
+    std::cout << termcolor::green << "[MPC Core] Using bicycle model"
+              << termcolor::reset << std::endl;
+    _mpc.emplace<BicycleMPCC>(_mpc_cfg);
   } else {
     throw std::runtime_error(
         "Invalid MPC input type: " +

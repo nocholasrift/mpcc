@@ -40,7 +40,6 @@ RLLogger::RLLogger(ros::NodeHandle& nh,
 
   load_params(node_cfg, mpc_cfg);
 
-
   _alpha_pub_abv = _nh.advertise<std_msgs::Float64>("/cbf_alpha_abv", 100);
   _alpha_pub_blw = _nh.advertise<std_msgs::Float64>("/cbf_alpha_blw", 100);
 
@@ -106,7 +105,7 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
 
   // copying instead of using const auto& becuase we will modify this
   // map...
-  double dt       = _mpc_cfg->dt;
+  double dt = _mpc_cfg->dt;
 
   // double alpha_abv = mpc_params["CBF_ALPHA_ABV"] + _alpha_dot_abv * dt;
   // double alpha_blw = mpc_params["CBF_ALPHA_BLW"] + _alpha_dot_blw * dt;
@@ -134,13 +133,25 @@ bool RLLogger::request_alpha(mpcc::MPCCore& mpc_core) {
 }
 
 void RLLogger::fill_state(const mpcc::MPCCore& mpc_core, mpcc::RLState& state) {
+  const size_t N = 3;
 
-  int N       = 3;
-  double step = (_mpc_steps) / (N - 1);
+  const double start_idx = 1.0;
+  const double stop_idx  = static_cast<double>(_mpc_steps) - 2.0;
+
   state.state.reserve(4 * N + 3);
 
   for (size_t i = 0; i < N; ++i) {
-    size_t idx               = static_cast<size_t>(i * step);
+    size_t idx;
+    if (N == 1) {
+      idx = static_cast<size_t>(start_idx);
+    } else {
+      // Replicate the exact math of np.linspace for integer tracking
+      double interp = start_idx + static_cast<double>(i) *
+                                      (stop_idx - start_idx) /
+                                      static_cast<double>(N - 1);
+      idx = static_cast<size_t>(interp);
+    }
+
     Eigen::VectorXd cbf_data = mpc_core.get_cbf_data(idx);
     state.state.emplace_back(cbf_data(0));
     state.state.emplace_back(cbf_data(1));
@@ -151,8 +162,6 @@ void RLLogger::fill_state(const mpcc::MPCCore& mpc_core, mpcc::RLState& state) {
   state.state.emplace_back(mpc_core.get_state().tail(1)[0]);
   state.state.emplace_back(_mpc_cfg->cbf.alpha_abv);
   state.state.emplace_back(_mpc_cfg->cbf.alpha_blw);
-  /*state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_ABV"));*/
-  /*state.state.emplace_back(mpc_core.get_params().at("CBF_ALPHA_BLW"));*/
 }
 
 }  // namespace logger

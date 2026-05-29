@@ -83,6 +83,7 @@ endif()
 set(ACADOS_MODELS
   unicycle_model_mpcc
   double_integrator_mpcc
+  bicycle_mpcc
 )
 
 set(ACADOS_OUTPUT_DIRS "")
@@ -172,6 +173,8 @@ add_library(mpcc_core SHARED
   src/mpcc/unicycle/casadi_unicycle_interface.cpp
   src/mpcc/double_integrator/mpcc_di_acados.cpp
   src/mpcc/double_integrator/casadi_double_integrator_interface.cpp
+  src/mpcc/bicycle/bicycle_acados.cpp
+  src/mpcc/bicycle/casadi_bicycle_interface.cpp
 )
 target_compile_options(mpcc_core PRIVATE -std=c++17 -O2 -fPIC)
 target_include_directories(mpcc_core PRIVATE 

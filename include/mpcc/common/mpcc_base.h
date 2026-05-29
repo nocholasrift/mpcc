@@ -117,7 +117,8 @@ class MPCBase {
   ********** INITIAL CONDITION *********
   **************************************/
     if (!is_solver_ready(state, corridor)) {
-      std::cout << termcolor::yellow << "Solver not yet ready!\n";
+      std::cout << termcolor::yellow << "Solver not yet ready!\n"
+                << termcolor::reset;
       result.status  = SolverStatus::kSolverNotReady;
       result.command = {0, 0};
       return result;
@@ -134,7 +135,8 @@ class MPCBase {
   ********* SET REFERENCE PARAMS *******
   **************************************/
     if (!set_solver_parameters(corridor)) {
-      std::cout << termcolor::yellow << "Setting solver params failed!\n";
+      std::cout << termcolor::yellow << "Setting solver params failed!\n"
+                << termcolor::reset;
       result.status  = SolverStatus::kParamMismatch;
       result.command = {0, 0};
       return result;

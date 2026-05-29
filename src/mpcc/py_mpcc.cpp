@@ -29,7 +29,8 @@ PYBIND11_MODULE(py_mpcc, m) {
 
   py::enum_<MPCType>(m, "MPCType")
       .value("DOUBLE_INTEGRATOR", MPCType::kDoubleIntegrator)
-      .value("UNICYCLE", MPCType::kUnicycle);
+      .value("UNICYCLE", MPCType::kUnicycle)
+      .value("BICYCLE", MPCType::kBicycle);
 
   py::class_<Polynomial>(m, "Polynomial")
       .def(py::init<>())
@@ -116,6 +117,22 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def_readwrite("length", &DIMPCC::MPCHorizon::length)
       .def("get_state_at_step", &DIMPCC::MPCHorizon::get_state_at_step)
       .def("get_input_at_step", &DIMPCC::MPCHorizon::get_input_at_step);
+
+  // Bicycle specific horizons
+  py::class_<BicycleMPCC::StateHorizon, StateHorizon>(m, "BicycleStateHorizon")
+      .def_readwrite("thetas", &BicycleMPCC::StateHorizon::thetas)
+      .def_readwrite("vs", &BicycleMPCC::StateHorizon::vs);
+
+  py::class_<BicycleMPCC::InputHorizon, InputHorizon>(m, "BicycleInputHorizon")
+      .def_readwrite("accs", &BicycleMPCC::InputHorizon::accs)
+      .def_readwrite("deltas", &BicycleMPCC::InputHorizon::deltas);
+
+  py::class_<BicycleMPCC::MPCHorizon>(m, "BicycleHorizon")
+      .def_readwrite("states", &BicycleMPCC::MPCHorizon::states)
+      .def_readwrite("inputs", &BicycleMPCC::MPCHorizon::inputs)
+      .def_readwrite("length", &BicycleMPCC::MPCHorizon::length)
+      .def("get_state_at_step", &BicycleMPCC::MPCHorizon::get_state_at_step)
+      .def("get_input_at_step", &BicycleMPCC::MPCHorizon::get_input_at_step);
 
   py::enum_<SolverStatus>(m, "SolverStatus")
       .value("Success", SolverStatus::kSuccess)
@@ -224,6 +241,7 @@ PYBIND11_MODULE(py_mpcc, m) {
       .def_readwrite("ref_samples", &mpcc::MPCConfig::ref_samples)
       .def_readwrite("ref_length", &mpcc::MPCConfig::ref_length)
       .def_readwrite("input_type", &mpcc::MPCConfig::input_type)
+      .def_readwrite("body_length", &mpcc::MPCConfig::body_length)
       .def_readwrite("weights", &mpcc::MPCConfig::weights)
       .def_readwrite("constraints", &mpcc::MPCConfig::constraints)
       .def_readwrite("cbf", &mpcc::MPCConfig::cbf)

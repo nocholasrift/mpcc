@@ -1,7 +1,8 @@
 #pragma once
 
-#include <mpcc/common/mpcc_config.h>
+#include <mpcc/bicycle/bicycle_acados.h>
 #include <mpcc/common/map_util.h>
+#include <mpcc/common/mpcc_config.h>
 #include <mpcc/common/tube_gen.h>
 #include <mpcc/common/types.h>
 #include <mpcc/double_integrator/mpcc_di_acados.h>
@@ -15,7 +16,8 @@ namespace mpcc {
 class MPCCore {
 
  public:
-  using AnyHorizon = std::variant<UnicycleMPCC::MPCHorizon, DIMPCC::MPCHorizon>;
+  using AnyHorizon = std::variant<UnicycleMPCC::MPCHorizon, DIMPCC::MPCHorizon,
+                                  BicycleMPCC::MPCHorizon>;
 
   MPCCore(std::shared_ptr<MPCConfig> cfg);
 
@@ -169,7 +171,7 @@ class MPCCore {
   tube::TubeGenerator _tube_generator;
 
   // std::unique_ptr<MPCBase> _mpc;
-  std::variant<UnicycleMPCC, DIMPCC> _mpc;
+  std::variant<UnicycleMPCC, DIMPCC, BicycleMPCC> _mpc;
 
   std::shared_ptr<MPCConfig> _mpc_cfg;
 

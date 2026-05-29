@@ -66,6 +66,8 @@ struct MPCConfig {
   double dt          = 0.1;
   int ref_samples    = 10;
   double ref_length  = 4.0;
+  double body_length = 0.5;
+
   MPCType input_type = MPCType::kDoubleIntegrator;
 
   CostWeights weights;
