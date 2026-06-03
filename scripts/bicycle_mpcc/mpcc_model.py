@@ -115,6 +115,12 @@ class mpcc_ode_model:
         self.model.cost_expr_ext_cost = self.cost_expr
         self.model.cost_expr_ext_cost_e = self.cost_expr_e
 
+        # self.model.con_h_expr_0 = vertcat(
+        #     self.lyap_con, self.d_abv - self.signed_d, self.signed_d - self.d_blw
+        # )
+        # self.model.con_h_expr = vertcat(
+        #     self.lyap_con, self.d_abv - self.signed_d, self.signed_d - self.d_blw
+        # )
         self.model.con_h_expr_0 = vertcat(
             self.lyap_con, self.cbf_con_abv, self.cbf_con_blw
         )
